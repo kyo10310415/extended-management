@@ -1,5 +1,6 @@
 import { Client } from '@notionhq/client';
 import dotenv from 'dotenv';
+import cacheService from './cacheService.js';
 
 dotenv.config();
 
@@ -10,13 +11,24 @@ const notion = new Client({
 const databaseId = process.env.NOTION_DATABASE_ID;
 
 /**
- * Notion データベースから生徒情報を取得（ページネーション対応）
+ * Notion データベースから生徒情報を取得（ページネーション対応 + キャッシュ）
  */
 export async function fetchStudents() {
+  const cacheKey = 'notion_students';
+  
+  // キャッシュをチェック
+  const cached = cacheService.get(cacheKey);
+  if (cached) {
+    console.log(`📦 Returning ${cached.length} students from cache`);
+    return cached;
+  }
+
   try {
     let allStudents = [];
     let hasMore = true;
     let startCursor = undefined;
+
+    console.log('🔄 Fetching students from Notion API...');
 
     // ページネーションで全データを取得
     while (hasMore) {
@@ -52,7 +64,12 @@ export async function fetchStudents() {
 
     console.log(`✅ Total students fetched: ${allStudents.length}`);
 
-    return allStudents.filter(s => s.studentId && s.lessonStartDate);
+    const filteredStudents = allStudents.filter(s => s.studentId && s.lessonStartDate);
+
+    // キャッシュに保存（5分間）
+    cacheService.set(cacheKey, filteredStudents);
+
+    return filteredStudents;
   } catch (error) {
     console.error('Error fetching from Notion:', error);
     throw error;

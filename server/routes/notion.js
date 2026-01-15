@@ -2,6 +2,7 @@ import express from 'express';
 import { fetchStudents } from '../services/notionService.js';
 import { fetchFormUpdates } from '../services/sheetsService.js';
 import { enrichStudentsWithMonths, filterStudentsByMonth } from '../utils/dateUtils.js';
+import cacheService from '../services/cacheService.js';
 
 const router = express.Router();
 
@@ -36,24 +37,36 @@ router.get('/students', async (req, res) => {
 
 /**
  * GET /api/notion/hearing
- * 4ヶ月目の生徒（ヒアリング一覧）を取得
+ * 4ヶ月目と10ヶ月目の生徒（ヒアリング一覧）を取得
  */
 router.get('/hearing', async (req, res) => {
   try {
     const students = await fetchStudents();
     const formUpdates = await fetchFormUpdates();
     
-    // 4ヶ月目の生徒をフィルタリング
-    const hearingStudents = filterStudentsByMonth(students, 4).map(student => ({
+    // 4ヶ月目と10ヶ月目の生徒をフィルタリング
+    const month4Students = filterStudentsByMonth(students, 4).map(student => ({
       ...student,
       monthsElapsed: 4,
       formLastUpdate: formUpdates[student.studentId] || null,
     }));
 
+    const month10Students = filterStudentsByMonth(students, 10).map(student => ({
+      ...student,
+      monthsElapsed: 10,
+      formLastUpdate: formUpdates[student.studentId] || null,
+    }));
+
+    const hearingStudents = [...month4Students, ...month10Students];
+
     res.json({
       success: true,
       data: hearingStudents,
       count: hearingStudents.length,
+      breakdown: {
+        month4: month4Students.length,
+        month10: month10Students.length,
+      },
     });
   } catch (error) {
     console.error('Error in /api/notion/hearing:', error);
@@ -66,27 +79,58 @@ router.get('/hearing', async (req, res) => {
 
 /**
  * GET /api/notion/examination
- * 5ヶ月目の生徒（延長審査一覧）を取得
+ * 5ヶ月目と11ヶ月目の生徒（延長審査一覧）を取得
  */
 router.get('/examination', async (req, res) => {
   try {
     const students = await fetchStudents();
     const formUpdates = await fetchFormUpdates();
     
-    // 5ヶ月目の生徒をフィルタリング
-    const examinationStudents = filterStudentsByMonth(students, 5).map(student => ({
+    // 5ヶ月目と11ヶ月目の生徒をフィルタリング
+    const month5Students = filterStudentsByMonth(students, 5).map(student => ({
       ...student,
       monthsElapsed: 5,
       formLastUpdate: formUpdates[student.studentId] || null,
     }));
 
+    const month11Students = filterStudentsByMonth(students, 11).map(student => ({
+      ...student,
+      monthsElapsed: 11,
+      formLastUpdate: formUpdates[student.studentId] || null,
+    }));
+
+    const examinationStudents = [...month5Students, ...month11Students];
+
     res.json({
       success: true,
       data: examinationStudents,
       count: examinationStudents.length,
+      breakdown: {
+        month5: month5Students.length,
+        month11: month11Students.length,
+      },
     });
   } catch (error) {
     console.error('Error in /api/notion/examination:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/notion/cache/clear
+ * キャッシュをクリア（手動リフレッシュ用）
+ */
+router.post('/cache/clear', (req, res) => {
+  try {
+    cacheService.clear();
+    res.json({
+      success: true,
+      message: 'Cache cleared successfully',
+    });
+  } catch (error) {
     res.status(500).json({
       success: false,
       error: error.message,

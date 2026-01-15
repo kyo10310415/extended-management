@@ -6,6 +6,18 @@ function StudentMaster() {
   const [error, setError] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterTutor, setFilterTutor] = useState('')
+  const [activeStatusTab, setActiveStatusTab] = useState('すべて')
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // ステータスのタブ定義
+  const statusTabs = [
+    { name: 'すべて', color: 'gray', icon: '📊' },
+    { name: 'アクティブ', color: 'green', icon: '✅' },
+    { name: '正規退会', color: 'red', icon: '🚪' },
+    { name: '休会', color: 'yellow', icon: '⏸️' },
+    { name: 'レッスン準備中', color: 'blue', icon: '🔄' },
+    { name: '無断キャンセル', color: 'orange', icon: '⚠️' },
+  ]
 
   useEffect(() => {
     fetchAllStudents()
@@ -30,6 +42,26 @@ function StudentMaster() {
     }
   }
 
+  // キャッシュをクリアして再取得
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true)
+      
+      // キャッシュをクリア
+      await fetch('/api/notion/cache/clear', { method: 'POST' })
+      
+      // データを再取得
+      await fetchAllStudents()
+      
+      alert('✅ データを最新に更新しました！')
+    } catch (err) {
+      console.error('Error refreshing:', err)
+      alert('❌ 更新に失敗しました')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
   // フィルタリング
   const filteredStudents = students.filter(student => {
     const matchesSearch = 
@@ -38,16 +70,25 @@ function StudentMaster() {
     
     const matchesTutor = filterTutor === '' || student.tutor === filterTutor
 
-    return matchesSearch && matchesTutor
+    const matchesStatus = activeStatusTab === 'すべて' || student.status === activeStatusTab
+
+    return matchesSearch && matchesTutor && matchesStatus
   })
 
   // Tutor一覧を取得
   const tutors = [...new Set(students.map(s => s.tutor).filter(Boolean))].sort()
 
+  // ステータス別の件数を取得
+  const getStatusCount = (status) => {
+    if (status === 'すべて') return students.length
+    return students.filter(s => s.status === status).length
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <span className="ml-3 text-gray-600">生徒情報を読み込み中...</span>
       </div>
     )
   }
@@ -56,6 +97,12 @@ function StudentMaster() {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <p className="text-red-800">エラーが発生しました: {error}</p>
+        <button
+          onClick={fetchAllStudents}
+          className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+        >
+          再試行
+        </button>
       </div>
     )
   }
@@ -67,11 +114,52 @@ function StudentMaster() {
           👥 生徒情報マスタ
         </h2>
         <button
-          onClick={fetchAllStudents}
-          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          🔄 更新
+          {isRefreshing ? '🔄 更新中...' : '🔄 最新データに更新'}
         </button>
+      </div>
+
+      {/* ステータスタブ */}
+      <div className="mb-6 bg-white rounded-lg shadow p-2">
+        <div className="flex flex-wrap gap-2">
+          {statusTabs.map((tab) => {
+            const count = getStatusCount(tab.name)
+            const isActive = activeStatusTab === tab.name
+            
+            return (
+              <button
+                key={tab.name}
+                onClick={() => setActiveStatusTab(tab.name)}
+                className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                  isActive
+                    ? `bg-${tab.color}-100 text-${tab.color}-800 ring-2 ring-${tab.color}-500`
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+                style={isActive ? {
+                  backgroundColor: tab.color === 'gray' ? '#f3f4f6' : 
+                                   tab.color === 'green' ? '#d1fae5' :
+                                   tab.color === 'red' ? '#fee2e2' :
+                                   tab.color === 'yellow' ? '#fef3c7' :
+                                   tab.color === 'blue' ? '#dbeafe' :
+                                   tab.color === 'orange' ? '#ffedd5' : '#f3f4f6',
+                  color: tab.color === 'gray' ? '#374151' :
+                         tab.color === 'green' ? '#065f46' :
+                         tab.color === 'red' ? '#991b1b' :
+                         tab.color === 'yellow' ? '#92400e' :
+                         tab.color === 'blue' ? '#1e40af' :
+                         tab.color === 'orange' ? '#9a3412' : '#374151'
+                } : {}}
+              >
+                <span className="mr-2">{tab.icon}</span>
+                {tab.name}
+                <span className="ml-2 text-sm font-bold">({count})</span>
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* フィルター */}
@@ -86,7 +174,7 @@ function StudentMaster() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="検索..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
           <div>
@@ -96,7 +184,7 @@ function StudentMaster() {
             <select
               value={filterTutor}
               onChange={(e) => setFilterTutor(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">すべて</option>
               {tutors.map(tutor => (
@@ -169,10 +257,16 @@ function StudentMaster() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs rounded-full ${
-                        student.status === '在籍' 
+                        student.status === 'アクティブ' 
                           ? 'bg-green-100 text-green-800'
                           : student.status === '休会'
                           ? 'bg-yellow-100 text-yellow-800'
+                          : student.status === '正規退会'
+                          ? 'bg-red-100 text-red-800'
+                          : student.status === 'レッスン準備中'
+                          ? 'bg-blue-100 text-blue-800'
+                          : student.status === '無断キャンセル'
+                          ? 'bg-orange-100 text-orange-800'
                           : 'bg-gray-100 text-gray-800'
                       }`}>
                         {student.status || '-'}
