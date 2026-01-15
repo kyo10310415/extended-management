@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import pkg from 'pg';
 const { Pool } = pkg;
 
@@ -9,6 +11,9 @@ import notionRoutes from './routes/notion.js';
 import studentsRoutes from './routes/students.js';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -32,6 +37,9 @@ pool.query('SELECT NOW()', (err, res) => {
 app.use(cors());
 app.use(express.json());
 
+// Serve static files from dist directory
+app.use(express.static(path.join(__dirname, '../dist')));
+
 // API Routes
 app.use('/api/notion', notionRoutes);
 app.use('/api/students', studentsRoutes);
@@ -39,6 +47,15 @@ app.use('/api/students', studentsRoutes);
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Serve index.html for all non-API routes (SPA support)
+app.get('*', (req, res) => {
+  if (!req.path.startsWith('/api')) {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
+  } else {
+    res.status(404).json({ error: 'API endpoint not found' });
+  }
 });
 
 // Initialize database tables
