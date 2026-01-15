@@ -7,6 +7,13 @@ package-lock.json
 .env.local
 .env.production
 
+# Google Sheets Service Account Keys
+config/
+*.json
+!package.json
+!package-lock.json
+!jsconfig.json
+
 # Build outputs
 dist/
 build/
