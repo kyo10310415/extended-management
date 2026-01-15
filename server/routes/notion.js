@@ -3,6 +3,7 @@ import { fetchStudents } from '../services/notionService.js';
 import { fetchFormUpdates } from '../services/sheetsService.js';
 import { enrichStudentsWithMonths, filterStudentsByMonth } from '../utils/dateUtils.js';
 import cacheService from '../services/cacheService.js';
+import { manualUpdate } from '../services/backgroundService.js';
 
 const router = express.Router();
 
@@ -130,6 +131,22 @@ router.post('/cache/clear', (req, res) => {
       success: true,
       message: 'Cache cleared successfully',
     });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/notion/update
+ * データを手動で更新（キャッシュクリア + 再取得）
+ */
+router.post('/update', async (req, res) => {
+  try {
+    const result = await manualUpdate();
+    res.json(result);
   } catch (error) {
     res.status(500).json({
       success: false,

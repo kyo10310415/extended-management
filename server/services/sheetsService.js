@@ -1,15 +1,27 @@
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
+import cacheService from './cacheService.js';
 
 dotenv.config();
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
 
 /**
- * Google Sheets から延長フォームの最終更新月を取得
+ * Google Sheets から延長フォームの最終更新月を取得（キャッシュ対応）
  */
 export async function fetchFormUpdates() {
+  const cacheKey = 'sheets_form_updates';
+  
+  // キャッシュをチェック
+  const cached = cacheService.get(cacheKey);
+  if (cached) {
+    console.log(`📦 Returning form updates from cache (${Object.keys(cached).length} records)`);
+    return cached;
+  }
+
   try {
+    console.log('🔄 Fetching form updates from Google Sheets...');
+    
     const sheets = google.sheets({ version: 'v4' });
     
     // A列: 最終更新月、E列: 学籍番号
@@ -35,6 +47,11 @@ export async function fetchFormUpdates() {
         formUpdates[studentId] = lastUpdate;
       }
     });
+
+    console.log(`✅ Fetched form updates for ${Object.keys(formUpdates).length} students`);
+
+    // キャッシュに保存（5分間）
+    cacheService.set(cacheKey, formUpdates);
 
     return formUpdates;
   } catch (error) {

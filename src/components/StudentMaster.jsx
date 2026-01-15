@@ -47,16 +47,20 @@ function StudentMaster() {
     try {
       setIsRefreshing(true)
       
-      // キャッシュをクリア
-      await fetch('/api/notion/cache/clear', { method: 'POST' })
+      // バックグラウンドサービスで更新
+      const response = await fetch('/api/notion/update', { method: 'POST' })
+      const result = await response.json()
       
-      // データを再取得
-      await fetchAllStudents()
-      
-      alert('✅ データを最新に更新しました！')
+      if (result.success) {
+        // データを再取得
+        await fetchAllStudents()
+        alert(`✅ データを最新に更新しました！\n\n生徒数: ${result.studentsCount}件\n処理時間: ${result.duration}`)
+      } else {
+        throw new Error(result.error)
+      }
     } catch (err) {
       console.error('Error refreshing:', err)
-      alert('❌ 更新に失敗しました')
+      alert('❌ 更新に失敗しました: ' + err.message)
     } finally {
       setIsRefreshing(false)
     }

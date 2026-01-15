@@ -10,6 +10,9 @@ const { Pool } = pkg;
 import notionRoutes from './routes/notion.js';
 import studentsRoutes from './routes/students.js';
 
+// Background services
+import { initializeDataPreload, scheduleDailyUpdate } from './services/backgroundService.js';
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -86,7 +89,19 @@ async function initDatabase() {
 // Start server
 app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
+  
+  // データベース初期化
   await initDatabase();
+  
+  // バックグラウンドでデータをプリロード（起動時に即座に取得）
+  console.log('📊 Starting data preload...');
+  await initializeDataPreload();
+  
+  // 定期更新スケジュールを設定（毎日 AM 2:00 JST）
+  scheduleDailyUpdate();
+  
+  console.log('✅ Server initialization completed');
 });
 
 export default app;
