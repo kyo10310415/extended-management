@@ -10,31 +10,49 @@ const notion = new Client({
 const databaseId = process.env.NOTION_DATABASE_ID;
 
 /**
- * Notion データベースから生徒情報を取得
+ * Notion データベースから生徒情報を取得（ページネーション対応）
  */
 export async function fetchStudents() {
   try {
-    const response = await notion.databases.query({
-      database_id: databaseId,
-      page_size: 100,
-    });
+    let allStudents = [];
+    let hasMore = true;
+    let startCursor = undefined;
 
-    const students = response.results.map(page => {
-      const properties = page.properties;
-      
-      return {
-        id: page.id,
-        studentId: getPropertyValue(properties['学籍番号']),
-        name: getPropertyValue(properties['名前']),
-        tutor: getPropertyValue(properties['担任Tutor']),
-        plan: getPropertyValue(properties['契約プラン']),
-        lessonStartDate: getPropertyValue(properties['レッスン開始月']),
-        status: getPropertyValue(properties['ステータス']),
-        notionUrl: page.url,
-      };
-    });
+    // ページネーションで全データを取得
+    while (hasMore) {
+      const response = await notion.databases.query({
+        database_id: databaseId,
+        page_size: 100,
+        start_cursor: startCursor,
+      });
 
-    return students.filter(s => s.studentId && s.lessonStartDate);
+      const students = response.results.map(page => {
+        const properties = page.properties;
+        
+        return {
+          id: page.id,
+          studentId: getPropertyValue(properties['学籍番号']),
+          name: getPropertyValue(properties['名前']),
+          tutor: getPropertyValue(properties['担任Tutor']),
+          plan: getPropertyValue(properties['契約プラン']),
+          lessonStartDate: getPropertyValue(properties['レッスン開始月']),
+          status: getPropertyValue(properties['ステータス']),
+          notionUrl: page.url,
+        };
+      });
+
+      allStudents = allStudents.concat(students);
+
+      hasMore = response.has_more;
+      startCursor = response.next_cursor;
+
+      // ログで進捗を表示
+      console.log(`📊 Fetched ${allStudents.length} students from Notion...`);
+    }
+
+    console.log(`✅ Total students fetched: ${allStudents.length}`);
+
+    return allStudents.filter(s => s.studentId && s.lessonStartDate);
   } catch (error) {
     console.error('Error fetching from Notion:', error);
     throw error;
