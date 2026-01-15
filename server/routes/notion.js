@@ -39,24 +39,29 @@ router.get('/students', async (req, res) => {
 /**
  * GET /api/notion/hearing
  * 4ヶ月目と10ヶ月目の生徒（ヒアリング一覧）を取得
+ * ステータスが「アクティブ」の生徒のみ
  */
 router.get('/hearing', async (req, res) => {
   try {
     const students = await fetchStudents();
     const formUpdates = await fetchFormUpdates();
     
-    // 4ヶ月目と10ヶ月目の生徒をフィルタリング
-    const month4Students = filterStudentsByMonth(students, 4).map(student => ({
-      ...student,
-      monthsElapsed: 4,
-      formLastUpdate: formUpdates[student.studentId] || null,
-    }));
+    // 4ヶ月目と10ヶ月目の生徒をフィルタリング（アクティブのみ）
+    const month4Students = filterStudentsByMonth(students, 4)
+      .filter(s => s.status === 'アクティブ')
+      .map(student => ({
+        ...student,
+        monthsElapsed: 4,
+        formLastUpdate: formUpdates[student.studentId] || null,
+      }));
 
-    const month10Students = filterStudentsByMonth(students, 10).map(student => ({
-      ...student,
-      monthsElapsed: 10,
-      formLastUpdate: formUpdates[student.studentId] || null,
-    }));
+    const month10Students = filterStudentsByMonth(students, 10)
+      .filter(s => s.status === 'アクティブ')
+      .map(student => ({
+        ...student,
+        monthsElapsed: 10,
+        formLastUpdate: formUpdates[student.studentId] || null,
+      }));
 
     const hearingStudents = [...month4Students, ...month10Students];
 
@@ -81,24 +86,29 @@ router.get('/hearing', async (req, res) => {
 /**
  * GET /api/notion/examination
  * 5ヶ月目と11ヶ月目の生徒（延長審査一覧）を取得
+ * ステータスが「アクティブ」の生徒のみ
  */
 router.get('/examination', async (req, res) => {
   try {
     const students = await fetchStudents();
     const formUpdates = await fetchFormUpdates();
     
-    // 5ヶ月目と11ヶ月目の生徒をフィルタリング
-    const month5Students = filterStudentsByMonth(students, 5).map(student => ({
-      ...student,
-      monthsElapsed: 5,
-      formLastUpdate: formUpdates[student.studentId] || null,
-    }));
+    // 5ヶ月目と11ヶ月目の生徒をフィルタリング（アクティブのみ）
+    const month5Students = filterStudentsByMonth(students, 5)
+      .filter(s => s.status === 'アクティブ')
+      .map(student => ({
+        ...student,
+        monthsElapsed: 5,
+        formLastUpdate: formUpdates[student.studentId] || null,
+      }));
 
-    const month11Students = filterStudentsByMonth(students, 11).map(student => ({
-      ...student,
-      monthsElapsed: 11,
-      formLastUpdate: formUpdates[student.studentId] || null,
-    }));
+    const month11Students = filterStudentsByMonth(students, 11)
+      .filter(s => s.status === 'アクティブ')
+      .map(student => ({
+        ...student,
+        monthsElapsed: 11,
+        formLastUpdate: formUpdates[student.studentId] || null,
+      }));
 
     const examinationStudents = [...month5Students, ...month11Students];
 

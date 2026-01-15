@@ -7,6 +7,33 @@ dotenv.config();
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
 
 /**
+ * Google Sheets 認証の取得
+ */
+function getAuth() {
+  // サービスアカウントキーが設定されている場合
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+    try {
+      const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
+      return new google.auth.GoogleAuth({
+        credentials,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+      });
+    } catch (error) {
+      console.error('❌ Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY:', error.message);
+      return null;
+    }
+  }
+  
+  // API Keyが設定されている場合（フォールバック）
+  if (process.env.GOOGLE_API_KEY) {
+    return { key: process.env.GOOGLE_API_KEY };
+  }
+  
+  console.warn('⚠️  No Google Sheets authentication configured');
+  return null;
+}
+
+/**
  * Google Sheets から延長フォームの最終更新月を取得（キャッシュ対応）
  */
 export async function fetchFormUpdates() {
@@ -22,13 +49,18 @@ export async function fetchFormUpdates() {
   try {
     console.log('🔄 Fetching form updates from Google Sheets...');
     
-    const sheets = google.sheets({ version: 'v4' });
+    const auth = getAuth();
+    if (!auth) {
+      console.warn('⚠️  Google Sheets authentication not configured, returning empty data');
+      return {};
+    }
+
+    const sheets = google.sheets({ version: 'v4', auth });
     
     // A列: 最終更新月、E列: 学籍番号
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: 'Form_Responses!A:E',
-      key: process.env.GOOGLE_API_KEY,
     });
 
     const rows = response.data.values || [];
@@ -55,7 +87,7 @@ export async function fetchFormUpdates() {
 
     return formUpdates;
   } catch (error) {
-    console.error('Error fetching from Google Sheets:', error);
+    console.error('❌ Error fetching from Google Sheets:', error.message);
     // エラーが発生しても空のオブジェクトを返す
     return {};
   }
