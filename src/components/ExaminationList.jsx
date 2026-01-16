@@ -1,10 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import StudentTable from './StudentTable'
 
 function ExaminationList() {
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  
+  // 検索フィルター
+  const [searchFilters, setSearchFilters] = useState({
+    studentId: '',
+    name: '',
+    tutor: '',
+    extension_certainty: '',
+    examination_result: '',
+  })
 
   useEffect(() => {
     fetchExaminationStudents()
@@ -77,6 +86,38 @@ function ExaminationList() {
     )
   }
 
+  // フィルター済み生徒リスト
+  const filteredStudents = useMemo(() => {
+    return students.filter(student => {
+      // 学籍番号フィルター
+      if (searchFilters.studentId && !student.studentId?.toLowerCase().includes(searchFilters.studentId.toLowerCase())) {
+        return false;
+      }
+      
+      // 生徒名フィルター
+      if (searchFilters.name && !student.name?.toLowerCase().includes(searchFilters.name.toLowerCase())) {
+        return false;
+      }
+      
+      // 担当Tutorフィルター
+      if (searchFilters.tutor && !student.tutor?.toLowerCase().includes(searchFilters.tutor.toLowerCase())) {
+        return false;
+      }
+      
+      // 延長確度フィルター
+      if (searchFilters.extension_certainty && student.extensionData?.extension_certainty !== searchFilters.extension_certainty) {
+        return false;
+      }
+      
+      // 審査結果フィルター
+      if (searchFilters.examination_result && student.extensionData?.examination_result !== searchFilters.examination_result) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [students, searchFilters]);
+
   if (error) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -99,13 +140,99 @@ function ExaminationList() {
         </button>
       </div>
 
+      {/* 検索フィルター */}
+      <div className="bg-white rounded-lg shadow p-4 mb-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">🔍 検索フィルター（AND検索）</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">学籍番号</label>
+            <input
+              type="text"
+              placeholder="例：W12345"
+              value={searchFilters.studentId}
+              onChange={(e) => setSearchFilters({...searchFilters, studentId: e.target.value})}
+              className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-primary focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">生徒名</label>
+            <input
+              type="text"
+              placeholder="例：山田"
+              value={searchFilters.name}
+              onChange={(e) => setSearchFilters({...searchFilters, name: e.target.value})}
+              className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-primary focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">担当Tutor</label>
+            <input
+              type="text"
+              placeholder="例：ごう"
+              value={searchFilters.tutor}
+              onChange={(e) => setSearchFilters({...searchFilters, tutor: e.target.value})}
+              className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-primary focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">延長確度</label>
+            <select
+              value={searchFilters.extension_certainty}
+              onChange={(e) => setSearchFilters({...searchFilters, extension_certainty: e.target.value})}
+              className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-primary focus:border-primary"
+            >
+              <option value="">すべて</option>
+              <option value="高">高</option>
+              <option value="中">中</option>
+              <option value="低">低</option>
+              <option value="対象外">対象外</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">審査結果</label>
+            <select
+              value={searchFilters.examination_result}
+              onChange={(e) => setSearchFilters({...searchFilters, examination_result: e.target.value})}
+              className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-primary focus:border-primary"
+            >
+              <option value="">すべて</option>
+              <option value="延長">延長</option>
+              <option value="在籍">在籍</option>
+              <option value="退会">退会</option>
+              <option value="永久会員">永久会員</option>
+            </select>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-gray-600">
+            表示中: <span className="font-semibold text-primary">{filteredStudents.length}</span> / {students.length} 件
+          </p>
+          <button
+            onClick={() => setSearchFilters({
+              studentId: '',
+              name: '',
+              tutor: '',
+              extension_certainty: '',
+              examination_result: '',
+            })}
+            className="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition"
+          >
+            🔄 リセット
+          </button>
+        </div>
+      </div>
+
       {students.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
           現在、延長審査対象の生徒はいません
         </div>
+      ) : filteredStudents.length === 0 ? (
+        <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+          検索条件に一致する生徒はいません
+        </div>
       ) : (
         <StudentTable
-          students={students}
+          students={filteredStudents}
           onUpdate={handleUpdate}
           showExaminationColumn={true}
         />

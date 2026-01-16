@@ -6,7 +6,7 @@
 class CacheService {
   constructor() {
     this.cache = new Map();
-    this.ttl = 5 * 60 * 1000; // 5分間キャッシュ
+    this.ttl = 30 * 60 * 1000; // 30分間キャッシュ（5分→30分に延長）
   }
 
   /**
