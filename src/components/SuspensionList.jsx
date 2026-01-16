@@ -117,45 +117,45 @@ function SuspensionList() {
             <table className="min-w-full divide-y divide-gray-200 text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
                     学籍番号
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
                     生徒様名
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                    担任Tutor
+                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
+                    担任
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
                     ステータス
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
                     開始月
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                    継続月数
+                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
+                    継続
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                    休会期間
+                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
+                    休会
                   </th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                    調整後月数
+                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
+                    調整後
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredStudents.map((student) => (
                   <tr key={student.id} className="hover:bg-gray-50">
-                    <td className="px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-900">
+                    <td className="px-2 py-1 whitespace-nowrap text-xs font-medium text-gray-900">
                       {student.studentId}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
+                    <td className="px-2 py-1 whitespace-nowrap text-xs text-gray-900">
                       {student.name}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
+                    <td className="px-2 py-1 whitespace-nowrap text-xs text-gray-500">
                       {student.tutor || '-'}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-2 py-1 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs rounded-full ${
                         student.status === 'アクティブ'
                           ? 'bg-green-100 text-green-800'
@@ -166,20 +166,20 @@ function SuspensionList() {
                         {student.status}
                       </span>
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
+                    <td className="px-2 py-1 whitespace-nowrap text-xs text-gray-500">
                       {student.lessonStartDate}
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-2 py-1 whitespace-nowrap">
                       <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
                         {student.monthsElapsed || 0}ヶ月
                       </span>
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-2 py-1 whitespace-nowrap">
                       <span className="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
                         {student.suspensionMonths || 0}ヶ月
                       </span>
                     </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
+                    <td className="px-2 py-1 whitespace-nowrap">
                       <span className="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
                         {student.adjustedMonths || student.monthsElapsed || 0}ヶ月
                       </span>
