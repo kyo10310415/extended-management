@@ -79,29 +79,7 @@ function HearingList() {
     }
   }
 
-  const getMonthLabel = () => {
-    if (monthOffset === -1) return '前月';
-    if (monthOffset === 1) return '翌月';
-    return '今月';
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-800">エラーが発生しました: {error}</p>
-      </div>
-    )
-  }
-
-  // フィルター済み生徒リスト
+  // フィルター済み生徒リスト（フックはトップレベルで呼ぶ必要がある）
   const filteredStudents = useMemo(() => {
     return students.filter(student => {
       // 学籍番号フィルター
@@ -135,6 +113,28 @@ function HearingList() {
       return true;
     });
   }, [students, searchFilters]);
+
+  const getMonthLabel = () => {
+    if (monthOffset === -1) return '前月';
+    if (monthOffset === 1) return '翌月';
+    return '今月';
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p className="text-red-800">エラーが発生しました: {error}</p>
+      </div>
+    )
+  }
 
   return (
     <div>
