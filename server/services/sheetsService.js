@@ -58,11 +58,41 @@ export async function fetchFormUpdates() {
 
     const sheets = google.sheets({ version: 'v4', auth });
     
-    // A列: 最終更新月、E列: 学籍番号
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: 'Form_Responses!A:E',
-    });
+    // 複数のシート名を試す
+    const possibleSheetNames = [
+      'フォームの回答 1',
+      'Form Responses 1',
+      'Form Responses',
+      'Form_Responses',
+      'フォーム回答 1',
+      'フォーム回答',
+      'シート1',
+    ];
+    
+    let response = null;
+    let successSheetName = null;
+    
+    // 各シート名を順番に試す
+    for (const sheetName of possibleSheetNames) {
+      try {
+        console.log(`📋 Trying sheet name: "${sheetName}"`);
+        response = await sheets.spreadsheets.values.get({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheetName}!A:E`,
+        });
+        successSheetName = sheetName;
+        console.log(`✅ Successfully accessed sheet: "${sheetName}"`);
+        break; // 成功したらループを抜ける
+      } catch (err) {
+        console.log(`❌ Failed to access sheet: "${sheetName}" - ${err.message}`);
+        continue; // 次のシート名を試す
+      }
+    }
+    
+    // すべて失敗した場合
+    if (!response) {
+      throw new Error('Unable to find valid sheet name. Tried: ' + possibleSheetNames.join(', '));
+    }
 
     const rows = response.data.values || [];
     
@@ -81,7 +111,7 @@ export async function fetchFormUpdates() {
       }
     });
 
-    console.log(`✅ Fetched form updates for ${Object.keys(formUpdates).length} students`);
+    console.log(`✅ Fetched form updates for ${Object.keys(formUpdates).length} students from "${successSheetName}"`);
 
     // キャッシュに保存（5分間）
     cacheService.set(cacheKey, formUpdates);
