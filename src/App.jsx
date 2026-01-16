@@ -3,6 +3,7 @@ import Dashboard from './components/Dashboard'
 import HearingList from './components/HearingList'
 import ExaminationList from './components/ExaminationList'
 import StudentMaster from './components/StudentMaster'
+import SuspensionList from './components/SuspensionList'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -11,6 +12,7 @@ function App() {
     { id: 'dashboard', name: 'ダッシュボード', icon: '📊' },
     { id: 'hearing', name: 'ヒアリング一覧', icon: '🎤' },
     { id: 'examination', name: '延長審査一覧', icon: '📋' },
+    { id: 'suspension', name: '休会歴一覧', icon: '⏸️' },
     { id: 'master', name: '生徒情報マスタ', icon: '👥' },
   ]
 
@@ -64,6 +66,7 @@ function App() {
         {activeTab === 'dashboard' && <Dashboard />}
         {activeTab === 'hearing' && <HearingList />}
         {activeTab === 'examination' && <ExaminationList />}
+        {activeTab === 'suspension' && <SuspensionList />}
         {activeTab === 'master' && <StudentMaster />}
       </main>
 

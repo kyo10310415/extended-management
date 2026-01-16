@@ -9,18 +9,29 @@ const router = express.Router();
 
 /**
  * GET /api/notion/students
- * Notionから全生徒情報を取得
+ * Notionから全生徒情報を取得（休会情報も含む）
  */
 router.get('/students', async (req, res) => {
   try {
     const students = await fetchStudents();
     const formUpdates = await fetchFormUpdates();
+    const suspensionData = await fetchSuspensionData();
     
-    // 経過月数を追加し、フォーム更新日を紐付け
-    const enrichedStudents = enrichStudentsWithMonths(students).map(student => ({
-      ...student,
-      formLastUpdate: formUpdates[student.studentId] || null,
-    }));
+    // 経過月数を追加し、フォーム更新日と休会情報を紐付け
+    const enrichedStudents = enrichStudentsWithMonths(students).map(student => {
+      const suspension = suspensionData[student.studentId];
+      const adjustedMonths = suspension 
+        ? Math.max(0, student.monthsElapsed - suspension.suspensionMonths)
+        : student.monthsElapsed;
+      
+      return {
+        ...student,
+        formLastUpdate: formUpdates[student.studentId] || null,
+        suspensionMonths: suspension?.suspensionMonths || 0,
+        hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
+        adjustedMonths,
+      };
+    });
 
     res.json({
       success: true,

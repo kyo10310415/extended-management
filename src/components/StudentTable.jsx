@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 function StudentTable({ students, onUpdate, showHearingColumn, showExaminationColumn }) {
   const [editingStudent, setEditingStudent] = useState(null)
   const [formData, setFormData] = useState({})
-  const [sortField, setSortField] = useState(null)
+  const [sortField, setSortField] = useState('tutor') // デフォルトで担任Tutorでソート
   const [sortDirection, setSortDirection] = useState('asc')
 
   const handleEdit = (student) => {
@@ -58,57 +58,54 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
+        <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                 学籍番号
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                 生徒様名
               </th>
               <th 
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100"
                 onClick={() => handleSort('tutor')}
               >
                 <div className="flex items-center">
                   担任Tutor
                   {sortField === 'tutor' && (
-                    <span className="ml-1">
+                    <span className="ml-1 text-xs">
                       {sortDirection === 'asc' ? '▲' : '▼'}
                     </span>
                   )}
                 </div>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                 プラン
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                レッスン開始月
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                開始月
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                 継続月数
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                フォーム最終更新
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                 延長確度
               </th>
               {showHearingColumn && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">
                   ヒアリング
                 </th>
               )}
               {showExaminationColumn && (
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">
                   審査結果
                 </th>
               )}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[300px]">
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-64">
                 備考
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">
                 操作
               </th>
             </tr>
@@ -124,37 +121,34 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
 
               return (
                 <tr key={student.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  <td className="px-3 py-2 whitespace-nowrap text-xs font-medium text-gray-900">
                     {student.studentId}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900">
                     {student.name}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
                     {student.tutor || '-'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
                     {student.plan || '-'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500">
                     {student.lessonStartDate}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-3 py-2 whitespace-nowrap">
                     <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                      {student.monthsElapsed}ヶ月目
+                      {student.monthsElapsed}ヶ月
                     </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {student.formLastUpdate || '-'}
                   </td>
                   
                   {/* 延長確度 */}
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-3 py-2 whitespace-nowrap">
                     {isEditing ? (
                       <select
                         value={formData.extension_certainty}
                         onChange={(e) => setFormData({ ...formData, extension_certainty: e.target.value })}
-                        className="px-2 py-1 border border-gray-300 rounded text-sm"
+                        className="px-2 py-1 border border-gray-300 rounded text-xs w-full"
                       >
                         <option value="">選択</option>
                         <option value="高">高</option>
@@ -163,7 +157,7 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                         <option value="対象外">対象外</option>
                       </select>
                     ) : (
-                      <span className={`px-2 py-1 text-xs rounded-full ${
+                      <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${
                         student.extensionData?.extension_certainty === '高'
                           ? 'bg-green-100 text-green-800'
                           : student.extensionData?.extension_certainty === '中'
@@ -179,7 +173,7 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
 
                   {/* ヒアリング */}
                   {showHearingColumn && (
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <td className="px-3 py-2 whitespace-nowrap text-center">
                       {isEditing ? (
                         <input
                           type="checkbox"
@@ -188,7 +182,7 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                           className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                         />
                       ) : (
-                        <span className="text-2xl">
+                        <span className="text-xl">
                           {student.extensionData?.hearing_status ? '✅' : '❌'}
                         </span>
                       )}
@@ -197,12 +191,12 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
 
                   {/* 審査結果 */}
                   {showExaminationColumn && (
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       {isEditing ? (
                         <select
                           value={formData.examination_result}
                           onChange={(e) => setFormData({ ...formData, examination_result: e.target.value })}
-                          className="px-2 py-1 border border-gray-300 rounded text-sm"
+                          className="px-2 py-1 border border-gray-300 rounded text-xs w-full"
                         >
                           <option value="">選択</option>
                           <option value="延長">延長</option>
@@ -211,7 +205,7 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                           <option value="永久会員">永久会員</option>
                         </select>
                       ) : (
-                        <span className={`px-2 py-1 text-xs rounded-full ${
+                        <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${
                           student.extensionData?.examination_result === '延長'
                             ? 'bg-green-100 text-green-800'
                             : student.extensionData?.examination_result === '在籍'
@@ -229,13 +223,13 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                   )}
 
                   {/* 備考 */}
-                  <td className="px-6 py-4 text-sm text-gray-500 min-w-[300px]">
+                  <td className="px-3 py-2 text-xs text-gray-500 w-64">
                     {isEditing ? (
                       <textarea
                         value={formData.notes}
                         onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                        className="px-2 py-1 border border-gray-300 rounded text-sm w-full"
-                        rows="3"
+                        className="px-2 py-1 border border-gray-300 rounded text-xs w-full"
+                        rows="2"
                         placeholder="備考を入力..."
                       />
                     ) : (
@@ -245,7 +239,7 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                             {suspensionWarning}
                           </div>
                         )}
-                        <span className="line-clamp-3">
+                        <span className="line-clamp-2 text-xs">
                           {student.extensionData?.notes || '-'}
                         </span>
                       </div>
@@ -253,18 +247,18 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                   </td>
 
                   {/* 操作 */}
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                  <td className="px-3 py-2 whitespace-nowrap text-center">
                     {isEditing ? (
-                      <div className="flex space-x-2">
+                      <div className="flex flex-col space-y-1">
                         <button
                           onClick={() => handleSave(student.studentId)}
-                          className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+                          className="px-2 py-1 bg-green-500 text-white rounded text-xs hover:bg-green-600"
                         >
                           保存
                         </button>
                         <button
                           onClick={handleCancel}
-                          className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
+                          className="px-2 py-1 bg-gray-500 text-white rounded text-xs hover:bg-gray-600"
                         >
                           キャンセル
                         </button>
@@ -272,7 +266,7 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                     ) : (
                       <button
                         onClick={() => handleEdit(student)}
-                        className="px-3 py-1 bg-primary text-white rounded hover:bg-primary/90"
+                        className="px-2 py-1 bg-primary text-white rounded text-xs hover:bg-primary/90"
                       >
                         編集
                       </button>
