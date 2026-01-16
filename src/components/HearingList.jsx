@@ -5,6 +5,7 @@ function HearingList() {
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [monthOffset, setMonthOffset] = useState(0) // -1: 前月, 0: 今月, 1: 翌月
   
   // 検索フィルター
   const [searchFilters, setSearchFilters] = useState({
@@ -17,12 +18,12 @@ function HearingList() {
 
   useEffect(() => {
     fetchHearingStudents()
-  }, [])
+  }, [monthOffset])
 
   const fetchHearingStudents = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/notion/hearing')
+      const response = await fetch(`/api/notion/hearing?monthOffset=${monthOffset}`)
       const data = await response.json()
 
       if (data.success) {
@@ -77,6 +78,12 @@ function HearingList() {
       console.error('Error updating student:', err)
     }
   }
+
+  const getMonthLabel = () => {
+    if (monthOffset === -1) return '前月';
+    if (monthOffset === 1) return '翌月';
+    return '今月';
+  };
 
   if (loading) {
     return (
@@ -135,12 +142,48 @@ function HearingList() {
         <h2 className="text-2xl font-bold text-gray-900">
           🎤 ヒアリング一覧（4ヶ月目・10ヶ月目）
         </h2>
-        <button
-          onClick={fetchHearingStudents}
-          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
-        >
-          🔄 更新
-        </button>
+        <div className="flex items-center gap-3">
+          {/* 月切り替えボタン */}
+          <div className="flex items-center gap-2 bg-white rounded-lg shadow px-3 py-2">
+            <span className="text-xs text-gray-600">対象月:</span>
+            <button
+              onClick={() => setMonthOffset(-1)}
+              className={`px-3 py-1 text-xs rounded transition ${
+                monthOffset === -1
+                  ? 'bg-primary text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              前月
+            </button>
+            <button
+              onClick={() => setMonthOffset(0)}
+              className={`px-3 py-1 text-xs rounded transition ${
+                monthOffset === 0
+                  ? 'bg-primary text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              今月
+            </button>
+            <button
+              onClick={() => setMonthOffset(1)}
+              className={`px-3 py-1 text-xs rounded transition ${
+                monthOffset === 1
+                  ? 'bg-primary text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              翌月
+            </button>
+          </div>
+          <button
+            onClick={fetchHearingStudents}
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+          >
+            🔄 更新
+          </button>
+        </div>
       </div>
 
       {/* 検索フィルター */}

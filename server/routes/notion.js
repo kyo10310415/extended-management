@@ -52,15 +52,17 @@ router.get('/students', async (req, res) => {
  * 4ヶ月目と10ヶ月目の生徒（ヒアリング一覧）を取得
  * ステータスが「アクティブ」の生徒のみ
  * 休会情報も含む
+ * @query {number} monthOffset - 月オフセット (-1: 前月, 0: 今月, 1: 翌月)
  */
 router.get('/hearing', async (req, res) => {
   try {
+    const monthOffset = parseInt(req.query.monthOffset) || 0;
     const students = await fetchStudents();
     const formUpdates = await fetchFormUpdates();
     const suspensionData = await fetchSuspensionData();
     
     // 4ヶ月目と10ヶ月目の生徒をフィルタリング（アクティブのみ）
-    const month4Students = filterStudentsByMonth(students, 4)
+    const month4Students = filterStudentsByMonth(students, 4, monthOffset)
       .filter(s => s.status === 'アクティブ')
       .map(student => {
         const suspension = suspensionData[student.studentId];
@@ -75,7 +77,7 @@ router.get('/hearing', async (req, res) => {
         };
       });
 
-    const month10Students = filterStudentsByMonth(students, 10)
+    const month10Students = filterStudentsByMonth(students, 10, monthOffset)
       .filter(s => s.status === 'アクティブ')
       .map(student => {
         const suspension = suspensionData[student.studentId];
@@ -96,6 +98,7 @@ router.get('/hearing', async (req, res) => {
       success: true,
       data: hearingStudents,
       count: hearingStudents.length,
+      monthOffset,
       breakdown: {
         month4: month4Students.length,
         month10: month10Students.length,
@@ -115,15 +118,17 @@ router.get('/hearing', async (req, res) => {
  * 5ヶ月目と11ヶ月目の生徒（延長審査一覧）を取得
  * ステータスが「アクティブ」の生徒のみ
  * 休会情報も含む
+ * @query {number} monthOffset - 月オフセット (-1: 前月, 0: 今月, 1: 翌月)
  */
 router.get('/examination', async (req, res) => {
   try {
+    const monthOffset = parseInt(req.query.monthOffset) || 0;
     const students = await fetchStudents();
     const formUpdates = await fetchFormUpdates();
     const suspensionData = await fetchSuspensionData();
     
     // 5ヶ月目と11ヶ月目の生徒をフィルタリング（アクティブのみ）
-    const month5Students = filterStudentsByMonth(students, 5)
+    const month5Students = filterStudentsByMonth(students, 5, monthOffset)
       .filter(s => s.status === 'アクティブ')
       .map(student => {
         const suspension = suspensionData[student.studentId];
@@ -138,7 +143,7 @@ router.get('/examination', async (req, res) => {
         };
       });
 
-    const month11Students = filterStudentsByMonth(students, 11)
+    const month11Students = filterStudentsByMonth(students, 11, monthOffset)
       .filter(s => s.status === 'アクティブ')
       .map(student => {
         const suspension = suspensionData[student.studentId];
@@ -159,6 +164,7 @@ router.get('/examination', async (req, res) => {
       success: true,
       data: examinationStudents,
       count: examinationStudents.length,
+      monthOffset,
       breakdown: {
         month5: month5Students.length,
         month11: month11Students.length,
