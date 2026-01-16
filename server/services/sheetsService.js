@@ -149,11 +149,38 @@ export async function fetchSuspensionData() {
 
     const sheets = google.sheets({ version: 'v4', auth });
     
-    // H列: 学籍番号、K列: 休会期間
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SUSPENSION_SPREADSHEET_ID,
-      range: 'シート1!H:K',
-    });
+    // 複数のシート名を試す
+    const possibleSheetNames = [
+      'シート1',
+      'Sheet1',
+      'フォームの回答 1',
+      'Form Responses 1',
+    ];
+    
+    let response = null;
+    let successSheetName = null;
+    
+    // 各シート名を順番に試す
+    for (const sheetName of possibleSheetNames) {
+      try {
+        console.log(`📋 Trying suspension sheet name: "${sheetName}"`);
+        response = await sheets.spreadsheets.values.get({
+          spreadsheetId: SUSPENSION_SPREADSHEET_ID,
+          range: `${sheetName}!H:K`,
+        });
+        successSheetName = sheetName;
+        console.log(`✅ Successfully accessed suspension sheet: "${sheetName}"`);
+        break; // 成功したらループを抜ける
+      } catch (err) {
+        console.log(`❌ Failed to access suspension sheet: "${sheetName}" - ${err.message}`);
+        continue; // 次のシート名を試す
+      }
+    }
+    
+    // すべて失敗した場合
+    if (!response) {
+      throw new Error('Unable to find valid suspension sheet name. Tried: ' + possibleSheetNames.join(', '));
+    }
 
     const rows = response.data.values || [];
     
@@ -175,7 +202,7 @@ export async function fetchSuspensionData() {
       }
     });
 
-    console.log(`✅ Fetched suspension data for ${Object.keys(suspensionData).length} students`);
+    console.log(`✅ Fetched suspension data for ${Object.keys(suspensionData).length} students from "${successSheetName}"`);
 
     // キャッシュに保存（5分間）
     cacheService.set(cacheKey, suspensionData);
