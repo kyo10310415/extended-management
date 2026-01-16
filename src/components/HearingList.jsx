@@ -27,18 +27,23 @@ function HearingList() {
       const data = await response.json()
 
       if (data.success) {
-        // 延長管理データを一括取得
+        // 延長管理データを一括取得（サイクル: 1回目は4-5ヶ月、2回目は10-11ヶ月）
         const studentIds = data.data.map(s => s.studentId)
+        
+        // サイクルを判定（4ヶ月目なら1回目、10ヶ月目なら2回目）
+        const cycle = data.data[0]?.monthsElapsed === 10 ? 2 : 1;
+        
         const extensionsRes = await fetch('/api/students/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentIds }),
+          body: JSON.stringify({ studentIds, cycle }),
         })
         const extensionsData = await extensionsRes.json()
 
-        // データをマージ
+        // データをマージ（サイクル情報も含める）
         const enrichedStudents = data.data.map(student => ({
           ...student,
+          cycle,  // サイクル情報を保存
           extensionData: extensionsData.data?.[student.studentId] || null,
         }))
 
@@ -56,10 +61,14 @@ function HearingList() {
 
   const handleUpdate = async (studentId, updatedData) => {
     try {
+      // 対象生徒のサイクル情報を取得
+      const student = students.find(s => s.studentId === studentId);
+      const cycle = student?.cycle || 1;
+      
       const response = await fetch(`/api/students/${studentId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedData),
+        body: JSON.stringify({ ...updatedData, cycle }),
       })
 
       const data = await response.json()

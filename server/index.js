@@ -67,10 +67,19 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS student_extensions (
       id SERIAL PRIMARY KEY,
       student_id VARCHAR(50) UNIQUE NOT NULL,
-      extension_certainty VARCHAR(20),
-      hearing_status BOOLEAN DEFAULT false,
-      examination_result VARCHAR(50),
-      notes TEXT,
+      
+      -- 1回目（4ヶ月目・5ヶ月目用）
+      extension_certainty_1 VARCHAR(20),
+      hearing_status_1 BOOLEAN DEFAULT false,
+      examination_result_1 VARCHAR(50),
+      notes_1 TEXT,
+      
+      -- 2回目（10ヶ月目・11ヶ月目用）
+      extension_certainty_2 VARCHAR(20),
+      hearing_status_2 BOOLEAN DEFAULT false,
+      examination_result_2 VARCHAR(50),
+      notes_2 TEXT,
+      
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
@@ -78,9 +87,43 @@ async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_student_id ON student_extensions(student_id);
   `;
 
+  // 既存テーブルに新しいカラムを追加するマイグレーション
+  const migrationQuery = `
+    -- 1回目のカラム追加（存在しない場合のみ）
+    DO $$ 
+    BEGIN
+      -- 既存のカラムを_1にリネーム
+      IF EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'student_extensions' 
+                 AND column_name = 'extension_certainty'
+                 AND column_name NOT LIKE '%_1') THEN
+        ALTER TABLE student_extensions 
+          RENAME COLUMN extension_certainty TO extension_certainty_1;
+        ALTER TABLE student_extensions 
+          RENAME COLUMN hearing_status TO hearing_status_1;
+        ALTER TABLE student_extensions 
+          RENAME COLUMN examination_result TO examination_result_1;
+        ALTER TABLE student_extensions 
+          RENAME COLUMN notes TO notes_1;
+      END IF;
+
+      -- 2回目のカラム追加
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                     WHERE table_name = 'student_extensions' 
+                     AND column_name = 'extension_certainty_2') THEN
+        ALTER TABLE student_extensions 
+          ADD COLUMN extension_certainty_2 VARCHAR(20),
+          ADD COLUMN hearing_status_2 BOOLEAN DEFAULT false,
+          ADD COLUMN examination_result_2 VARCHAR(50),
+          ADD COLUMN notes_2 TEXT;
+      END IF;
+    END $$;
+  `;
+
   try {
     await pool.query(createTableQuery);
-    console.log('✅ Database tables initialized');
+    await pool.query(migrationQuery);
+    console.log('✅ Database tables initialized and migrated');
   } catch (error) {
     console.error('❌ Database initialization error:', error);
   }
