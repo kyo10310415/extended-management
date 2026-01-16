@@ -89,7 +89,7 @@ function ExaminationList() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">
-          📋 延長審査一覧（5ヶ月目）
+          📋 延長審査一覧（5ヶ月目・11ヶ月目）
         </h2>
         <button
           onClick={fetchExaminationStudents}

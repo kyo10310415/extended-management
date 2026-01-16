@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 
 function StudentTable({ students, onUpdate, showHearingColumn, showExaminationColumn }) {
   const [editingStudent, setEditingStudent] = useState(null)
   const [formData, setFormData] = useState({})
+  const [sortField, setSortField] = useState(null)
+  const [sortDirection, setSortDirection] = useState('asc')
 
   const handleEdit = (student) => {
     setEditingStudent(student.studentId)
@@ -24,6 +26,35 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
     setFormData({})
   }
 
+  // ソート機能
+  const handleSort = (field) => {
+    if (sortField === field) {
+      // 同じフィールドをクリックした場合は昇順・降順を切り替え
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      // 新しいフィールドは昇順から開始
+      setSortField(field)
+      setSortDirection('asc')
+    }
+  }
+
+  // ソート後の生徒リスト
+  const sortedStudents = useMemo(() => {
+    if (!sortField) return students
+
+    return [...students].sort((a, b) => {
+      let aValue = a[sortField] || ''
+      let bValue = b[sortField] || ''
+
+      // 文字列比較
+      if (sortDirection === 'asc') {
+        return aValue.localeCompare(bValue, 'ja')
+      } else {
+        return bValue.localeCompare(aValue, 'ja')
+      }
+    })
+  }, [students, sortField, sortDirection])
+
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="overflow-x-auto">
@@ -36,8 +67,18 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 生徒様名
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                担任Tutor
+              <th 
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                onClick={() => handleSort('tutor')}
+              >
+                <div className="flex items-center">
+                  担任Tutor
+                  {sortField === 'tutor' && (
+                    <span className="ml-1">
+                      {sortDirection === 'asc' ? '▲' : '▼'}
+                    </span>
+                  )}
+                </div>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 プラン
@@ -64,7 +105,7 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                   審査結果
                 </th>
               )}
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[300px]">
                 備考
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -73,8 +114,13 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {students.map((student) => {
+            {sortedStudents.map((student) => {
               const isEditing = editingStudent === student.studentId
+              
+              // 休会歴があるかチェック
+              const suspensionWarning = student.hasSuspensionHistory 
+                ? '⚠️ 休会歴あり。要チェック' 
+                : ''
 
               return (
                 <tr key={student.id} className="hover:bg-gray-50">
@@ -183,19 +229,26 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                   )}
 
                   {/* 備考 */}
-                  <td className="px-6 py-4 text-sm text-gray-500">
+                  <td className="px-6 py-4 text-sm text-gray-500 min-w-[300px]">
                     {isEditing ? (
                       <textarea
                         value={formData.notes}
                         onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                         className="px-2 py-1 border border-gray-300 rounded text-sm w-full"
-                        rows="2"
+                        rows="3"
                         placeholder="備考を入力..."
                       />
                     ) : (
-                      <span className="line-clamp-2">
-                        {student.extensionData?.notes || '-'}
-                      </span>
+                      <div className="space-y-1">
+                        {suspensionWarning && (
+                          <div className="text-orange-600 font-semibold text-xs mb-1">
+                            {suspensionWarning}
+                          </div>
+                        )}
+                        <span className="line-clamp-3">
+                          {student.extensionData?.notes || '-'}
+                        </span>
+                      </div>
                     )}
                   </td>
 

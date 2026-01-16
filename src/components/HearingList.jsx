@@ -89,7 +89,7 @@ function HearingList() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">
-          🎤 ヒアリング一覧（4ヶ月目）
+          🎤 ヒアリング一覧（4ヶ月目・10ヶ月目）
         </h2>
         <button
           onClick={fetchHearingStudents}

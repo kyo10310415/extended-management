@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { fetchStudents } from './notionService.js';
-import { fetchFormUpdates } from './sheetsService.js';
+import { fetchFormUpdates, fetchSuspensionData } from './sheetsService.js';
 import cacheService from './cacheService.js';
 
 /**
@@ -22,8 +22,14 @@ async function preloadData() {
     const formUpdates = await fetchFormUpdates();
     console.log(`✅ Fetched form updates for ${Object.keys(formUpdates).length} students`);
 
+    // Google Sheetsから休会情報を取得
+    console.log('📊 Fetching suspension data from Google Sheets...');
+    const suspensionData = await fetchSuspensionData();
+    console.log(`✅ Fetched suspension data for ${Object.keys(suspensionData).length} students`);
+
     // キャッシュに保存（Notionデータは既にキャッシュされているが、念のため）
     cacheService.set('sheets_form_updates', formUpdates);
+    cacheService.set('sheets_suspension_data', suspensionData);
 
     const endTime = Date.now();
     const duration = ((endTime - startTime) / 1000).toFixed(2);
@@ -35,6 +41,7 @@ async function preloadData() {
       success: true,
       studentsCount: students.length,
       formUpdatesCount: Object.keys(formUpdates).length,
+      suspensionDataCount: Object.keys(suspensionData).length,
       duration: `${duration}s`,
     };
   } catch (error) {
