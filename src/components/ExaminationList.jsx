@@ -27,25 +27,49 @@ function ExaminationList() {
       const data = await response.json()
 
       if (data.success) {
-        // 延長管理データを一括取得（サイクル: 1回目は4-5ヶ月、2回目は10-11ヶ月）
-        const studentIds = data.data.map(s => s.studentId)
+        // 5ヶ月目と11ヶ月目の生徒を分ける
+        const month5Students = data.data.filter(s => s.monthsElapsed === 5);
+        const month11Students = data.data.filter(s => s.monthsElapsed === 11);
         
-        // サイクルを判定（5ヶ月目なら1回目、11ヶ月目なら2回目）
-        const cycle = data.data[0]?.monthsElapsed === 11 ? 2 : 1;
+        // それぞれのサイクルで一括取得
+        const cycle1Ids = month5Students.map(s => s.studentId);
+        const cycle2Ids = month11Students.map(s => s.studentId);
         
-        const extensionsRes = await fetch('/api/students/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentIds, cycle }),
-        })
-        const extensionsData = await extensionsRes.json()
+        // サイクル1のデータ取得（5ヶ月目）
+        let cycle1Data = {};
+        if (cycle1Ids.length > 0) {
+          const res1 = await fetch('/api/students/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ studentIds: cycle1Ids, cycle: 1 }),
+          });
+          const data1 = await res1.json();
+          cycle1Data = data1.data || {};
+        }
+        
+        // サイクル2のデータ取得（11ヶ月目）
+        let cycle2Data = {};
+        if (cycle2Ids.length > 0) {
+          const res2 = await fetch('/api/students/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ studentIds: cycle2Ids, cycle: 2 }),
+          });
+          const data2 = await res2.json();
+          cycle2Data = data2.data || {};
+        }
 
-        // データをマージ（サイクル情報も含める）
-        const enrichedStudents = data.data.map(student => ({
-          ...student,
-          cycle,  // サイクル情報を保存
-          extensionData: extensionsData.data?.[student.studentId] || null,
-        }))
+        // データをマージ（各生徒のサイクルを個別に判定）
+        const enrichedStudents = data.data.map(student => {
+          const cycle = student.monthsElapsed === 11 ? 2 : 1;
+          const extensionData = cycle === 1 ? cycle1Data[student.studentId] : cycle2Data[student.studentId];
+          
+          return {
+            ...student,
+            cycle,  // 個別のサイクル情報を保存
+            extensionData: extensionData || null,
+          };
+        });
 
         setStudents(enrichedStudents)
       } else {

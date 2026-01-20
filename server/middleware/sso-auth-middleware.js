@@ -16,6 +16,17 @@ const JWT_SECRET = process.env.JWT_SECRET || 'wannav-secret-key-change-in-produc
 const DASHBOARD_URL = process.env.DASHBOARD_URL || 'https://wannav-main.onrender.com';
 
 function ssoAuthMiddleware(req, res, next) {
+  // API エンドポイントは認証をスキップ
+  if (req.path.startsWith('/api/')) {
+    console.log(`🔓 API エンドポイント認証スキップ: ${req.path}`);
+    return next();
+  }
+  
+  // 静的ファイルは認証をスキップ
+  if (req.path.startsWith('/assets/') || req.path.endsWith('.js') || req.path.endsWith('.css') || req.path.endsWith('.ico')) {
+    return next();
+  }
+  
   // 認証トークンをチェック
   const tokenFromQuery = req.query.auth_token;
   const tokenFromCookie = req.cookies?.wannav_sso;
