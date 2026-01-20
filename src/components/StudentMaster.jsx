@@ -242,7 +242,19 @@ function StudentMaster() {
                 filteredStudents.map((student) => (
                   <tr key={student.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {student.studentId}
+                      {student.notionUrl ? (
+                        <a
+                          href={student.notionUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                          title="Notionページを開く"
+                        >
+                          {student.studentId}
+                        </a>
+                      ) : (
+                        <span>{student.studentId}</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {student.name}
