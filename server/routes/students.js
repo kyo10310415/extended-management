@@ -21,6 +21,67 @@ function determineCycle(monthsElapsed) {
 }
 
 /**
+ * POST /api/students/bulk
+ * 複数の生徒の延長管理データを一括取得
+ * @body {Array} studentIds - 学籍番号の配列
+ * @body {number} cycle - サイクル（1 or 2）
+ * 
+ * 重要: このルートは /:studentId より前に定義する必要がある
+ */
+router.post('/bulk', async (req, res) => {
+  const { studentIds, cycle } = req.body;
+  const cycleNumber = cycle || 1;
+
+  console.log('📦 POST /api/students/bulk');
+  console.log('  生徒数:', studentIds?.length);
+  console.log('  サイクル:', cycleNumber);
+
+  if (!Array.isArray(studentIds) || studentIds.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'studentIds must be a non-empty array',
+    });
+  }
+
+  try {
+    const placeholders = studentIds.map((_, i) => `$${i + 1}`).join(',');
+    const result = await pool.query(
+      `SELECT * FROM student_extensions WHERE student_id IN (${placeholders})`,
+      studentIds
+    );
+
+    console.log('  取得件数:', result.rows.length);
+
+    // 学籍番号をキーとしたマップに変換（サイクルに応じたフィールド）
+    const extensionMap = {};
+    result.rows.forEach(row => {
+      extensionMap[row.student_id] = {
+        student_id: row.student_id,
+        extension_certainty: row[`extension_certainty_${cycleNumber}`],
+        hearing_status: row[`hearing_status_${cycleNumber}`],
+        examination_result: row[`examination_result_${cycleNumber}`],
+        notes: row[`notes_${cycleNumber}`],
+        updated_at: row.updated_at,
+        created_at: row.created_at,
+      };
+    });
+
+    console.log('  ✅ 一括取得成功');
+
+    res.json({
+      success: true,
+      data: extensionMap,
+    });
+  } catch (error) {
+    console.error('  ❌ 一括取得エラー:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
  * GET /api/students/:studentId
  * 特定の生徒の延長管理データを取得
  * @query {number} cycle - サイクル（1 or 2）
@@ -130,57 +191,6 @@ router.post('/:studentId', async (req, res) => {
     });
   } catch (error) {
     console.error('  ❌ 保存エラー:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-/**
- * POST /api/students/bulk
- * 複数の生徒の延長管理データを一括取得
- * @body {Array} studentIds - 学籍番号の配列
- * @body {number} cycle - サイクル（1 or 2）
- */
-router.post('/bulk', async (req, res) => {
-  const { studentIds, cycle } = req.body;
-  const cycleNumber = cycle || 1;
-
-  if (!Array.isArray(studentIds) || studentIds.length === 0) {
-    return res.status(400).json({
-      success: false,
-      error: 'studentIds must be a non-empty array',
-    });
-  }
-
-  try {
-    const placeholders = studentIds.map((_, i) => `$${i + 1}`).join(',');
-    const result = await pool.query(
-      `SELECT * FROM student_extensions WHERE student_id IN (${placeholders})`,
-      studentIds
-    );
-
-    // 学籍番号をキーとしたマップに変換（サイクルに応じたフィールド）
-    const extensionMap = {};
-    result.rows.forEach(row => {
-      extensionMap[row.student_id] = {
-        student_id: row.student_id,
-        extension_certainty: row[`extension_certainty_${cycleNumber}`],
-        hearing_status: row[`hearing_status_${cycleNumber}`],
-        examination_result: row[`examination_result_${cycleNumber}`],
-        notes: row[`notes_${cycleNumber}`],
-        updated_at: row.updated_at,
-        created_at: row.created_at,
-      };
-    });
-
-    res.json({
-      success: true,
-      data: extensionMap,
-    });
-  } catch (error) {
-    console.error('Error fetching bulk student extension data:', error);
     res.status(500).json({
       success: false,
       error: error.message,
