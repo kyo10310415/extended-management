@@ -79,12 +79,20 @@ router.post('/:studentId', async (req, res) => {
   
   const cycleNumber = cycle || 1;
 
+  // デバッグログ
+  console.log('📝 POST /api/students/:studentId');
+  console.log('  学籍番号:', studentId);
+  console.log('  サイクル:', cycleNumber);
+  console.log('  データ:', { extension_certainty, hearing_status, examination_result, notes });
+
   try {
     // サイクルに応じたカラム名を構築
     const certaintyCol = `extension_certainty_${cycleNumber}`;
     const hearingCol = `hearing_status_${cycleNumber}`;
     const examCol = `examination_result_${cycleNumber}`;
     const notesCol = `notes_${cycleNumber}`;
+
+    console.log('  カラム名:', { certaintyCol, hearingCol, examCol, notesCol });
 
     const result = await pool.query(
       `INSERT INTO student_extensions 
@@ -114,12 +122,14 @@ router.post('/:studentId', async (req, res) => {
       created_at: row.created_at,
     };
 
+    console.log('  ✅ 保存成功:', data);
+
     res.json({
       success: true,
       data,
     });
   } catch (error) {
-    console.error('Error saving student extension data:', error);
+    console.error('  ❌ 保存エラー:', error);
     res.status(500).json({
       success: false,
       error: error.message,

@@ -89,6 +89,12 @@ function ExaminationList() {
       const student = students.find(s => s.studentId === studentId);
       const cycle = student?.cycle || 1;
       
+      console.log('📝 handleUpdate 呼び出し (延長審査)');
+      console.log('  学籍番号:', studentId);
+      console.log('  継続月数:', student?.monthsElapsed);
+      console.log('  サイクル:', cycle);
+      console.log('  更新データ:', updatedData);
+      
       const response = await fetch(`/api/students/${studentId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -97,7 +103,10 @@ function ExaminationList() {
 
       const data = await response.json()
 
+      console.log('  レスポンス:', data);
+
       if (data.success) {
+        console.log('  ✅ 更新成功 - ローカル状態を更新');
         // ローカル状態を更新
         setStudents(prev =>
           prev.map(s =>
@@ -106,9 +115,11 @@ function ExaminationList() {
               : s
           )
         )
+      } else {
+        console.error('  ❌ 更新失敗:', data.error);
       }
     } catch (err) {
-      console.error('Error updating student:', err)
+      console.error('  ❌ エラー:', err)
     }
   }
 
