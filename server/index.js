@@ -4,7 +4,11 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import pkg from 'pg';
+import cookieParser from 'cookie-parser';
 const { Pool } = pkg;
+
+// SSO Authentication Middleware
+import ssoAuthMiddleware from './middleware/sso-auth-middleware.js';
 
 // Routes
 import notionRoutes from './routes/notion.js';
@@ -39,6 +43,10 @@ pool.query('SELECT NOW()', (err, res) => {
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(cookieParser());
+
+// SSO Authentication (must be before routes)
+app.use(ssoAuthMiddleware);
 
 // Serve static files from dist directory
 app.use(express.static(path.join(__dirname, '../dist')));
