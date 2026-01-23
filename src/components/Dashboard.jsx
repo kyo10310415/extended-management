@@ -36,6 +36,8 @@ function Dashboard() {
 
   const fetchStats = async () => {
     try {
+      console.log('📊 Dashboard: データ取得開始');
+      
       const [allRes, hearingRes, examRes] = await Promise.all([
         fetch('/api/notion/students'),
         fetch('/api/notion/hearing'),
@@ -46,37 +48,101 @@ function Dashboard() {
       const hearingData = await hearingRes.json()
       const examData = await examRes.json()
 
-      // 延長管理データを一括取得（ヒアリング）
-      const hearingIds = hearingData.data?.map(s => s.studentId) || []
-      const hearingExtRes = await fetch('/api/students/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentIds: hearingIds }),
-      })
-      const hearingExtData = await hearingExtRes.json()
+      console.log('  ヒアリング対象:', hearingData.data?.length);
+      console.log('  延長審査対象:', examData.data?.length);
 
-      // 延長管理データを一括取得（延長審査）
-      const examIds = examData.data?.map(s => s.studentId) || []
-      const examExtRes = await fetch('/api/students/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentIds: examIds }),
-      })
-      const examExtData = await examExtRes.json()
+      // ヒアリングデータを4ヶ月と10ヶ月に分ける
+      const hearing4Month = (hearingData.data || []).filter(s => s.monthsElapsed === 4);
+      const hearing10Month = (hearingData.data || []).filter(s => s.monthsElapsed === 10);
+      
+      console.log('  - 4ヶ月目:', hearing4Month.length);
+      console.log('  - 10ヶ月目:', hearing10Month.length);
 
-      // データマージ
-      const hearingStudents = (hearingData.data || []).map(s => ({
-        ...s,
-        extensionData: hearingExtData.data?.[s.studentId] || null,
-      }))
+      // サイクル1のヒアリングデータ取得（4ヶ月目）
+      let hearing1Data = {};
+      if (hearing4Month.length > 0) {
+        const hearing1Ids = hearing4Month.map(s => s.studentId);
+        const res1 = await fetch('/api/students/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentIds: hearing1Ids, cycle: 1 }),
+        });
+        const data1 = await res1.json();
+        hearing1Data = data1.data || {};
+      }
 
-      const examinationStudents = (examData.data || []).map(s => ({
-        ...s,
-        extensionData: examExtData.data?.[s.studentId] || null,
-      }))
+      // サイクル2のヒアリングデータ取得（10ヶ月目）
+      let hearing2Data = {};
+      if (hearing10Month.length > 0) {
+        const hearing2Ids = hearing10Month.map(s => s.studentId);
+        const res2 = await fetch('/api/students/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentIds: hearing2Ids, cycle: 2 }),
+        });
+        const data2 = await res2.json();
+        hearing2Data = data2.data || {};
+      }
+
+      // 延長審査データを5ヶ月と11ヶ月に分ける
+      const exam5Month = (examData.data || []).filter(s => s.monthsElapsed === 5);
+      const exam11Month = (examData.data || []).filter(s => s.monthsElapsed === 11);
+      
+      console.log('  - 5ヶ月目:', exam5Month.length);
+      console.log('  - 11ヶ月目:', exam11Month.length);
+
+      // サイクル1の延長審査データ取得（5ヶ月目）
+      let exam1Data = {};
+      if (exam5Month.length > 0) {
+        const exam1Ids = exam5Month.map(s => s.studentId);
+        const res1 = await fetch('/api/students/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentIds: exam1Ids, cycle: 1 }),
+        });
+        const data1 = await res1.json();
+        exam1Data = data1.data || {};
+        console.log('  サイクル1延長審査データ取得:', Object.keys(exam1Data).length);
+      }
+
+      // サイクル2の延長審査データ取得（11ヶ月目）
+      let exam2Data = {};
+      if (exam11Month.length > 0) {
+        const exam2Ids = exam11Month.map(s => s.studentId);
+        const res2 = await fetch('/api/students/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentIds: exam2Ids, cycle: 2 }),
+        });
+        const data2 = await res2.json();
+        exam2Data = data2.data || {};
+        console.log('  サイクル2延長審査データ取得:', Object.keys(exam2Data).length);
+      }
+
+      // データマージ（各生徒に正しいサイクルのデータを紐付け）
+      const hearingStudents = (hearingData.data || []).map(s => {
+        const cycle = s.monthsElapsed === 10 ? 2 : 1;
+        const extensionData = cycle === 1 ? hearing1Data[s.studentId] : hearing2Data[s.studentId];
+        return {
+          ...s,
+          extensionData: extensionData || null,
+        };
+      });
+
+      const examinationStudents = (examData.data || []).map(s => {
+        const cycle = s.monthsElapsed === 11 ? 2 : 1;
+        const extensionData = cycle === 1 ? exam1Data[s.studentId] : exam2Data[s.studentId];
+        return {
+          ...s,
+          extensionData: extensionData || null,
+        };
+      });
 
       // KPI計算
       const examinationCount = examinationStudents.length
+      
+      console.log('📊 KPI計算開始');
+      console.log('  延長審査対象:', examinationCount);
       
       // 延長確度記入済み = 確度が入力されている - 「対象外」
       const certaintyFilledCount = hearingStudents.filter(s => 
@@ -88,11 +154,19 @@ function Dashboard() {
       const extensionCount = examinationStudents.filter(s => 
         s.extensionData?.examination_result === '延長'
       ).length
+      
+      console.log('  延長数（全体）:', extensionCount);
+      console.log('  延長の生徒:', examinationStudents
+        .filter(s => s.extensionData?.examination_result === '延長')
+        .map(s => `${s.studentId} (${s.monthsElapsed}ヶ月目)`)
+      );
 
       // 退会数 = 審査結果が「退会」
       const withdrawalCount = examinationStudents.filter(s => 
         s.extensionData?.examination_result === '退会'
       ).length
+      
+      console.log('  退会数:', withdrawalCount);
 
       // 延長率 = 延長数 / 延長審査対象 × 100
       const extensionRate = examinationCount > 0 
@@ -130,6 +204,11 @@ function Dashboard() {
       const exam1stExtensionRate = exam1stTargetCount > 0 
         ? (exam1stExtensionCount / exam1stTargetCount * 100) 
         : 0
+      
+      console.log('  1回目（5ヶ月目）:');
+      console.log('    対象数:', exam1stTargetCount);
+      console.log('    延長数:', exam1stExtensionCount);
+      console.log('    延長率:', exam1stExtensionRate.toFixed(2) + '%');
 
       // 延長審査2回目（11ヶ月目）
       const exam2ndStudents = examinationStudents.filter(s => s.monthsElapsed === 11)
@@ -140,6 +219,13 @@ function Dashboard() {
       const exam2ndExtensionRate = exam2ndTargetCount > 0 
         ? (exam2ndExtensionCount / exam2ndTargetCount * 100) 
         : 0
+      
+      console.log('  2回目（11ヶ月目）:');
+      console.log('    対象数:', exam2ndTargetCount);
+      console.log('    延長数:', exam2ndExtensionCount);
+      console.log('    延長率:', exam2ndExtensionRate.toFixed(2) + '%');
+      
+      console.log('✅ KPI計算完了');
 
       setStats(prev => ({
         ...prev,
@@ -182,6 +268,25 @@ function Dashboard() {
     }))
   }
 
+  const handleRefresh = async () => {
+    console.log('🔄 手動更新: キャッシュクリア中...');
+    try {
+      // キャッシュをクリア
+      await fetch('/api/notion/cache/clear', { method: 'POST' });
+      console.log('  ✅ キャッシュクリア完了');
+      
+      // データを再取得
+      console.log('  📊 データ再取得中...');
+      await fetchStats();
+      console.log('  ✅ データ再取得完了');
+      
+      alert('✅ データを最新に更新しました！');
+    } catch (error) {
+      console.error('  ❌ 更新エラー:', error);
+      alert('❌ 更新に失敗しました: ' + error.message);
+    }
+  }
+
   if (stats.loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -197,10 +302,10 @@ function Dashboard() {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">ダッシュボード</h2>
         <button
-          onClick={fetchStats}
+          onClick={handleRefresh}
           className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition text-sm"
         >
-          🔄 更新
+          🔄 最新データに更新
         </button>
       </div>
       
