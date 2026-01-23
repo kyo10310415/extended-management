@@ -5,6 +5,7 @@ function ExaminationList() {
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [refreshing, setRefreshing] = useState(false) // 手動更新中フラグ
   const [monthOffset, setMonthOffset] = useState(0) // -1: 前月, 0: 今月, 1: 翌月
   
   // 検索フィルター
@@ -23,6 +24,7 @@ function ExaminationList() {
   const fetchExaminationStudents = async () => {
     try {
       setLoading(true)
+      setRefreshing(false) // 初回読み込みの場合はrefreshingをfalseに
       const response = await fetch(`/api/notion/examination?monthOffset=${monthOffset}`)
       const data = await response.json()
 
@@ -80,6 +82,30 @@ function ExaminationList() {
       setError(err.message)
     } finally {
       setLoading(false)
+      setRefreshing(false)
+    }
+  }
+
+  // 手動更新機能（キャッシュクリア）
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true)
+      
+      // キャッシュクリア
+      await fetch('/api/notion/cache/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      
+      // データ再取得
+      await fetchExaminationStudents()
+      
+      // 成功アラート
+      alert('✅ 最新データに更新しました！')
+    } catch (err) {
+      console.error('更新エラー:', err)
+      alert('❌ 更新に失敗しました: ' + err.message)
+      setRefreshing(false)
     }
   }
 
@@ -161,11 +187,35 @@ function ExaminationList() {
     return '今月';
   };
 
-  if (loading) {
+  if (loading && !refreshing) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
+    )
+  }
+
+  // 読み込み中オーバーレイ
+  if (refreshing) {
+    return (
+      <>
+        {/* 読み込み中オーバーレイ */}
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 shadow-xl flex flex-col items-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mb-4"></div>
+            <p className="text-lg font-semibold text-gray-800">読み込み中...</p>
+            <p className="text-sm text-gray-600 mt-2">最新データを取得しています</p>
+          </div>
+        </div>
+        {/* 既存のコンテンツ（薄く表示） */}
+        <div className="opacity-50 pointer-events-none">
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">📋 延長審査一覧</h2>
+            </div>
+          </div>
+        </div>
+      </>
     )
   }
 
@@ -184,6 +234,13 @@ function ExaminationList() {
           📋 延長審査一覧（5ヶ月目・11ヶ月目）
         </h2>
         <div className="flex items-center gap-3">
+          {/* 更新ボタン */}
+          <button
+            onClick={handleRefresh}
+            className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition shadow"
+          >
+            🔄 最新データに更新
+          </button>
           {/* 月切り替えボタン */}
           <div className="flex items-center gap-2 bg-white rounded-lg shadow px-3 py-2">
             <span className="text-xs text-gray-600">対象月:</span>

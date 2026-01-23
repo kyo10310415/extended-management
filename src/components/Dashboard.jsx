@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 function Dashboard() {
   const [stats, setStats] = useState({
     loading: true,
+    refreshing: false, // 手動更新中フラグ
     // 基本データ
     totalStudents: 0,
     hearingStudents: [],
@@ -270,6 +271,10 @@ function Dashboard() {
 
   const handleRefresh = async () => {
     console.log('🔄 手動更新: キャッシュクリア中...');
+    
+    // 読み込み状態を開始
+    setStats(prev => ({ ...prev, refreshing: true }));
+    
     try {
       // キャッシュをクリア
       await fetch('/api/notion/cache/clear', { method: 'POST' });
@@ -280,10 +285,14 @@ function Dashboard() {
       await fetchStats();
       console.log('  ✅ データ再取得完了');
       
+      // 成功メッセージ
       alert('✅ データを最新に更新しました！');
     } catch (error) {
       console.error('  ❌ 更新エラー:', error);
       alert('❌ 更新に失敗しました: ' + error.message);
+    } finally {
+      // 読み込み状態を終了
+      setStats(prev => ({ ...prev, refreshing: false }));
     }
   }
 
@@ -303,9 +312,23 @@ function Dashboard() {
         <h2 className="text-2xl font-bold text-gray-900">ダッシュボード</h2>
         <button
           onClick={handleRefresh}
-          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition text-sm"
+          disabled={stats.refreshing}
+          className={`px-4 py-2 text-white rounded-lg transition text-sm flex items-center gap-2 ${
+            stats.refreshing 
+              ? 'bg-gray-400 cursor-not-allowed' 
+              : 'bg-primary hover:bg-primary/90'
+          }`}
         >
-          🔄 最新データに更新
+          {stats.refreshing ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              読み込み中...
+            </>
+          ) : (
+            <>
+              🔄 最新データに更新
+            </>
+          )}
         </button>
       </div>
       
