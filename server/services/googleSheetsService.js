@@ -26,7 +26,7 @@ export async function exportStudentsToCSV() {
     ];
 
     // データ行を作成
-    const rows = students.map(student => {
+    const rows = students.map((student, index) => {
       const monthsElapsed = calculateMonthsElapsed(student.lessonStartDate);
       
       // X IDから@を除去
@@ -36,7 +36,7 @@ export async function exportStudentsToCSV() {
       }
 
       // デバッグ: 最初の5件のX IDをログ出力
-      if (rows.length < 5) {
+      if (index < 5) {
         console.log(`Debug student ${student.studentId}: xId = "${student.xId}", processed = "${xId}"`);
       }
 
