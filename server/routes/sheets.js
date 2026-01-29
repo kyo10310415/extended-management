@@ -1,25 +1,30 @@
 import express from 'express';
-import { exportStudentsToSheet } from '../services/googleSheetsService.js';
+import { exportStudentsToCSV } from '../services/googleSheetsService.js';
 
 const router = express.Router();
 
 /**
  * POST /api/sheets/export
- * 生徒情報をGoogle Sheetsにエクスポート
+ * 生徒情報をCSV形式でエクスポート
  */
 router.post('/export', async (req, res) => {
   try {
-    console.log('📊 Export to Google Sheets request received');
+    console.log('📊 CSV export request received');
 
-    const result = await exportStudentsToSheet();
+    const result = await exportStudentsToCSV();
 
-    res.json({
-      success: true,
-      message: `${result.rowCount}件の生徒情報をスプレッドシートに出力しました`,
-      spreadsheetUrl: result.spreadsheetUrl,
-      spreadsheetId: result.spreadsheetId,
-      rowCount: result.rowCount,
-    });
+    // CSVファイルとしてレスポンス
+    const filename = `生徒マスタ_${new Date().toISOString().split('T')[0]}.csv`;
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    
+    // UTF-8 BOM を追加（Excelで正しく開くため）
+    res.write('\ufeff');
+    res.write(result.csvContent);
+    res.end();
+
+    console.log(`✅ CSV export completed: ${result.rowCount} rows`);
   } catch (error) {
     console.error('Error in /api/sheets/export:', error);
     res.status(500).json({
