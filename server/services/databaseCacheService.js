@@ -80,7 +80,7 @@ class DatabaseCacheService {
           name,
           tutor,
           plan,
-          lesson_start_date as "lessonStartDate",
+          TO_CHAR(lesson_start_date, 'YYYY-MM-DD') as "lessonStartDate",
           status,
           character_name as "characterName",
           yt_channel_id as "ytChannelId",
