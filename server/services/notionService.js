@@ -41,7 +41,7 @@ export async function fetchStudents() {
       const students = response.results.map(page => {
         const properties = page.properties;
         
-        return {
+        const student = {
           id: page.id,
           studentId: getPropertyValue(properties['学籍番号']),
           name: getPropertyValue(properties['名前']),
@@ -54,6 +54,15 @@ export async function fetchStudents() {
           xId: getPropertyValue(properties['X ID']),
           notionUrl: page.url,
         };
+
+        // デバッグ: 最初の3件のX IDをログ出力
+        if (allStudents.length < 3 && student.studentId) {
+          console.log(`Debug Notion fetch - Student ${student.studentId}:`);
+          console.log(`  X ID raw property:`, properties['X ID']);
+          console.log(`  X ID value:`, student.xId);
+        }
+
+        return student;
       });
 
       allStudents = allStudents.concat(students);

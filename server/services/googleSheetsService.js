@@ -35,6 +35,11 @@ export async function exportStudentsToCSV() {
         xId = xId.substring(1);
       }
 
+      // デバッグ: 最初の5件のX IDをログ出力
+      if (rows.length < 5) {
+        console.log(`Debug student ${student.studentId}: xId = "${student.xId}", processed = "${xId}"`);
+      }
+
       return [
         escapeCSV(student.name || ''),
         escapeCSV(student.studentId || ''),
