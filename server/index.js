@@ -13,6 +13,7 @@ import ssoAuthMiddleware from './middleware/sso-auth-middleware.js';
 // Routes
 import notionRoutes from './routes/notion.js';
 import studentsRoutes from './routes/students.js';
+import sheetsRoutes from './routes/sheets.js';
 
 // Background services
 import { initializeDataPreload, scheduleDailyUpdate } from './services/backgroundService.js';
@@ -54,6 +55,7 @@ app.use(express.static(path.join(__dirname, '../dist')));
 // API Routes
 app.use('/api/notion', notionRoutes);
 app.use('/api/students', studentsRoutes);
+app.use('/api/sheets', sheetsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

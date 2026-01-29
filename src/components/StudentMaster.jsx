@@ -8,6 +8,7 @@ function StudentMaster() {
   const [filterTutor, setFilterTutor] = useState('')
   const [activeStatusTab, setActiveStatusTab] = useState('すべて')
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
 
   // ステータスのタブ定義
   const statusTabs = [
@@ -68,28 +69,39 @@ function StudentMaster() {
 
   // スプレッドシート出力
   const handleExportSpreadsheet = async () => {
+    if (!confirm('Google Sheetsに生徒情報を出力しますか？\n\n新しいスプレッドシートが作成され、URLが表示されます。')) {
+      return
+    }
+
     try {
-      // CSVをダウンロード
-      const response = await fetch('/api/notion/export-spreadsheet')
+      setIsExporting(true)
       
-      if (!response.ok) {
-        throw new Error('ダウンロードに失敗しました')
+      const response = await fetch('/api/sheets/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        // 成功メッセージとURLを表示
+        const message = `✅ ${data.rowCount}件の生徒情報をスプレッドシートに出力しました！\n\nスプレッドシートを開きますか？`
+        
+        if (confirm(message)) {
+          window.open(data.spreadsheetUrl, '_blank')
+        } else {
+          // URLをクリップボードにコピー
+          navigator.clipboard.writeText(data.spreadsheetUrl)
+          alert('📋 スプレッドシートURLをクリップボードにコピーしました！')
+        }
+      } else {
+        throw new Error(data.error)
       }
-      
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `生徒マスタ_${new Date().toISOString().split('T')[0]}.csv`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-      
-      alert('✅ スプレッドシートをダウンロードしました！')
     } catch (err) {
-      console.error('Error exporting spreadsheet:', err)
-      alert('❌ ダウンロードに失敗しました: ' + err.message)
+      console.error('Error exporting to spreadsheet:', err)
+      alert('❌ スプレッドシート出力に失敗しました: ' + err.message)
+    } finally {
+      setIsExporting(false)
     }
   }
 
@@ -147,9 +159,10 @@ function StudentMaster() {
         <div className="flex items-center gap-3">
           <button
             onClick={handleExportSpreadsheet}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition shadow"
+            disabled={isExporting}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow"
           >
-            📊 スプレッドシート出力
+            {isExporting ? '📤 出力中...' : '📊 スプレッドシート出力'}
           </button>
           <button
             onClick={handleRefresh}
