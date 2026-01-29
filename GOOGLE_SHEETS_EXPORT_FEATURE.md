@@ -18,25 +18,39 @@
 6. **契約プラン** - Notionの「契約プラン」フィールド
 7. **キャラクター名** - Notionの「キャラクター名」フィールド
 8. **YTチャンネルID** - Notionの「YTチャンネルID」フィールド
-9. **X ID** - Notionの「X ID」フィールド（**@記号を除去**）
+9. **X ID（@は無し）** - Notionの「X ID」フィールド（**@記号を除去したもの**）
 
 ---
 
 ## 🔧 Google Sheets API設定手順
 
-### **1. Google Cloud Projectの作成**
+### **✅ 既存の環境変数を使用（推奨）**
+
+既に `GOOGLE_SERVICE_ACCOUNT_KEY` 環境変数が設定されている場合、**追加設定は不要です**。
+
+システムは以下の優先順位で環境変数を検索します：
+1. `GOOGLE_SERVICE_ACCOUNT_KEY`（既存）
+2. `GOOGLE_SHEETS_CREDENTIALS`（新規）
+
+**既に設定済みの場合、この章の設定手順はスキップしてください。**
+
+---
+
+### **新規にサービスアカウントを作成する場合**
+
+#### **1. Google Cloud Projectの作成**
 
 1. [Google Cloud Console](https://console.cloud.google.com/) にアクセス
 2. 新しいプロジェクトを作成（例: `wannav-extension-manager`）
 3. プロジェクトを選択
 
-### **2. Google Sheets APIの有効化**
+#### **2. Google Sheets APIの有効化**
 
 1. 「APIとサービス」→「ライブラリ」に移動
 2. 「Google Sheets API」を検索
 3. 「有効にする」をクリック
 
-### **3. サービスアカウントの作成**
+#### **3. サービスアカウントの作成**
 
 1. 「APIとサービス」→「認証情報」に移動
 2. 「認証情報を作成」→「サービスアカウント」を選択
@@ -45,7 +59,7 @@
 5. ロールを選択（**編集者** または **オーナー**）
 6. 「完了」をクリック
 
-### **4. サービスアカウントキーの作成**
+#### **4. サービスアカウントキーの作成**
 
 1. 作成したサービスアカウントをクリック
 2. 「キー」タブに移動
@@ -54,13 +68,13 @@
 5. 「作成」をクリック
 6. **JSONファイルがダウンロードされます**（大切に保管！）
 
-### **5. 環境変数の設定（Render）**
+#### **5. 環境変数の設定（Render）**
 
 1. Renderのダッシュボードを開く
 2. プロジェクトの「Environment」タブに移動
 3. 以下の環境変数を追加：
 
-**環境変数名:** `GOOGLE_SHEETS_CREDENTIALS`
+**環境変数名:** `GOOGLE_SERVICE_ACCOUNT_KEY` または `GOOGLE_SHEETS_CREDENTIALS`
 
 **値:** ダウンロードしたJSONファイルの内容をそのままコピー&ペースト
 
@@ -138,8 +152,8 @@
 
 ### **データ例**
 
-| 生徒様名 | 学籍番号 | 経過月数 | NotionURL | ステータス | 契約プラン | キャラクター名 | YTチャンネルID | X ID |
-|---------|---------|---------|-----------|-----------|-----------|-------------|--------------|------|
+| 生徒様名 | 学籍番号 | 経過月数 | NotionURL | ステータス | 契約プラン | キャラクター名 | YTチャンネルID | X ID（@は無し） |
+|---------|---------|---------|-----------|-----------|-----------|-------------|--------------|----------------|
 | 山田太郎 | S001 | 5 | https://notion.so/... | アクティブ | スタンダード | ヤマダ | UC123... | yamada_taro |
 | 佐藤花子 | S002 | 11 | https://notion.so/... | アクティブ | プレミアム | サトウ | UC456... | sato_hanako |
 
@@ -171,7 +185,7 @@
 ```json
 {
   "success": false,
-  "error": "GOOGLE_SHEETS_CREDENTIALS environment variable is not set"
+  "error": "GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_SHEETS_CREDENTIALS environment variable is not set"
 }
 ```
 

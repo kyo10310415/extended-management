@@ -6,10 +6,11 @@ import { calculateMonthsElapsed } from '../utils/dateUtils.js';
  * Google Sheets APIクライアントを初期化
  */
 function getGoogleSheetsClient() {
-  const credentials = process.env.GOOGLE_SHEETS_CREDENTIALS;
+  // 既存の環境変数を優先的に使用
+  const credentials = process.env.GOOGLE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_SHEETS_CREDENTIALS;
   
   if (!credentials) {
-    throw new Error('GOOGLE_SHEETS_CREDENTIALS environment variable is not set');
+    throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY or GOOGLE_SHEETS_CREDENTIALS environment variable is not set');
   }
 
   const auth = new google.auth.GoogleAuth({
@@ -64,7 +65,7 @@ export async function exportStudentsToSheet() {
       '契約プラン',
       'キャラクター名',
       'YTチャンネルID',
-      'X ID',
+      'X ID（@は無し）',
     ];
 
     const data = [headers, ...rows];
