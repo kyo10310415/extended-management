@@ -1,5 +1,6 @@
 import { fetchStudents } from './notionService.js';
 import { calculateMonthsElapsed } from '../utils/dateUtils.js';
+import cacheService from './cacheService.js';
 
 /**
  * 生徒情報をCSV形式で生成
@@ -7,6 +8,10 @@ import { calculateMonthsElapsed } from '../utils/dateUtils.js';
 export async function exportStudentsToCSV() {
   try {
     console.log('📊 Starting CSV export...');
+
+    // キャッシュをクリアして最新データを取得
+    console.log('🗑️ Clearing cache to fetch fresh data from Notion...');
+    cacheService.delete('notion_students');
 
     // Notionから生徒データを取得（キャッシュを使用）
     const students = await fetchStudents();

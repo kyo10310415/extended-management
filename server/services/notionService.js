@@ -64,7 +64,9 @@ export async function fetchStudents() {
         // デバッグ: 最初の3件のX IDをログ出力
         if (allStudents.length < 3 && student.studentId) {
           console.log(`Debug Notion fetch - Student ${student.studentId}:`);
-          console.log(`  X ID raw property:`, properties['X ID']);
+          console.log(`  All property names:`, Object.keys(properties));
+          console.log(`  X ID property exists:`, !!properties['X ID']);
+          console.log(`  X ID raw property:`, JSON.stringify(properties['X ID'], null, 2));
           console.log(`  X ID value:`, student.xId);
         }
 
