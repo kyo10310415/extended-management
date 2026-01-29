@@ -31,7 +31,13 @@ export async function fetchStudents() {
     console.log('🔄 Fetching students from Notion API...');
 
     // ページネーションで全データを取得
-    while (hasMore) {
+    let pageCount = 0;
+    const maxPages = 50; // 無限ループ防止: 最大50ページ（5000件）
+    
+    while (hasMore && pageCount < maxPages) {
+      pageCount++;
+      console.log(`📄 Fetching page ${pageCount}, cursor: ${startCursor || 'initial'}`);
+      
       const response = await notion.databases.query({
         database_id: databaseId,
         page_size: 100,
@@ -71,7 +77,17 @@ export async function fetchStudents() {
       startCursor = response.next_cursor;
 
       // ログで進捗を表示
-      console.log(`📊 Fetched ${allStudents.length} students from Notion...`);
+      console.log(`📊 Page ${pageCount}: fetched ${students.length} students, total: ${allStudents.length}, hasMore: ${hasMore}`);
+      
+      // 同じカーソルで繰り返している場合は停止
+      if (hasMore && !startCursor) {
+        console.error('⚠️ Warning: hasMore is true but next_cursor is null. Breaking loop to prevent infinite loop.');
+        break;
+      }
+    }
+    
+    if (pageCount >= maxPages) {
+      console.error(`⚠️ Warning: Reached maximum page limit (${maxPages} pages). Some data may be missing.`);
     }
 
     console.log(`✅ Total students fetched: ${allStudents.length}`);

@@ -8,7 +8,7 @@ export async function exportStudentsToCSV() {
   try {
     console.log('📊 Starting CSV export...');
 
-    // Notionから生徒データを取得
+    // Notionから生徒データを取得（キャッシュを使用）
     const students = await fetchStudents();
     console.log(`✅ Fetched ${students.length} students from Notion`);
 
@@ -37,7 +37,9 @@ export async function exportStudentsToCSV() {
 
       // デバッグ: 最初の5件のX IDをログ出力
       if (index < 5) {
-        console.log(`Debug student ${student.studentId}: xId = "${student.xId}", processed = "${xId}"`);
+        console.log(`Debug CSV row ${index} - Student ${student.studentId}:`);
+        console.log(`  xId raw: "${student.xId}"`);
+        console.log(`  xId processed: "${xId}"`);
       }
 
       return [
