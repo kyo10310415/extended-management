@@ -66,6 +66,33 @@ function StudentMaster() {
     }
   }
 
+  // スプレッドシート出力
+  const handleExportSpreadsheet = async () => {
+    try {
+      // CSVをダウンロード
+      const response = await fetch('/api/notion/export-spreadsheet')
+      
+      if (!response.ok) {
+        throw new Error('ダウンロードに失敗しました')
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `生徒マスタ_${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      
+      alert('✅ スプレッドシートをダウンロードしました！')
+    } catch (err) {
+      console.error('Error exporting spreadsheet:', err)
+      alert('❌ ダウンロードに失敗しました: ' + err.message)
+    }
+  }
+
   // フィルタリング
   const filteredStudents = students.filter(student => {
     const matchesSearch = 
@@ -117,13 +144,21 @@ function StudentMaster() {
         <h2 className="text-2xl font-bold text-gray-900">
           👥 生徒情報マスタ
         </h2>
-        <button
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isRefreshing ? '🔄 更新中...' : '🔄 最新データに更新'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExportSpreadsheet}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition shadow"
+          >
+            📊 スプレッドシート出力
+          </button>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow"
+          >
+            {isRefreshing ? '🔄 更新中...' : '🔄 最新データに更新'}
+          </button>
+        </div>
       </div>
 
       {/* ステータスタブ */}

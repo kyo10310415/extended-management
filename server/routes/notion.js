@@ -180,6 +180,75 @@ router.get('/examination', async (req, res) => {
 });
 
 /**
+ * GET /api/notion/export-spreadsheet
+ * スプレッドシート用にデータを出力（CSV形式）
+ */
+router.get('/export-spreadsheet', async (req, res) => {
+  try {
+    const students = await fetchStudents();
+    const enrichedStudents = enrichStudentsWithMonths(students);
+
+    // CSVヘッダー
+    const headers = [
+      '生徒様名',
+      '学籍番号',
+      '経過月数',
+      'NotionURL',
+      'ステータス',
+      '契約プラン',
+      'キャラクター名',
+      'YTチャンネルID',
+      'X ID'
+    ];
+
+    // CSVデータ
+    const rows = enrichedStudents.map(student => {
+      // X IDから@を削除
+      const xId = student.xId ? student.xId.replace('@', '') : '';
+      
+      return [
+        student.name || '',
+        student.studentId || '',
+        student.monthsElapsed || 0,
+        student.notionUrl || '',
+        student.status || '',
+        student.plan || '',
+        student.characterName || '',
+        student.ytChannelId || '',
+        xId
+      ];
+    });
+
+    // CSV形式に変換
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => {
+        // カンマやダブルクォートを含む場合はエスケープ
+        const cellStr = String(cell);
+        if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+          return `"${cellStr.replace(/"/g, '""')}"`;
+        }
+        return cellStr;
+      }).join(','))
+    ].join('\n');
+
+    // UTF-8 BOM付きで返す（Excelでの文字化け防止）
+    const bom = '\uFEFF';
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="students_export.csv"');
+    res.send(bom + csvContent);
+
+  } catch (error) {
+    console.error('Error in /api/notion/export-spreadsheet:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
  * POST /api/notion/cache/clear
  * キャッシュをクリア（手動リフレッシュ用）
  */

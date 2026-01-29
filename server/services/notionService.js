@@ -49,6 +49,9 @@ export async function fetchStudents() {
           plan: getPropertyValue(properties['契約プラン']),
           lessonStartDate: getPropertyValue(properties['レッスン開始月']),
           status: getPropertyValue(properties['ステータス']),
+          characterName: getPropertyValue(properties['キャラクター名']),
+          ytChannelId: getPropertyValue(properties['YTチャンネルID']),
+          xId: getPropertyValue(properties['X ID']),
           notionUrl: page.url,
         };
       });
