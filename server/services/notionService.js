@@ -1,6 +1,6 @@
 import { Client } from '@notionhq/client';
 import dotenv from 'dotenv';
-import cacheService from './cacheService.js';
+import databaseCacheService from './databaseCacheService.js';
 
 dotenv.config();
 
@@ -11,17 +11,42 @@ const notion = new Client({
 const databaseId = process.env.NOTION_DATABASE_ID;
 
 /**
- * Notion データベースから生徒情報を取得（ページネーション対応 + キャッシュ）
+ * Notion データベースから生徒情報を取得（データベースキャッシュ優先）
  */
-export async function fetchStudents() {
-  const cacheKey = 'notion_students';
-  
-  // キャッシュをチェック
-  const cached = cacheService.get(cacheKey);
-  if (cached) {
-    console.log(`📦 Returning ${cached.length} students from cache`);
-    return cached;
+export async function fetchStudents(forceRefresh = false) {
+  // 強制更新でない場合、まずデータベースキャッシュを確認
+  if (!forceRefresh) {
+    try {
+      const lastUpdate = await databaseCacheService.getCacheLastUpdate();
+      
+      // 最終同期から1時間以内であればデータベースキャッシュを使用
+      if (lastUpdate) {
+        const cacheAge = Date.now() - new Date(lastUpdate).getTime();
+        const oneHour = 60 * 60 * 1000;
+        
+        if (cacheAge < oneHour) {
+          console.log(`📦 Using database cache (updated ${Math.floor(cacheAge / 1000 / 60)} minutes ago)`);
+          const students = await databaseCacheService.getNotionStudents();
+          
+          if (students && students.length > 0) {
+            return students;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('⚠️ Error checking database cache, falling back to Notion API:', error);
+    }
   }
+  
+  // データベースキャッシュが無い、または古い場合、Notionから取得
+  console.log('🔄 Fetching fresh data from Notion API...');
+  return await fetchStudentsFromNotion();
+}
+
+/**
+ * Notionから直接生徒情報を取得してデータベースに保存
+ */
+export async function fetchStudentsFromNotion() {
 
   try {
     let allStudents = [];
@@ -93,8 +118,12 @@ export async function fetchStudents() {
 
     const filteredStudents = allStudents.filter(s => s.studentId && s.lessonStartDate);
 
-    // キャッシュに保存（5分間）
-    cacheService.set(cacheKey, filteredStudents);
+    // データベースに保存
+    try {
+      await databaseCacheService.cacheNotionStudents(filteredStudents);
+    } catch (error) {
+      console.error('⚠️ Failed to save to database, but continuing with data:', error);
+    }
 
     return filteredStudents;
   } catch (error) {

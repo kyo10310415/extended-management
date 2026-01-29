@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { fetchStudents } from './notionService.js';
+import { fetchStudentsFromNotion } from './notionService.js';
 import { fetchFormUpdates, fetchSuspensionData } from './sheetsService.js';
 import cacheService from './cacheService.js';
 
@@ -12,10 +12,10 @@ async function preloadData() {
   try {
     const startTime = Date.now();
 
-    // Notionから生徒データを取得
-    console.log('📊 Fetching students from Notion...');
-    const students = await fetchStudents();
-    console.log(`✅ Fetched ${students.length} students`);
+    // Notionから生徒データを取得してデータベースに保存
+    console.log('📊 Fetching students from Notion and saving to database...');
+    const students = await fetchStudentsFromNotion();
+    console.log(`✅ Fetched ${students.length} students and saved to database`);
 
     // Google Sheetsからフォーム更新日を取得
     console.log('📊 Fetching form updates from Google Sheets...');
@@ -27,7 +27,7 @@ async function preloadData() {
     const suspensionData = await fetchSuspensionData();
     console.log(`✅ Fetched suspension data for ${Object.keys(suspensionData).length} students`);
 
-    // キャッシュに保存（Notionデータは既にキャッシュされているが、念のため）
+    // キャッシュに保存
     cacheService.set('sheets_form_updates', formUpdates);
     cacheService.set('sheets_suspension_data', suspensionData);
 

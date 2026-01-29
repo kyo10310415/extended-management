@@ -1,4 +1,5 @@
 import { fetchStudents } from './notionService.js';
+import { fetchSuspensionData } from './sheetsService.js';
 import { calculateMonthsElapsed } from '../utils/dateUtils.js';
 import cacheService from './cacheService.js';
 
@@ -13,9 +14,13 @@ export async function exportStudentsToCSV() {
     console.log('🗑️ Clearing cache to fetch fresh data from Notion...');
     cacheService.delete('notion_students');
 
-    // Notionから生徒データを取得（キャッシュを使用）
+    // Notionから生徒データを取得
     const students = await fetchStudents();
     console.log(`✅ Fetched ${students.length} students from Notion`);
+    
+    // 休会データを取得
+    const suspensionData = await fetchSuspensionData();
+    console.log(`✅ Fetched suspension data`);
 
     // CSVヘッダー
     const headers = [
@@ -34,6 +39,12 @@ export async function exportStudentsToCSV() {
     const rows = students.map((student, index) => {
       const monthsElapsed = calculateMonthsElapsed(student.lessonStartDate);
       
+      // 休会を引いた調整後の経過月数
+      const suspension = suspensionData[student.studentId];
+      const adjustedMonths = suspension 
+        ? Math.max(0, monthsElapsed - suspension.suspensionMonths)
+        : monthsElapsed;
+      
       // X IDから@を除去
       let xId = student.xId || '';
       if (xId.startsWith('@')) {
@@ -43,6 +54,7 @@ export async function exportStudentsToCSV() {
       // デバッグ: 最初の5件のX IDをログ出力
       if (index < 5) {
         console.log(`Debug CSV row ${index} - Student ${student.studentId}:`);
+        console.log(`  monthsElapsed: ${monthsElapsed}, suspensionMonths: ${suspension?.suspensionMonths || 0}, adjustedMonths: ${adjustedMonths}`);
         console.log(`  xId raw: "${student.xId}"`);
         console.log(`  xId processed: "${xId}"`);
       }
@@ -50,7 +62,7 @@ export async function exportStudentsToCSV() {
       return [
         escapeCSV(student.name || ''),
         escapeCSV(student.studentId || ''),
-        monthsElapsed || '',
+        adjustedMonths || '',  // 調整後の経過月数を使用
         escapeCSV(student.notionUrl || ''),
         escapeCSV(student.status || ''),
         escapeCSV(student.plan || ''),

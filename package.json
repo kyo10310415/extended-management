@@ -10,7 +10,9 @@
     "client": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "migrate": "node run-migration.js",
+    "postinstall": "npm run migrate"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
