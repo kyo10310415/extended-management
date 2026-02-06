@@ -130,7 +130,7 @@ function SuspensionList() {
                     ステータス
                   </th>
                   <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
-                    開始月
+                    開始日
                   </th>
                   <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
                     継続
@@ -167,7 +167,7 @@ function SuspensionList() {
                       </span>
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap text-xs text-gray-500">
-                      {student.lessonStartDate}
+                      {student.suspensionStartDate || '-'}
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap">
                       <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
