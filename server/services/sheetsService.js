@@ -167,7 +167,7 @@ export async function fetchSuspensionData() {
         console.log(`📋 Trying suspension sheet name: "${sheetName}"`);
         response = await sheets.spreadsheets.values.get({
           spreadsheetId: SUSPENSION_SPREADSHEET_ID,
-          range: `${sheetName}!H:K`, // H列（学籍番号）、I列（休会開始日）、K列（休会期間）
+          range: `${sheetName}!A:M`, // 全列を取得して正しい列を特定
         });
         successSheetName = sheetName;
         console.log(`✅ Successfully accessed suspension sheet: "${sheetName}"`);
@@ -197,9 +197,14 @@ export async function fetchSuspensionData() {
     const suspensionData = {};
     
     dataRows.forEach((row, index) => {
-      const rawStudentId = row[0]?.trim(); // H列: 学籍番号（前後の空白を削除）
-      const suspensionStartDate = row[1]; // I列: 休会開始日
-      const suspensionMonths = parseInt(row[3]) || 0; // K列: 休会期間
+      // スプレッドシートの列構造:
+      // A: タイムスタンプ, B: 修正日, C: 休会開始日, D: メール, E: 担当Tutor
+      // F: 契約ID, G: 契約者名, H: 学籍番号, I: 休会理由, J: ドライブリンク
+      // K: 休会期間, L: 復帰予定日（開始）, M: 復帰予定日（終了）
+      
+      const rawStudentId = row[7]?.trim(); // H列: 学籍番号（インデックス7）
+      const suspensionStartDate = row[2]?.trim(); // C列: 休会開始日（インデックス2）
+      const suspensionMonths = parseInt(row[10]) || 0; // K列: 休会期間（インデックス10）
       
       // 学籍番号の正規化: OLST を OLTS に変換
       // スプレッドシートには OLST と OLTS の両方が混在しているため統一する
@@ -211,7 +216,7 @@ export async function fetchSuspensionData() {
       
       // デバッグ: 最初の10件を詳細ログ出力
       if (index < 10) {
-        console.log(`  [${index}] Raw row data:`, JSON.stringify(row));
+        console.log(`  [${index}] Raw row data (first 11 columns):`, JSON.stringify(row.slice(0, 11)));
         console.log(`    → rawStudentId="${rawStudentId}", normalized="${studentId}", startDate="${suspensionStartDate}", months=${suspensionMonths}`);
       }
       
