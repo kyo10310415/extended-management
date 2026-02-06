@@ -198,12 +198,12 @@ export async function fetchSuspensionData() {
     
     dataRows.forEach((row, index) => {
       // スプレッドシートの列構造:
-      // A: タイムスタンプ, B: 修正日, C: 休会開始日, D: メール, E: 担当Tutor
+      // A: タイムスタンプ, B: 修正日, C: 休会開始日（フォーム入力日）, D: メール, E: 担当Tutor
       // F: 契約ID, G: 契約者名, H: 学籍番号, I: 休会理由, J: ドライブリンク
-      // K: 休会期間, L: 復帰予定日（開始）, M: 復帰予定日（終了）
+      // K: 休会期間, L: 復帰予定日（開始）=休会開始日, M: 復帰予定日（終了）
       
       const rawStudentId = row[7]?.trim(); // H列: 学籍番号（インデックス7）
-      const suspensionStartDate = row[2]?.trim(); // C列: 休会開始日（インデックス2）
+      const suspensionStartDate = row[11]?.trim(); // L列: 復帰予定日（開始）=休会開始日（インデックス11）
       const suspensionMonths = parseInt(row[10]) || 0; // K列: 休会期間（インデックス10）
       
       // 学籍番号の正規化: OLST を OLTS に変換
