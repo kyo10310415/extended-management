@@ -178,14 +178,13 @@ async function sendSuspensionEndNotificationsTask() {
       const suspension = suspensionData[student.studentId];
       if (!suspension || !suspension.suspensionStartDate) continue;
       
-      // 休会終了日を計算: 休会開始日 + 休会期間
+      // 休会終了日を計算: (休会開始日 + 休会期間) の月の末日
+      // 例: 2025/11/01 + 3ヶ月 = 2026/02/01 → 2026/02/28（2月末）
       const startDate = new Date(suspension.suspensionStartDate);
       const endDate = new Date(startDate);
       endDate.setMonth(endDate.getMonth() + suspension.suspensionMonths);
-      // 月末日に設定
-      endDate.setDate(0); // 前月の最終日
-      endDate.setMonth(endDate.getMonth() + 1); // 1ヶ月進める
-      endDate.setDate(0); // その月の最終日
+      // その月の末日を取得
+      endDate.setMonth(endDate.getMonth() + 1, 0); // 翌月の0日 = 当月の末日
       
       const endYear = endDate.getFullYear();
       const endMonth = endDate.getMonth() + 1;
@@ -333,14 +332,13 @@ export async function getSuspensionEndingStudents() {
       const suspension = suspensionData[student.studentId];
       if (!suspension || !suspension.suspensionStartDate) continue;
       
-      // 休会終了日を計算: 休会開始日 + 休会期間
+      // 休会終了日を計算: (休会開始日 + 休会期間) の月の末日
+      // 例: 2025/11/01 + 3ヶ月 = 2026/02/01 → 2026/02/28（2月末）
       const startDate = new Date(suspension.suspensionStartDate);
       const endDate = new Date(startDate);
       endDate.setMonth(endDate.getMonth() + suspension.suspensionMonths);
-      // 月末日に設定
-      endDate.setDate(0); // 前月の最終日
-      endDate.setMonth(endDate.getMonth() + 1); // 1ヶ月進める
-      endDate.setDate(0); // その月の最終日
+      // その月の末日を取得
+      endDate.setMonth(endDate.getMonth() + 1, 0); // 翌月の0日 = 当月の末日
       
       const endYear = endDate.getFullYear();
       const endMonth = endDate.getMonth() + 1;
