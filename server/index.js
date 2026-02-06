@@ -14,9 +14,16 @@ import ssoAuthMiddleware from './middleware/sso-auth-middleware.js';
 import notionRoutes from './routes/notion.js';
 import studentsRoutes from './routes/students.js';
 import sheetsRoutes from './routes/sheets.js';
+import notificationsRoutes from './routes/notifications.js';
 
 // Background services
-import { initializeDataPreload, scheduleDailyUpdate } from './services/backgroundService.js';
+import { 
+  initializeDataPreload, 
+  scheduleDailyUpdate,
+  scheduleSuspensionEndNotifications,
+  scheduleMonthlyStudentListNotifications,
+  scheduleIncompleteListNotifications
+} from './services/backgroundService.js';
 
 dotenv.config();
 
@@ -56,6 +63,7 @@ app.use(express.static(path.join(__dirname, '../dist')));
 app.use('/api/notion', notionRoutes);
 app.use('/api/students', studentsRoutes);
 app.use('/api/sheets', sheetsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -151,8 +159,11 @@ app.listen(PORT, async () => {
   console.log('📊 Starting data preload...');
   await initializeDataPreload();
   
-  // 定期更新スケジュールを設定（毎日 AM 2:00 JST）
-  scheduleDailyUpdate();
+  // 定期更新スケジュールを設定
+  scheduleDailyUpdate(); // 毎日 AM 2:00 JST
+  scheduleSuspensionEndNotifications(); // 毎月15日 AM 9:00 JST
+  scheduleMonthlyStudentListNotifications(); // 毎月1日 AM 9:00 JST
+  scheduleIncompleteListNotifications(); // 毎月20日 AM 9:00 JST
   
   console.log('✅ Server initialization completed');
 });

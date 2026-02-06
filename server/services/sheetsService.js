@@ -6,6 +6,7 @@ dotenv.config();
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
 const SUSPENSION_SPREADSHEET_ID = '17ys2PZpDpffG3j4EQrXiLlwGbFxiNosBqMivL2quVEA';
+const EXAMINATION_FORM_SPREADSHEET_ID = '1m7P2nsX-M9BGP2RHIj3CjAZiDPs2K9gu1Y_md7xiazQ';
 
 /**
  * Google Sheets 認証の取得
@@ -212,5 +213,81 @@ export async function fetchSuspensionData() {
     console.error('❌ Error fetching suspension data from Google Sheets:', error.message);
     // エラーが発生しても空のオブジェクトを返す
     return {};
+  }
+}
+
+/**
+ * 審査結果フォームの送信状況を確認
+ * スプレッドシート: https://docs.google.com/spreadsheets/d/1m7P2nsX-M9BGP2RHIj3CjAZiDPs2K9gu1Y_md7xiazQ/edit?gid=1473368384#gid=1473368384
+ * シート名: フォームの回答 1
+ * B列: タイムスタンプ、E列: 学籍番号
+ * @param {string} studentId - 学籍番号
+ * @returns {Promise<boolean>} - 今月のフォーム送信があればtrue
+ */
+export async function checkExaminationFormSubmission(studentId) {
+  try {
+    const auth = getAuth();
+    if (!auth) {
+      console.warn('⚠️ Google Sheets authentication not configured');
+      return false;
+    }
+
+    const sheets = google.sheets({ version: 'v4', auth });
+    
+    // シート名を試す
+    const possibleSheetNames = [
+      'フォームの回答 1',
+      'Form Responses 1',
+      'Form Responses',
+    ];
+    
+    let response = null;
+    
+    for (const sheetName of possibleSheetNames) {
+      try {
+        response = await sheets.spreadsheets.values.get({
+          spreadsheetId: EXAMINATION_FORM_SPREADSHEET_ID,
+          range: `${sheetName}!B:E`, // B列（タイムスタンプ）とE列（学籍番号）
+        });
+        break;
+      } catch (err) {
+        continue;
+      }
+    }
+    
+    if (!response) {
+      console.warn('⚠️ Unable to access examination form sheet');
+      return false;
+    }
+
+    const rows = response.data.values || [];
+    const dataRows = rows.slice(1); // ヘッダー行をスキップ
+    
+    // 今月の年月を取得 (YYYY-MM形式)
+    const now = new Date();
+    const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    
+    // 学籍番号とタイムスタンプの月が一致する行を検索
+    const hasSubmission = dataRows.some(row => {
+      const timestamp = row[0]; // B列
+      const formStudentId = row[3]; // E列（インデックス3）
+      
+      if (!timestamp || !formStudentId) return false;
+      if (formStudentId !== studentId) return false;
+      
+      // タイムスタンプから年月を抽出
+      try {
+        const date = new Date(timestamp);
+        const yearMonth = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        return yearMonth === currentYearMonth;
+      } catch (error) {
+        return false;
+      }
+    });
+    
+    return hasSubmission;
+  } catch (error) {
+    console.error('❌ Error checking examination form submission:', error);
+    return false;
   }
 }

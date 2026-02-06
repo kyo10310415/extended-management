@@ -121,6 +121,31 @@ function ExaminationList() {
       console.log('  サイクル:', cycle);
       console.log('  更新データ:', updatedData);
       
+      // 審査結果が入力された場合、フォームの送信状況を確認
+      if (updatedData.examination_result) {
+        console.log('  📋 審査結果が入力されました。フォームの送信状況を確認中...');
+        
+        try {
+          const formCheckResponse = await fetch('/api/notifications/check-examination-form', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ studentId }),
+          });
+          
+          const formCheckData = await formCheckResponse.json();
+          
+          console.log('  フォーム確認結果:', formCheckData);
+          
+          // フォームが未送信の場合、警告を表示
+          if (formCheckData.success && !formCheckData.hasSubmission) {
+            alert('⚠️ 審査結果フォームが未送信です。フォームを送信してください');
+          }
+        } catch (formCheckError) {
+          console.error('  ⚠️ フォーム確認エラー:', formCheckError);
+          // フォーム確認エラーは更新処理を妨げない
+        }
+      }
+      
       const response = await fetch(`/api/students/${studentId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
