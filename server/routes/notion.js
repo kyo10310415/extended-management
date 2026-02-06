@@ -3,6 +3,7 @@ import { fetchStudents } from '../services/notionService.js';
 import { fetchFormUpdates, fetchSuspensionData } from '../services/sheetsService.js';
 import { enrichStudentsWithMonths, filterStudentsByMonth } from '../utils/dateUtils.js';
 import cacheService from '../services/cacheService.js';
+import databaseCacheService from '../services/databaseCacheService.js';
 import { manualUpdate } from '../services/backgroundService.js';
 
 const router = express.Router();
@@ -253,14 +254,24 @@ router.get('/export-spreadsheet', async (req, res) => {
  * POST /api/notion/cache/clear
  * キャッシュをクリア（手動リフレッシュ用）
  */
-router.post('/cache/clear', (req, res) => {
+router.post('/cache/clear', async (req, res) => {
   try {
+    console.log('🗑️ Clearing all caches...');
+    
+    // メモリキャッシュをクリア
     cacheService.clear();
+    console.log('✅ Memory cache cleared');
+    
+    // データベースキャッシュをクリア
+    await databaseCacheService.clearCache();
+    console.log('✅ Database cache cleared');
+    
     res.json({
       success: true,
-      message: 'Cache cleared successfully',
+      message: 'All caches cleared successfully (memory + database)',
     });
   } catch (error) {
+    console.error('❌ Error clearing caches:', error);
     res.status(500).json({
       success: false,
       error: error.message,
