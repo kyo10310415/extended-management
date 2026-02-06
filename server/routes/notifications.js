@@ -5,6 +5,7 @@ import {
   manualSendIncompleteList
 } from '../services/backgroundService.js';
 import { checkExaminationFormSubmission } from '../services/sheetsService.js';
+import { sendSuspensionEndNotification } from '../services/slackService.js';
 
 const router = express.Router();
 
@@ -82,6 +83,46 @@ router.post('/check-examination-form', async (req, res) => {
         : '審査結果フォームが未送信です。フォームを送信してください',
     });
   } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/notifications/test-slack
+ * Slack通知のテスト送信（ダミーデータ）
+ */
+router.post('/test-slack', async (req, res) => {
+  try {
+    // ダミーの休会終了生徒データを作成
+    const dummyStudents = [
+      {
+        name: 'テスト太郎',
+        studentId: 'TEST-001',
+        suspensionEndDate: '2026-02-28',
+        notionUrl: 'https://notion.so/test-001',
+      },
+      {
+        name: 'テスト花子',
+        studentId: 'TEST-002',
+        suspensionEndDate: '2026-02-28',
+        notionUrl: 'https://notion.so/test-002',
+      },
+    ];
+
+    console.log('🧪 Sending test Slack notification with dummy data...');
+    const result = await sendSuspensionEndNotification(dummyStudents);
+    
+    res.json({
+      success: result.success,
+      message: 'Test Slack notification sent',
+      count: dummyStudents.length,
+      result,
+    });
+  } catch (error) {
+    console.error('❌ Error sending test Slack notification:', error);
     res.status(500).json({
       success: false,
       error: error.message,
