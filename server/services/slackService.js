@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
+const SLACK_MENTION_GROUP_ID = process.env.SLACK_MENTION_GROUP_ID; // tutorsグループのID
 
 /**
  * Slackに休会終了通知を送信
@@ -15,17 +16,23 @@ export async function sendSuspensionEndNotification(suspensionEndingStudents) {
   }
 
   try {
-    const message = formatSuspensionEndMessage(suspensionEndingStudents);
+    // メンション文字列を作成
+    // ユーザーグループID が設定されている場合: <!subteam^GROUPID|@tutors>
+    // 設定されていない場合: @tutors (通常のテキスト)
+    const mention = SLACK_MENTION_GROUP_ID 
+      ? `<!subteam^${SLACK_MENTION_GROUP_ID}|@tutors>`
+      : '@tutors';
+    
+    const message = formatSuspensionEndMessage(suspensionEndingStudents, mention);
     
     await axios.post(SLACK_WEBHOOK_URL, {
-      text: message,
+      text: `${mention} 🔔 休会終了予定のお知らせ\n今月中に休会期間が終了する生徒は ${suspensionEndingStudents.length}名 です。`,
       blocks: [
         {
-          type: 'header',
+          type: 'section',
           text: {
-            type: 'plain_text',
-            text: '🔔 休会終了予定のお知らせ',
-            emoji: true
+            type: 'mrkdwn',
+            text: `${mention} 🔔 *休会終了予定のお知らせ*`
           }
         },
         {
@@ -50,7 +57,7 @@ export async function sendSuspensionEndNotification(suspensionEndingStudents) {
       ]
     });
 
-    console.log(`✅ Slack notification sent for ${suspensionEndingStudents.length} students`);
+    console.log(`✅ Slack notification sent for ${suspensionEndingStudents.length} students with mention: ${mention}`);
     return { success: true, count: suspensionEndingStudents.length };
   } catch (error) {
     console.error('❌ Error sending Slack notification:', error);
@@ -61,8 +68,8 @@ export async function sendSuspensionEndNotification(suspensionEndingStudents) {
 /**
  * 休会終了メッセージをフォーマット
  */
-function formatSuspensionEndMessage(students) {
-  const header = '🔔 休会終了予定のお知らせ\n\n';
+function formatSuspensionEndMessage(students, mention) {
+  const header = `${mention} 🔔 休会終了予定のお知らせ\n\n`;
   const summary = `今月中に休会期間が終了する生徒は ${students.length}名 です。\n\n`;
   
   const studentList = students.map(student => 
