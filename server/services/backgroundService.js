@@ -176,13 +176,16 @@ async function sendSuspensionEndNotificationsTask() {
     
     for (const student of students) {
       const suspension = suspensionData[student.studentId];
-      if (!suspension || !student.lessonStartDate) continue;
+      if (!suspension || !suspension.suspensionStartDate) continue;
       
-      // 休会終了日を計算
-      const startDate = new Date(student.lessonStartDate);
+      // 休会終了日を計算: 休会開始日 + 休会期間
+      const startDate = new Date(suspension.suspensionStartDate);
       const endDate = new Date(startDate);
       endDate.setMonth(endDate.getMonth() + suspension.suspensionMonths);
-      endDate.setDate(0); // 月末日に設定
+      // 月末日に設定
+      endDate.setDate(0); // 前月の最終日
+      endDate.setMonth(endDate.getMonth() + 1); // 1ヶ月進める
+      endDate.setDate(0); // その月の最終日
       
       const endYear = endDate.getFullYear();
       const endMonth = endDate.getMonth() + 1;
@@ -191,6 +194,8 @@ async function sendSuspensionEndNotificationsTask() {
       if (endYear === currentYear && endMonth === currentMonth) {
         suspensionEndingStudents.push({
           ...student,
+          suspensionStartDate: suspension.suspensionStartDate,
+          suspensionMonths: suspension.suspensionMonths,
           suspensionEndDate: endDate.toISOString().split('T')[0], // YYYY-MM-DD
         });
       }
@@ -307,6 +312,55 @@ export async function manualSendMonthlyStudentList() {
  */
 export async function manualSendIncompleteList() {
   return await sendIncompleteListTask();
+}
+
+/**
+ * 休会終了予定生徒を取得（プレビュー用・Slack送信なし）
+ */
+export async function getSuspensionEndingStudents() {
+  try {
+    const suspensionData = await fetchSuspensionData();
+    const students = await fetchStudentsFromNotion();
+    
+    // 今月終了する休会生徒を抽出
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    
+    const suspensionEndingStudents = [];
+    
+    for (const student of students) {
+      const suspension = suspensionData[student.studentId];
+      if (!suspension || !suspension.suspensionStartDate) continue;
+      
+      // 休会終了日を計算: 休会開始日 + 休会期間
+      const startDate = new Date(suspension.suspensionStartDate);
+      const endDate = new Date(startDate);
+      endDate.setMonth(endDate.getMonth() + suspension.suspensionMonths);
+      // 月末日に設定
+      endDate.setDate(0); // 前月の最終日
+      endDate.setMonth(endDate.getMonth() + 1); // 1ヶ月進める
+      endDate.setDate(0); // その月の最終日
+      
+      const endYear = endDate.getFullYear();
+      const endMonth = endDate.getMonth() + 1;
+      
+      // 今月終了する場合
+      if (endYear === currentYear && endMonth === currentMonth) {
+        suspensionEndingStudents.push({
+          ...student,
+          suspensionStartDate: suspension.suspensionStartDate,
+          suspensionMonths: suspension.suspensionMonths,
+          suspensionEndDate: endDate.toISOString().split('T')[0], // YYYY-MM-DD
+        });
+      }
+    }
+    
+    return suspensionEndingStudents;
+  } catch (error) {
+    console.error('❌ Error getting suspension ending students:', error);
+    throw error;
+  }
 }
 
 export default {

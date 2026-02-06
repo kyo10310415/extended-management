@@ -130,4 +130,34 @@ router.post('/test-slack', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/notifications/preview-suspension-end
+ * 今月終了予定の休会生徒をプレビュー（Slackには送信しない）
+ */
+router.get('/preview-suspension-end', async (req, res) => {
+  try {
+    const { getSuspensionEndingStudents } = await import('../services/backgroundService.js');
+    const students = await getSuspensionEndingStudents();
+    
+    res.json({
+      success: true,
+      count: students.length,
+      students: students.map(s => ({
+        name: s.name,
+        studentId: s.studentId,
+        suspensionStartDate: s.suspensionStartDate,
+        suspensionMonths: s.suspensionMonths,
+        suspensionEndDate: s.suspensionEndDate,
+        notionUrl: s.notionUrl,
+      })),
+    });
+  } catch (error) {
+    console.error('❌ Error previewing suspension end students:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 export default router;
