@@ -4,7 +4,7 @@ import {
   manualSendMonthlyStudentList,
   manualSendIncompleteList
 } from '../services/backgroundService.js';
-import { checkExaminationFormSubmission } from '../services/sheetsService.js';
+import { checkExaminationFormSubmission, fetchSuspensionData } from '../services/sheetsService.js';
 import { sendSuspensionEndNotification } from '../services/slackService.js';
 
 const router = express.Router();

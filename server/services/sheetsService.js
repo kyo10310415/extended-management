@@ -185,6 +185,11 @@ export async function fetchSuspensionData() {
 
     const rows = response.data.values || [];
     
+    console.log(`📊 Total rows fetched: ${rows.length}`);
+    console.log(`📋 Header row: ${JSON.stringify(rows[0])}`);
+    console.log(`📋 First data row: ${JSON.stringify(rows[1])}`);
+    console.log(`📋 Second data row: ${JSON.stringify(rows[2])}`);
+    
     // ヘッダー行をスキップ
     const dataRows = rows.slice(1);
     
@@ -196,6 +201,12 @@ export async function fetchSuspensionData() {
       const suspensionStartDate = row[1]; // I列: 休会開始日
       const suspensionMonths = parseInt(row[3]) || 0; // K列: 休会期間
       
+      // デバッグ: 最初の10件を詳細ログ出力
+      if (index < 10) {
+        console.log(`  [${index}] Raw row data:`, JSON.stringify(row));
+        console.log(`    → studentId="${studentId}", startDate="${suspensionStartDate}", months=${suspensionMonths}`);
+      }
+      
       if (studentId && suspensionMonths > 0) {
         suspensionData[studentId] = {
           suspensionMonths,
@@ -203,9 +214,13 @@ export async function fetchSuspensionData() {
           hasSuspensionHistory: true,
         };
         
-        // デバッグ: 最初の5件をログ出力
-        if (index < 5) {
-          console.log(`  [${index}] ${studentId}: startDate=${suspensionStartDate}, months=${suspensionMonths}`);
+        // マッチした場合も表示
+        if (index < 10) {
+          console.log(`    ✅ Added to suspensionData`);
+        }
+      } else {
+        if (index < 10) {
+          console.log(`    ❌ Skipped (studentId="${studentId}", months=${suspensionMonths})`);
         }
       }
     });

@@ -295,4 +295,33 @@ router.post('/update', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/notion/debug/suspension
+ * 休会データのデバッグ情報を取得
+ */
+router.get('/debug/suspension', async (req, res) => {
+  try {
+    console.log('🔍 Debug: Fetching suspension data...');
+    const suspensionData = await fetchSuspensionData();
+    
+    // 最初の10件を取得
+    const entries = Object.entries(suspensionData).slice(0, 10);
+    
+    res.json({
+      success: true,
+      totalCount: Object.keys(suspensionData).length,
+      sample: entries.map(([studentId, data]) => ({
+        studentId,
+        ...data
+      })),
+      allKeys: Object.keys(suspensionData).slice(0, 20), // 最初の20個の学籍番号
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 export default router;
