@@ -197,14 +197,22 @@ export async function fetchSuspensionData() {
     const suspensionData = {};
     
     dataRows.forEach((row, index) => {
-      const studentId = row[0]; // H列: 学籍番号
+      const rawStudentId = row[0]?.trim(); // H列: 学籍番号（前後の空白を削除）
       const suspensionStartDate = row[1]; // I列: 休会開始日
       const suspensionMonths = parseInt(row[3]) || 0; // K列: 休会期間
+      
+      // 学籍番号の正規化: OLST を OLTS に変換
+      // スプレッドシートには OLST と OLTS の両方が混在しているため統一する
+      let studentId = rawStudentId;
+      if (studentId && studentId.startsWith('OLST')) {
+        // OLST240082-OG → OLTS240082-OG に変換
+        studentId = studentId.replace(/^OLST/, 'OLTS');
+      }
       
       // デバッグ: 最初の10件を詳細ログ出力
       if (index < 10) {
         console.log(`  [${index}] Raw row data:`, JSON.stringify(row));
-        console.log(`    → studentId="${studentId}", startDate="${suspensionStartDate}", months=${suspensionMonths}`);
+        console.log(`    → rawStudentId="${rawStudentId}", normalized="${studentId}", startDate="${suspensionStartDate}", months=${suspensionMonths}`);
       }
       
       if (studentId && suspensionMonths > 0) {
