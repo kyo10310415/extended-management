@@ -28,6 +28,7 @@ router.get('/students', async (req, res) => {
         ...student,
         formLastUpdate: formUpdates[student.studentId] || null,
         suspensionMonths: suspension?.suspensionMonths || 0,
+        suspensionStartDate: suspension?.suspensionStartDate || null, // 休会開始日を追加
         hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
         adjustedMonths,
       };

@@ -127,7 +127,7 @@ export async function fetchFormUpdates() {
 
 /**
  * Google Sheets から休会情報を取得（キャッシュ対応）
- * H列: 学籍番号、K列: 休会期間
+ * H列: 学籍番号、I列: 休会開始日、K列: 休会期間
  */
 export async function fetchSuspensionData() {
   const cacheKey = 'sheets_suspension_data';
@@ -167,7 +167,7 @@ export async function fetchSuspensionData() {
         console.log(`📋 Trying suspension sheet name: "${sheetName}"`);
         response = await sheets.spreadsheets.values.get({
           spreadsheetId: SUSPENSION_SPREADSHEET_ID,
-          range: `${sheetName}!H:K`,
+          range: `${sheetName}!H:K`, // H列（学籍番号）、I列（休会開始日）、K列（休会期間）
         });
         successSheetName = sheetName;
         console.log(`✅ Successfully accessed suspension sheet: "${sheetName}"`);
@@ -191,15 +191,22 @@ export async function fetchSuspensionData() {
     // 学籍番号をキーとして休会情報を格納
     const suspensionData = {};
     
-    dataRows.forEach(row => {
+    dataRows.forEach((row, index) => {
       const studentId = row[0]; // H列: 学籍番号
+      const suspensionStartDate = row[1]; // I列: 休会開始日
       const suspensionMonths = parseInt(row[3]) || 0; // K列: 休会期間
       
       if (studentId && suspensionMonths > 0) {
         suspensionData[studentId] = {
           suspensionMonths,
+          suspensionStartDate, // 休会開始日を追加
           hasSuspensionHistory: true,
         };
+        
+        // デバッグ: 最初の5件をログ出力
+        if (index < 5) {
+          console.log(`  [${index}] ${studentId}: startDate=${suspensionStartDate}, months=${suspensionMonths}`);
+        }
       }
     });
 
