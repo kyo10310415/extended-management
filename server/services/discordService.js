@@ -131,17 +131,17 @@ async function sendDiscordMessage(webhookUrl, data) {
     ? '⚠️ 未完了の生徒リスト' 
     : '📋 今月の対象生徒リスト';
   
-  const hearingSection = hearingStudents.length > 0 ? formatStudentSection(
-    isIncompleteList ? 'ヒアリング未完了' : 'ヒアリング対象',
-    hearingStudents,
-    '🎤'
-  ) : '';
+  // ヒアリング対象セクション（0件でも表示）
+  const hearingTitle = isIncompleteList ? 'ヒアリング未完了' : 'ヒアリング対象';
+  const hearingSection = hearingStudents.length > 0 
+    ? formatStudentSection(hearingTitle, hearingStudents, '🎤')
+    : `**🎤 ${hearingTitle} (0名)**\n\n該当する生徒はいません\n\n`;
   
-  const examinationSection = examinationStudents.length > 0 ? formatStudentSection(
-    isIncompleteList ? '審査結果未入力' : '延長審査対象',
-    examinationStudents,
-    '📝'
-  ) : '';
+  // 延長審査対象セクション（0件でも表示）
+  const examinationTitle = isIncompleteList ? '審査結果未入力' : '延長審査対象';
+  const examinationSection = examinationStudents.length > 0 
+    ? formatStudentSection(examinationTitle, examinationStudents, '📝')
+    : `**📝 ${examinationTitle} (0名)**\n\n該当する生徒はいません\n\n`;
   
   // メンション文字列を作成
   // ロールID: 1294923221107478571
@@ -156,7 +156,8 @@ async function sendDiscordMessage(webhookUrl, data) {
       {
         title,
         description: `**${tutor}** 先生\n\n` +
-                     (hearingSection || examinationSection || '該当する生徒はいません'),
+                     hearingSection +
+                     examinationSection,
         color: isIncompleteList ? 0xFF6B6B : 0x4ECDC4, // 赤: 未完了、青緑: 通常
         timestamp: new Date().toISOString(),
         footer: {
