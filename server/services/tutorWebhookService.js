@@ -34,6 +34,7 @@ function initializeAuth() {
 /**
  * TutorのWebhook URLとUser IDを取得
  * スプレッドシート: https://docs.google.com/spreadsheets/d/13rHnYHavM6Mm7JRC3n88X2pTCoAlCZOXMkapDq7uwNs/edit?gid=2058276273#gid=2058276273
+ * シート名: 「WTCチャットURL」
  * A列: Tutor名、E列: WTCチャットURL、L列: ユーザーID
  */
 export async function getTutorWebhooks() {
@@ -41,13 +42,10 @@ export async function getTutorWebhooks() {
     const authClient = initializeAuth();
     const sheets = google.sheets({ version: 'v4', auth: authClient });
 
-    // シート名を取得
-    const spreadsheet = await sheets.spreadsheets.get({
-      spreadsheetId: TUTOR_WEBHOOK_SHEET_ID,
-    });
+    // 指定したシート名「WTCチャットURL」を使用
+    const sheetName = 'WTCチャットURL';
 
-    // 最初のシートを使用（または特定のシート名を指定）
-    const sheetName = spreadsheet.data.sheets[0].properties.title;
+    console.log(`🔍 Fetching data from sheet: "${sheetName}"`);
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: TUTOR_WEBHOOK_SHEET_ID,
