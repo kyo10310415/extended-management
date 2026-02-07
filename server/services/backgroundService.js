@@ -119,13 +119,13 @@ export function scheduleSuspensionEndNotifications() {
  * 月次生徒リスト通知スケジュール（毎月1日）
  */
 export function scheduleMonthlyStudentListNotifications() {
-  // 毎月1日 AM 9:00 JST (UTC 0:00 on 1st)
-  const cronExpression = '0 0 1 * *'; // 毎月1日 00:00 UTC = 1日 09:00 JST
+  // 毎月1日 PM 5:00 JST (UTC 8:00 on 1st)
+  const cronExpression = '0 8 1 * *'; // 毎月1日 08:00 UTC = 1日 17:00 JST
 
-  console.log('⏰ Scheduling monthly student list notifications on 1st of each month at 9:00 AM JST');
+  console.log('⏰ Scheduling monthly student list notifications on 1st of each month at 5:00 PM JST');
 
   const task = cron.schedule(cronExpression, async () => {
-    console.log('⏰ Monthly student list notification triggered on 1st of the month');
+    console.log('⏰ Monthly student list notification triggered on 1st of the month at 5:00 PM JST');
     await sendMonthlyStudentListTask();
   }, {
     timezone: 'UTC'
@@ -141,13 +141,13 @@ export function scheduleMonthlyStudentListNotifications() {
  * 未完了リスト通知スケジュール（毎月20日）
  */
 export function scheduleIncompleteListNotifications() {
-  // 毎月20日 AM 9:00 JST (UTC 0:00 on 20th)
-  const cronExpression = '0 0 20 * *'; // 毎月20日 00:00 UTC = 20日 09:00 JST
+  // 毎月20日 PM 5:00 JST (UTC 8:00 on 20th)
+  const cronExpression = '0 8 20 * *'; // 毎月20日 08:00 UTC = 20日 17:00 JST
 
-  console.log('⏰ Scheduling incomplete list notifications on 20th of each month at 9:00 AM JST');
+  console.log('⏰ Scheduling incomplete list notifications on 20th of each month at 5:00 PM JST');
 
   const task = cron.schedule(cronExpression, async () => {
-    console.log('⏰ Incomplete list notification triggered on 20th of the month');
+    console.log('⏰ Incomplete list notification triggered on 20th of the month at 5:00 PM JST');
     await sendIncompleteListTask();
   }, {
     timezone: 'UTC'

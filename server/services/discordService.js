@@ -15,17 +15,18 @@ export async function sendMonthlyStudentListToTutors(hearingStudents, examinatio
     
     for (const [tutor, students] of Object.entries(tutorGroups)) {
       const normalizedTutor = normalizeTutorName(tutor);
-      const webhookUrl = tutorWebhooks[normalizedTutor];
+      const webhookData = tutorWebhooks[normalizedTutor];
       
-      if (!webhookUrl) {
+      if (!webhookData || !webhookData.webhookUrl) {
         console.warn(`⚠️ No webhook URL found for tutor: ${tutor} (normalized: ${normalizedTutor})`);
         results.push({ tutor, success: false, message: 'Webhook URL not found' });
         continue;
       }
       
       try {
-        await sendDiscordMessage(webhookUrl, {
+        await sendDiscordMessage(webhookData.webhookUrl, {
           tutor,
+          userId: webhookData.userId,
           hearingStudents: students.hearing,
           examinationStudents: students.examination,
         });
@@ -59,17 +60,18 @@ export async function sendIncompleteStudentListToTutors(incompleteHearingStudent
     
     for (const [tutor, students] of Object.entries(tutorGroups)) {
       const normalizedTutor = normalizeTutorName(tutor);
-      const webhookUrl = tutorWebhooks[normalizedTutor];
+      const webhookData = tutorWebhooks[normalizedTutor];
       
-      if (!webhookUrl) {
+      if (!webhookData || !webhookData.webhookUrl) {
         console.warn(`⚠️ No webhook URL found for tutor: ${tutor} (normalized: ${normalizedTutor})`);
         results.push({ tutor, success: false, message: 'Webhook URL not found' });
         continue;
       }
       
       try {
-        await sendDiscordMessage(webhookUrl, {
+        await sendDiscordMessage(webhookData.webhookUrl, {
           tutor,
+          userId: webhookData.userId,
           hearingStudents: students.hearing,
           examinationStudents: students.examination,
           isIncompleteList: true,
@@ -123,7 +125,7 @@ function groupStudentsByTutor(hearingStudents, examinationStudents) {
  * Discordにメッセージを送信
  */
 async function sendDiscordMessage(webhookUrl, data) {
-  const { tutor, hearingStudents, examinationStudents, isIncompleteList } = data;
+  const { tutor, userId, hearingStudents, examinationStudents, isIncompleteList } = data;
   
   const title = isIncompleteList 
     ? '⚠️ 未完了の生徒リスト' 
@@ -141,7 +143,15 @@ async function sendDiscordMessage(webhookUrl, data) {
     '📝'
   ) : '';
   
+  // メンション文字列を作成
+  // ロールID: 1294923221107478571
+  const roleId = '1294923221107478571';
+  const roleMention = `<@&${roleId}>`;
+  const userMention = userId ? `<@${userId}>` : '';
+  const mentions = [roleMention, userMention].filter(Boolean).join(' ');
+  
   const message = {
+    content: mentions, // メンションを追加
     embeds: [
       {
         title,

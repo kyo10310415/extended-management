@@ -32,9 +32,9 @@ function initializeAuth() {
 }
 
 /**
- * TutorのWebhook URLを取得
+ * TutorのWebhook URLとUser IDを取得
  * スプレッドシート: https://docs.google.com/spreadsheets/d/13rHnYHavM6Mm7JRC3n88X2pTCoAlCZOXMkapDq7uwNs/edit?gid=2058276273#gid=2058276273
- * A列: Tutor名、E列: WTCチャットURL
+ * A列: Tutor名、E列: WTCチャットURL、L列: ユーザーID
  */
 export async function getTutorWebhooks() {
   try {
@@ -51,7 +51,7 @@ export async function getTutorWebhooks() {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: TUTOR_WEBHOOK_SHEET_ID,
-      range: `${sheetName}!A:E`, // A列（Tutor名）とE列（WTCチャットURL）
+      range: `${sheetName}!A:L`, // A列（Tutor名）、E列（WTCチャットURL）、L列（ユーザーID）
     });
 
     const rows = response.data.values || [];
@@ -69,11 +69,15 @@ export async function getTutorWebhooks() {
     dataRows.forEach(row => {
       const tutorName = row[0]; // A列
       const webhookUrl = row[4]; // E列（インデックス4）
+      const userId = row[11]; // L列（インデックス11）
       
       if (tutorName && webhookUrl) {
         // 「先生」を除去して正規化
         const normalizedName = tutorName.replace(/先生/g, '');
-        tutorWebhooks[normalizedName] = webhookUrl;
+        tutorWebhooks[normalizedName] = {
+          webhookUrl,
+          userId: userId || null, // ユーザーIDがない場合はnull
+        };
       }
     });
 
