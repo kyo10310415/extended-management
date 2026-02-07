@@ -160,4 +160,189 @@ router.get('/preview-suspension-end', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/notifications/preview-monthly-student-list
+ * 月次生徒リストをプレビュー（Discordには送信しない）
+ */
+router.get('/preview-monthly-student-list', async (req, res) => {
+  try {
+    const { fetchStudentsFromNotion } = await import('../services/notionService.js');
+    const { enrichStudentsWithMonths, filterStudentsByMonth } = await import('../utils/dateUtils.js');
+    const { getTutorWebhooks, normalizeTutorName } = await import('../services/tutorWebhookService.js');
+    
+    const students = await fetchStudentsFromNotion();
+    const enrichedStudents = enrichStudentsWithMonths(students);
+    
+    // 今月のヒアリング対象（4ヶ月目・10ヶ月目）
+    const hearingStudents = [
+      ...filterStudentsByMonth(enrichedStudents, 4, 0),
+      ...filterStudentsByMonth(enrichedStudents, 10, 0),
+    ].filter(s => s.status === 'アクティブ');
+    
+    // 今月の延長審査対象（5ヶ月目・11ヶ月目）
+    const examinationStudents = [
+      ...filterStudentsByMonth(enrichedStudents, 5, 0),
+      ...filterStudentsByMonth(enrichedStudents, 11, 0),
+    ].filter(s => s.status === 'アクティブ');
+    
+    // 担当Tutorごとにグループ化
+    const tutorWebhooks = await getTutorWebhooks();
+    const tutorGroups = groupStudentsByTutor(hearingStudents, examinationStudents);
+    
+    // プレビュー用にデータを整形
+    const preview = [];
+    for (const [tutor, students] of Object.entries(tutorGroups)) {
+      const normalizedTutor = normalizeTutorName(tutor);
+      const webhookData = tutorWebhooks[normalizedTutor];
+      
+      preview.push({
+        tutor,
+        normalizedTutor,
+        hasWebhook: !!webhookData,
+        userId: webhookData?.userId || null,
+        roleId: '1294923221107478571',
+        mentions: buildMentions(webhookData?.userId),
+        hearingCount: students.hearing.length,
+        examinationCount: students.examination.length,
+        hearingStudents: students.hearing.map(s => ({
+          name: s.name,
+          studentId: s.studentId,
+          monthsElapsed: s.monthsElapsed,
+          notionUrl: s.notionUrl,
+        })),
+        examinationStudents: students.examination.map(s => ({
+          name: s.name,
+          studentId: s.studentId,
+          monthsElapsed: s.monthsElapsed,
+          notionUrl: s.notionUrl,
+        })),
+      });
+    }
+    
+    res.json({
+      success: true,
+      totalTutors: preview.length,
+      totalHearingStudents: hearingStudents.length,
+      totalExaminationStudents: examinationStudents.length,
+      preview,
+    });
+  } catch (error) {
+    console.error('❌ Error previewing monthly student list:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/notifications/preview-incomplete-list
+ * 未完了リストをプレビュー（Discordには送信しない）
+ */
+router.get('/preview-incomplete-list', async (req, res) => {
+  try {
+    const { fetchStudentsFromNotion } = await import('../services/notionService.js');
+    const { enrichStudentsWithMonths, filterStudentsByMonth } = await import('../utils/dateUtils.js');
+    const { getTutorWebhooks, normalizeTutorName } = await import('../services/tutorWebhookService.js');
+    
+    const students = await fetchStudentsFromNotion();
+    const enrichedStudents = enrichStudentsWithMonths(students);
+    
+    // 今月のヒアリング対象（4ヶ月目・10ヶ月目）でヒアリング未完了
+    const hearingStudents = [
+      ...filterStudentsByMonth(enrichedStudents, 4, 0),
+      ...filterStudentsByMonth(enrichedStudents, 10, 0),
+    ].filter(s => s.status === 'アクティブ' && !s.hearingCompleted);
+    
+    // 今月の延長審査対象（5ヶ月目・11ヶ月目）で審査結果未入力
+    const examinationStudents = [
+      ...filterStudentsByMonth(enrichedStudents, 5, 0),
+      ...filterStudentsByMonth(enrichedStudents, 11, 0),
+    ].filter(s => s.status === 'アクティブ' && !s.examinationResult);
+    
+    // 担当Tutorごとにグループ化
+    const tutorWebhooks = await getTutorWebhooks();
+    const tutorGroups = groupStudentsByTutor(hearingStudents, examinationStudents);
+    
+    // プレビュー用にデータを整形
+    const preview = [];
+    for (const [tutor, students] of Object.entries(tutorGroups)) {
+      const normalizedTutor = normalizeTutorName(tutor);
+      const webhookData = tutorWebhooks[normalizedTutor];
+      
+      preview.push({
+        tutor,
+        normalizedTutor,
+        hasWebhook: !!webhookData,
+        userId: webhookData?.userId || null,
+        roleId: '1294923221107478571',
+        mentions: buildMentions(webhookData?.userId),
+        incompleteHearingCount: students.hearing.length,
+        incompleteExaminationCount: students.examination.length,
+        incompleteHearingStudents: students.hearing.map(s => ({
+          name: s.name,
+          studentId: s.studentId,
+          monthsElapsed: s.monthsElapsed,
+          notionUrl: s.notionUrl,
+        })),
+        incompleteExaminationStudents: students.examination.map(s => ({
+          name: s.name,
+          studentId: s.studentId,
+          monthsElapsed: s.monthsElapsed,
+          notionUrl: s.notionUrl,
+        })),
+      });
+    }
+    
+    res.json({
+      success: true,
+      totalTutors: preview.length,
+      totalIncompleteHearingStudents: hearingStudents.length,
+      totalIncompleteExaminationStudents: examinationStudents.length,
+      preview,
+    });
+  } catch (error) {
+    console.error('❌ Error previewing incomplete list:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * ヘルパー関数: 担当Tutorごとに生徒をグループ化
+ */
+function groupStudentsByTutor(hearingStudents, examinationStudents) {
+  const groups = {};
+  
+  hearingStudents.forEach(student => {
+    if (!student.tutor) return;
+    if (!groups[student.tutor]) {
+      groups[student.tutor] = { hearing: [], examination: [] };
+    }
+    groups[student.tutor].hearing.push(student);
+  });
+  
+  examinationStudents.forEach(student => {
+    if (!student.tutor) return;
+    if (!groups[student.tutor]) {
+      groups[student.tutor] = { hearing: [], examination: [] };
+    }
+    groups[student.tutor].examination.push(student);
+  });
+  
+  return groups;
+}
+
+/**
+ * ヘルパー関数: メンション文字列を作成
+ */
+function buildMentions(userId) {
+  const roleId = '1294923221107478571';
+  const roleMention = `<@&${roleId}>`;
+  const userMention = userId ? `<@${userId}>` : null;
+  return [roleMention, userMention].filter(Boolean).join(' ');
+}
+
 export default router;
