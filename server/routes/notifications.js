@@ -244,25 +244,105 @@ router.get('/preview-incomplete-list', async (req, res) => {
     const { fetchStudentsFromNotion } = await import('../services/notionService.js');
     const { enrichStudentsWithMonths, filterStudentsByMonth } = await import('../utils/dateUtils.js');
     const { getTutorWebhooks, normalizeTutorName } = await import('../services/tutorWebhookService.js');
+    const { pool } = await import('../index.js');
     
     const students = await fetchStudentsFromNotion();
     const enrichedStudents = enrichStudentsWithMonths(students);
     
-    // 今月のヒアリング対象（4ヶ月目・10ヶ月目）でヒアリング未完了
-    const hearingStudents = [
-      ...filterStudentsByMonth(enrichedStudents, 4, 0),
-      ...filterStudentsByMonth(enrichedStudents, 10, 0),
-    ].filter(s => s.status === 'アクティブ' && !s.hearingCompleted);
+    // 今月のヒアリング対象（4ヶ月目・10ヶ月目）を取得
+    const month4Students = filterStudentsByMonth(enrichedStudents, 4, 0)
+      .filter(s => s.status === 'アクティブ');
+    const month10Students = filterStudentsByMonth(enrichedStudents, 10, 0)
+      .filter(s => s.status === 'アクティブ');
     
-    // 今月の延長審査対象（5ヶ月目・11ヶ月目）で審査結果未入力
-    const examinationStudents = [
-      ...filterStudentsByMonth(enrichedStudents, 5, 0),
-      ...filterStudentsByMonth(enrichedStudents, 11, 0),
-    ].filter(s => s.status === 'アクティブ' && !s.examinationResult);
+    // 今月の延長審査対象（5ヶ月目・11ヶ月目）を取得
+    const month5Students = filterStudentsByMonth(enrichedStudents, 5, 0)
+      .filter(s => s.status === 'アクティブ');
+    const month11Students = filterStudentsByMonth(enrichedStudents, 11, 0)
+      .filter(s => s.status === 'アクティブ');
+    
+    // データベースから延長管理データを取得
+    const allStudentIds = [
+      ...month4Students.map(s => s.studentId),
+      ...month10Students.map(s => s.studentId),
+      ...month5Students.map(s => s.studentId),
+      ...month11Students.map(s => s.studentId),
+    ];
+    
+    let extensionDataMap = {};
+    if (allStudentIds.length > 0) {
+      const placeholders = allStudentIds.map((_, i) => `$${i + 1}`).join(',');
+      const result = await pool.query(
+        `SELECT * FROM student_extensions WHERE student_id IN (${placeholders})`,
+        allStudentIds
+      );
+      
+      result.rows.forEach(row => {
+        extensionDataMap[row.student_id] = row;
+      });
+    }
+    
+    // ヒアリング未完了の生徒を抽出
+    const incompleteHearingStudents = [];
+    
+    month4Students.forEach(student => {
+      const extensionData = extensionDataMap[student.studentId];
+      const hearingStatus = extensionData?.hearing_status_1;
+      
+      if (!hearingStatus || hearingStatus === '×' || hearingStatus === 'x') {
+        incompleteHearingStudents.push({
+          ...student,
+          cycle: 1,
+          extensionData,
+        });
+      }
+    });
+    
+    month10Students.forEach(student => {
+      const extensionData = extensionDataMap[student.studentId];
+      const hearingStatus = extensionData?.hearing_status_2;
+      
+      if (!hearingStatus || hearingStatus === '×' || hearingStatus === 'x') {
+        incompleteHearingStudents.push({
+          ...student,
+          cycle: 2,
+          extensionData,
+        });
+      }
+    });
+    
+    // 審査結果未入力の生徒を抽出
+    const incompleteExaminationStudents = [];
+    
+    month5Students.forEach(student => {
+      const extensionData = extensionDataMap[student.studentId];
+      const examinationResult = extensionData?.examination_result_1;
+      
+      if (!examinationResult || examinationResult.trim() === '') {
+        incompleteExaminationStudents.push({
+          ...student,
+          cycle: 1,
+          extensionData,
+        });
+      }
+    });
+    
+    month11Students.forEach(student => {
+      const extensionData = extensionDataMap[student.studentId];
+      const examinationResult = extensionData?.examination_result_2;
+      
+      if (!examinationResult || examinationResult.trim() === '') {
+        incompleteExaminationStudents.push({
+          ...student,
+          cycle: 2,
+          extensionData,
+        });
+      }
+    });
     
     // 担当Tutorごとにグループ化
     const tutorWebhooks = await getTutorWebhooks();
-    const tutorGroups = groupStudentsByTutor(hearingStudents, examinationStudents);
+    const tutorGroups = groupStudentsByTutor(incompleteHearingStudents, incompleteExaminationStudents);
     
     // プレビュー用にデータを整形
     const preview = [];
@@ -297,8 +377,8 @@ router.get('/preview-incomplete-list', async (req, res) => {
     res.json({
       success: true,
       totalTutors: preview.length,
-      totalIncompleteHearingStudents: hearingStudents.length,
-      totalIncompleteExaminationStudents: examinationStudents.length,
+      totalIncompleteHearingStudents: incompleteHearingStudents.length,
+      totalIncompleteExaminationStudents: incompleteExaminationStudents.length,
       preview,
     });
   } catch (error) {

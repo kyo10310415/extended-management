@@ -256,17 +256,111 @@ async function sendIncompleteListTask() {
     const students = await fetchStudentsFromNotion();
     const enrichedStudents = enrichStudentsWithMonths(students);
     
-    // 今月のヒアリング対象でヒアリング未完了
-    const incompleteHearingStudents = [
-      ...filterStudentsByMonth(enrichedStudents, 4, 0),
-      ...filterStudentsByMonth(enrichedStudents, 10, 0),
-    ].filter(s => s.status === 'アクティブ' && !s.extensionData?.hearing_status);
+    // 今月のヒアリング対象（4ヶ月目・10ヶ月目）を取得
+    const month4Students = filterStudentsByMonth(enrichedStudents, 4, 0)
+      .filter(s => s.status === 'アクティブ');
+    const month10Students = filterStudentsByMonth(enrichedStudents, 10, 0)
+      .filter(s => s.status === 'アクティブ');
     
-    // 今月の延長審査対象で審査結果未入力
-    const incompleteExaminationStudents = [
-      ...filterStudentsByMonth(enrichedStudents, 5, 0),
-      ...filterStudentsByMonth(enrichedStudents, 11, 0),
-    ].filter(s => s.status === 'アクティブ' && !s.extensionData?.examination_result);
+    // 今月の延長審査対象（5ヶ月目・11ヶ月目）を取得
+    const month5Students = filterStudentsByMonth(enrichedStudents, 5, 0)
+      .filter(s => s.status === 'アクティブ');
+    const month11Students = filterStudentsByMonth(enrichedStudents, 11, 0)
+      .filter(s => s.status === 'アクティブ');
+    
+    // データベースから延長管理データを取得
+    const { pool } = await import('../index.js');
+    
+    // すべての対象生徒の学籍番号を集める
+    const allStudentIds = [
+      ...month4Students.map(s => s.studentId),
+      ...month10Students.map(s => s.studentId),
+      ...month5Students.map(s => s.studentId),
+      ...month11Students.map(s => s.studentId),
+    ];
+    
+    console.log(`📊 Fetching extension data for ${allStudentIds.length} students`);
+    
+    let extensionDataMap = {};
+    if (allStudentIds.length > 0) {
+      const placeholders = allStudentIds.map((_, i) => `$${i + 1}`).join(',');
+      const result = await pool.query(
+        `SELECT * FROM student_extensions WHERE student_id IN (${placeholders})`,
+        allStudentIds
+      );
+      
+      result.rows.forEach(row => {
+        extensionDataMap[row.student_id] = row;
+      });
+      
+      console.log(`📊 Found extension data for ${result.rows.length} students`);
+    }
+    
+    // ヒアリング未完了の生徒を抽出
+    // 4ヶ月目（サイクル1）: hearing_status_1 が null or '×'
+    // 10ヶ月目（サイクル2）: hearing_status_2 が null or '×'
+    const incompleteHearingStudents = [];
+    
+    month4Students.forEach(student => {
+      const extensionData = extensionDataMap[student.studentId];
+      const hearingStatus = extensionData?.hearing_status_1;
+      
+      // ヒアリング状況が未入力（null）または ×
+      if (!hearingStatus || hearingStatus === '×' || hearingStatus === 'x') {
+        incompleteHearingStudents.push({
+          ...student,
+          cycle: 1,
+          extensionData,
+        });
+      }
+    });
+    
+    month10Students.forEach(student => {
+      const extensionData = extensionDataMap[student.studentId];
+      const hearingStatus = extensionData?.hearing_status_2;
+      
+      // ヒアリング状況が未入力（null）または ×
+      if (!hearingStatus || hearingStatus === '×' || hearingStatus === 'x') {
+        incompleteHearingStudents.push({
+          ...student,
+          cycle: 2,
+          extensionData,
+        });
+      }
+    });
+    
+    // 審査結果未入力の生徒を抽出
+    // 5ヶ月目（サイクル1）: examination_result_1 が null or 空
+    // 11ヶ月目（サイクル2）: examination_result_2 が null or 空
+    const incompleteExaminationStudents = [];
+    
+    month5Students.forEach(student => {
+      const extensionData = extensionDataMap[student.studentId];
+      const examinationResult = extensionData?.examination_result_1;
+      
+      // 審査結果が未入力（null or 空文字）
+      if (!examinationResult || examinationResult.trim() === '') {
+        incompleteExaminationStudents.push({
+          ...student,
+          cycle: 1,
+          extensionData,
+        });
+      }
+    });
+    
+    month11Students.forEach(student => {
+      const extensionData = extensionDataMap[student.studentId];
+      const examinationResult = extensionData?.examination_result_2;
+      
+      // 審査結果が未入力（null or 空文字）
+      if (!examinationResult || examinationResult.trim() === '') {
+        incompleteExaminationStudents.push({
+          ...student,
+          cycle: 2,
+          extensionData,
+        });
+      }
+    });
     
     console.log(`📊 Sending incomplete list: ${incompleteHearingStudents.length} hearing, ${incompleteExaminationStudents.length} examination`);
     
