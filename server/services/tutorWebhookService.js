@@ -72,8 +72,8 @@ export async function getTutorWebhooks() {
       const userId = row[11]; // L列（インデックス11）
       
       if (tutorName && webhookUrl) {
-        // 「先生」を除去して正規化
-        const normalizedName = tutorName.replace(/先生/g, '');
+        // Tutor名を正規化（「先生」とスペースを除去）
+        const normalizedName = normalizeTutorName(tutorName);
         tutorWebhooks[normalizedName] = {
           webhookUrl,
           userId: userId || null, // ユーザーIDがない場合はnull
@@ -90,11 +90,15 @@ export async function getTutorWebhooks() {
 }
 
 /**
- * Tutor名を正規化（「先生」を除去）
+ * Tutor名を正規化（「先生」とスペースを除去）
+ * 例: 「のあ先生」→「のあ」、「先生 ゆか」→「ゆか」、「先生りほ」→「りほ」
  */
 export function normalizeTutorName(tutorName) {
   if (!tutorName) return '';
-  return tutorName.replace(/先生/g, '');
+  return tutorName
+    .replace(/先生/g, '')  // 「先生」を削除
+    .replace(/\s+/g, '')   // 全てのスペースを削除（半角・全角）
+    .trim();               // 前後の空白を削除
 }
 
 export default {
