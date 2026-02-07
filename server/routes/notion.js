@@ -324,4 +324,31 @@ router.get('/debug/suspension', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/notion/debug/tutors
+ * NotionからのTutor名の形式をデバッグ表示
+ */
+router.get('/debug/tutors', async (req, res) => {
+  try {
+    console.log('🔍 Debug: Fetching tutors from Notion...');
+    const students = await fetchStudents();
+    
+    // ユニークなTutor名を抽出
+    const tutors = [...new Set(students.map(s => s.tutor).filter(Boolean))].sort();
+    
+    res.json({
+      success: true,
+      totalTutors: tutors.length,
+      tutors: tutors,
+      sample: tutors.slice(0, 20), // 最初の20人
+    });
+  } catch (error) {
+    console.error('❌ Error fetching tutors:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 export default router;

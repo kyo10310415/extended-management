@@ -345,4 +345,40 @@ function buildMentions(userId) {
   return [roleMention, userMention].filter(Boolean).join(' ');
 }
 
+/**
+ * GET /api/notifications/debug-tutor-webhooks
+ * スプレッドシートからTutorのWebhookとUser IDを取得してデバッグ表示
+ */
+router.get('/debug-tutor-webhooks', async (req, res) => {
+  try {
+    const { getTutorWebhooks } = await import('../services/tutorWebhookService.js');
+    
+    console.log('🔍 Fetching tutor webhooks from spreadsheet...');
+    const tutorWebhooks = await getTutorWebhooks();
+    
+    // デバッグ情報を整形
+    const debug = {
+      success: true,
+      totalTutors: Object.keys(tutorWebhooks).length,
+      tutors: Object.entries(tutorWebhooks).map(([normalizedName, data]) => ({
+        normalizedName,
+        hasWebhook: !!data.webhookUrl,
+        webhookUrl: data.webhookUrl ? `${data.webhookUrl.substring(0, 50)}...` : null, // 最初の50文字のみ表示
+        userId: data.userId,
+      })),
+      rawData: tutorWebhooks, // 全データを返す（デバッグ用）
+    };
+    
+    console.log(`✅ Successfully fetched ${debug.totalTutors} tutors`);
+    res.json(debug);
+  } catch (error) {
+    console.error('❌ Error fetching tutor webhooks:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack,
+    });
+  }
+});
+
 export default router;
