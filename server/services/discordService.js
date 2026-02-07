@@ -6,16 +6,30 @@ import { getTutorWebhooks, normalizeTutorName } from './tutorWebhookService.js';
  */
 export async function sendMonthlyStudentListToTutors(hearingStudents, examinationStudents) {
   try {
+    console.log(`📊 sendMonthlyStudentListToTutors called with:`);
+    console.log(`   - hearingStudents: ${hearingStudents.length}`);
+    console.log(`   - examinationStudents: ${examinationStudents.length}`);
+    
     const tutorWebhooks = await getTutorWebhooks();
     
     // 担当Tutorごとに生徒をグループ化
     const tutorGroups = groupStudentsByTutor(hearingStudents, examinationStudents);
+    
+    console.log(`📊 Grouped into ${Object.keys(tutorGroups).length} tutors:`);
+    for (const [tutor, students] of Object.entries(tutorGroups)) {
+      console.log(`   - ${tutor}: hearing=${students.hearing.length}, examination=${students.examination.length}`);
+    }
     
     const results = [];
     
     for (const [tutor, students] of Object.entries(tutorGroups)) {
       const normalizedTutor = normalizeTutorName(tutor);
       const webhookData = tutorWebhooks[normalizedTutor];
+      
+      console.log(`\n📤 Sending to ${tutor} (normalized: ${normalizedTutor}):`);
+      console.log(`   - Hearing: ${students.hearing.length} students`);
+      console.log(`   - Examination: ${students.examination.length} students`);
+      console.log(`   - Has webhook: ${!!webhookData?.webhookUrl}`);
       
       if (!webhookData || !webhookData.webhookUrl) {
         console.warn(`⚠️ No webhook URL found for tutor: ${tutor} (normalized: ${normalizedTutor})`);
@@ -32,7 +46,12 @@ export async function sendMonthlyStudentListToTutors(hearingStudents, examinatio
         });
         
         console.log(`✅ Sent Discord notification to ${tutor}`);
-        results.push({ tutor, success: true, count: students.hearing.length + students.examination.length });
+        results.push({ 
+          tutor, 
+          success: true, 
+          hearingCount: students.hearing.length,
+          examinationCount: students.examination.length,
+        });
       } catch (error) {
         console.error(`❌ Error sending Discord notification to ${tutor}:`, error);
         results.push({ tutor, success: false, error: error.message });
@@ -127,6 +146,11 @@ function groupStudentsByTutor(hearingStudents, examinationStudents) {
 async function sendDiscordMessage(webhookUrl, data) {
   const { tutor, userId, hearingStudents, examinationStudents, isIncompleteList } = data;
   
+  console.log(`\n🔍 sendDiscordMessage for ${tutor}:`);
+  console.log(`   - hearingStudents: ${hearingStudents?.length || 0}`);
+  console.log(`   - examinationStudents: ${examinationStudents?.length || 0}`);
+  console.log(`   - isIncompleteList: ${isIncompleteList}`);
+  
   const title = isIncompleteList 
     ? '⚠️ 未完了の生徒リスト' 
     : '📋 今月の対象生徒リスト';
@@ -143,6 +167,9 @@ async function sendDiscordMessage(webhookUrl, data) {
     ? formatStudentSection(examinationTitle, examinationStudents, '📝')
     : `**📝 ${examinationTitle} (0名)**\n\n該当する生徒はいません\n\n`;
   
+  console.log(`   - hearingSection length: ${hearingSection.length}`);
+  console.log(`   - examinationSection length: ${examinationSection.length}`);
+  
   // メンション文字列を作成
   // ロールID: 1294923221107478571
   const roleId = '1294923221107478571';
@@ -150,14 +177,19 @@ async function sendDiscordMessage(webhookUrl, data) {
   const userMention = userId ? `<@${userId}>` : '';
   const mentions = [roleMention, userMention].filter(Boolean).join(' ');
   
+  const description = `**${tutor}** 先生\n\n` +
+                      hearingSection +
+                      examinationSection;
+  
+  console.log(`   - Final description length: ${description.length} chars`);
+  console.log(`   - Description preview: ${description.substring(0, 100)}...`);
+  
   const message = {
     content: mentions, // メンションを追加
     embeds: [
       {
         title,
-        description: `**${tutor}** 先生\n\n` +
-                     hearingSection +
-                     examinationSection,
+        description,
         color: isIncompleteList ? 0xFF6B6B : 0x4ECDC4, // 赤: 未完了、青緑: 通常
         timestamp: new Date().toISOString(),
         footer: {
@@ -167,7 +199,9 @@ async function sendDiscordMessage(webhookUrl, data) {
     ]
   };
   
+  console.log(`   - Sending to Discord webhook...`);
   await axios.post(webhookUrl, message);
+  console.log(`   ✅ Discord message sent successfully`);
 }
 
 /**
