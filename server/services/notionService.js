@@ -19,19 +19,30 @@ export async function fetchStudents(forceRefresh = false) {
     try {
       const lastUpdate = await databaseCacheService.getCacheLastUpdate();
       
-      // 最終同期から1時間以内であればデータベースキャッシュを使用
+      // 最終同期から24時間以内であればデータベースキャッシュを使用
       if (lastUpdate) {
         const cacheAge = Date.now() - new Date(lastUpdate).getTime();
-        const oneHour = 60 * 60 * 1000;
+        const twentyFourHours = 24 * 60 * 60 * 1000; // 24時間
         
-        if (cacheAge < oneHour) {
-          console.log(`📦 Using database cache (updated ${Math.floor(cacheAge / 1000 / 60)} minutes ago)`);
+        if (cacheAge < twentyFourHours) {
+          const ageMinutes = Math.floor(cacheAge / 1000 / 60);
+          const ageHours = Math.floor(ageMinutes / 60);
+          const displayAge = ageHours > 0 
+            ? `${ageHours}時間${ageMinutes % 60}分前` 
+            : `${ageMinutes}分前`;
+          
+          console.log(`📦 Using database cache (updated ${displayAge})`);
           const students = await databaseCacheService.getNotionStudents();
           
           if (students && students.length > 0) {
             return students;
           }
+        } else {
+          const ageHours = Math.floor(cacheAge / 1000 / 60 / 60);
+          console.log(`⏰ Cache expired (${ageHours}時間前), fetching fresh data from Notion...`);
         }
+      } else {
+        console.log(`📭 No cache found, fetching fresh data from Notion...`);
       }
     } catch (error) {
       console.error('⚠️ Error checking database cache, falling back to Notion API:', error);

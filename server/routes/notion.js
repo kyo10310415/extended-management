@@ -18,6 +18,23 @@ router.get('/students', async (req, res) => {
     const formUpdates = await fetchFormUpdates();
     const suspensionData = await fetchSuspensionData();
     
+    // キャッシュの年齢を取得
+    const lastUpdate = await databaseCacheService.getCacheLastUpdate();
+    let cacheInfo = null;
+    if (lastUpdate) {
+      const cacheAge = Date.now() - new Date(lastUpdate).getTime();
+      const ageMinutes = Math.floor(cacheAge / 1000 / 60);
+      const ageHours = Math.floor(ageMinutes / 60);
+      cacheInfo = {
+        lastUpdate: lastUpdate,
+        ageMinutes: ageMinutes,
+        ageHours: ageHours,
+        displayAge: ageHours > 0 
+          ? `${ageHours}時間${ageMinutes % 60}分前` 
+          : `${ageMinutes}分前`,
+      };
+    }
+    
     // 経過月数を追加し、フォーム更新日と休会情報を紐付け
     const enrichedStudents = enrichStudentsWithMonths(students).map(student => {
       const suspension = suspensionData[student.studentId];
@@ -39,6 +56,7 @@ router.get('/students', async (req, res) => {
       success: true,
       data: enrichedStudents,
       count: enrichedStudents.length,
+      cacheInfo: cacheInfo, // キャッシュ情報を追加
     });
   } catch (error) {
     console.error('Error in /api/notion/students:', error);

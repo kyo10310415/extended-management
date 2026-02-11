@@ -58,12 +58,45 @@ async function preloadData() {
 
 /**
  * サーバー起動時にデータをプリロード
+ * キャッシュがある場合は即座に返し、バックグラウンドで更新
  */
 export async function initializeDataPreload() {
   console.log('🚀 Initializing data preload on server startup...');
   
-  // 起動時に即座にプリロード
-  await preloadData();
+  try {
+    // まずキャッシュの状態を確認
+    const lastUpdate = await databaseCacheService.getCacheLastUpdate();
+    
+    if (lastUpdate) {
+      const cacheAge = Date.now() - new Date(lastUpdate).getTime();
+      const twentyFourHours = 24 * 60 * 60 * 1000;
+      const ageHours = Math.floor(cacheAge / 1000 / 60 / 60);
+      
+      if (cacheAge < twentyFourHours) {
+        // キャッシュが新しい場合、バックグラウンドで更新（非ブロッキング）
+        console.log(`✅ Recent cache found (${ageHours}時間前), server ready immediately`);
+        console.log(`🔄 Scheduling background data refresh...`);
+        
+        // バックグラウンドで更新（awaitしない）
+        preloadData().catch(error => {
+          console.error('❌ Background preload error:', error);
+        });
+        
+        return; // 即座に返す
+      } else {
+        // キャッシュが古い場合、同期的に更新
+        console.log(`⏰ Cache expired (${ageHours}時間前), fetching fresh data...`);
+        await preloadData();
+      }
+    } else {
+      // キャッシュがない場合、同期的に初回ロード
+      console.log(`📭 No cache found, performing initial data load...`);
+      await preloadData();
+    }
+  } catch (error) {
+    console.error('❌ Error during initialization:', error);
+    // エラーでもサーバーは起動する
+  }
 }
 
 /**
