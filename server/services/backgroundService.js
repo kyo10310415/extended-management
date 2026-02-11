@@ -69,10 +69,10 @@ export async function initializeDataPreload() {
     
     if (lastUpdate) {
       const cacheAge = Date.now() - new Date(lastUpdate).getTime();
-      const twentyFourHours = 24 * 60 * 60 * 1000;
+      const fortyEightHours = 48 * 60 * 60 * 1000; // 48時間
       const ageHours = Math.floor(cacheAge / 1000 / 60 / 60);
       
-      if (cacheAge < twentyFourHours) {
+      if (cacheAge < fortyEightHours) {
         // キャッシュが新しい場合、バックグラウンドで更新（非ブロッキング）
         console.log(`✅ Recent cache found (${ageHours}時間前), server ready immediately`);
         console.log(`🔄 Scheduling background data refresh...`);

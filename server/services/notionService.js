@@ -19,12 +19,12 @@ export async function fetchStudents(forceRefresh = false) {
     try {
       const lastUpdate = await databaseCacheService.getCacheLastUpdate();
       
-      // 最終同期から24時間以内であればデータベースキャッシュを使用
+      // 最終同期から48時間以内であればデータベースキャッシュを使用
       if (lastUpdate) {
         const cacheAge = Date.now() - new Date(lastUpdate).getTime();
-        const twentyFourHours = 24 * 60 * 60 * 1000; // 24時間
+        const fortyEightHours = 48 * 60 * 60 * 1000; // 48時間
         
-        if (cacheAge < twentyFourHours) {
+        if (cacheAge < fortyEightHours) {
           const ageMinutes = Math.floor(cacheAge / 1000 / 60);
           const ageHours = Math.floor(ageMinutes / 60);
           const displayAge = ageHours > 0 
