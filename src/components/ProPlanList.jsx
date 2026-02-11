@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
-import StudentTable from './StudentTable'
 
 function ProPlanList() {
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [saving, setSaving] = useState({})
   
   // 検索フィルター
   const [searchFilters, setSearchFilters] = useState({
@@ -23,36 +23,14 @@ function ProPlanList() {
       setLoading(true)
       setRefreshing(false)
       
-      // Notionから全生徒データを取得
-      const response = await fetch('/api/notion/students')
+      // 永久会員の生徒一覧を取得（Proプランデータも含む）
+      const response = await fetch('/api/pro-plan/students')
       const data = await response.json()
 
-      if (data.success) {
-        // 永久会員のみをフィルタリング
-        const proPlanStudents = data.data.filter(s => s.plan === '永久会員')
-        
-        // 学籍番号のリストを取得
-        const studentIds = proPlanStudents.map(s => s.studentId)
-        
-        // Proプラン管理データを一括取得
-        let proPlanData = {}
-        if (studentIds.length > 0) {
-          const res = await fetch('/api/pro-plan/bulk', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ studentIds }),
-          })
-          const bulkData = await res.json()
-          proPlanData = bulkData.data || {}
-        }
-        
-        // データをマージ
-        const enrichedStudents = proPlanStudents.map(student => ({
-          ...student,
-          proPlanData: proPlanData[student.studentId] || null,
-        }))
+      console.log('Pro plan students API response:', data)
 
-        setStudents(enrichedStudents)
+      if (data.success) {
+        setStudents(data.data || [])
       } else {
         setError(data.error)
       }
@@ -80,19 +58,91 @@ function ProPlanList() {
       await fetchProPlanStudents()
     } catch (err) {
       console.error('Error refreshing data:', err)
-      setError(err.message)
+      alert(`更新エラー: ${err.message}`)
     }
   }
 
-  // 検索フィルター適用
+  // Proプラン開始月を更新
+  const handleProPlanStartMonthChange = async (studentId, value) => {
+    try {
+      setSaving({ ...saving, [studentId]: true })
+      
+      const student = students.find(s => s.studentId === studentId)
+      
+      const response = await fetch(`/api/pro-plan/${studentId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pro_plan_start_month: value,
+          pro_plan_enabled: student?.proPlan || false,
+        }),
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        // ローカル状態を更新
+        setStudents(prev => prev.map(s => 
+          s.studentId === studentId 
+            ? { ...s, proPlanStartMonth: value }
+            : s
+        ))
+      } else {
+        alert(`保存エラー: ${data.error}`)
+      }
+    } catch (err) {
+      console.error('Error saving pro plan start month:', err)
+      alert(`保存エラー: ${err.message}`)
+    } finally {
+      setSaving(prev => ({ ...prev, [studentId]: false }))
+    }
+  }
+
+  // Proプランチェックボックスを更新
+  const handleProPlanToggle = async (studentId, checked) => {
+    try {
+      setSaving({ ...saving, [studentId]: true })
+      
+      const student = students.find(s => s.studentId === studentId)
+      
+      const response = await fetch(`/api/pro-plan/${studentId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pro_plan_start_month: student?.proPlanStartMonth || null,
+          pro_plan_enabled: checked,
+        }),
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        // ローカル状態を更新
+        setStudents(prev => prev.map(s => 
+          s.studentId === studentId 
+            ? { ...s, proPlan: checked }
+            : s
+        ))
+      } else {
+        alert(`保存エラー: ${data.error}`)
+      }
+    } catch (err) {
+      console.error('Error saving pro plan toggle:', err)
+      alert(`保存エラー: ${err.message}`)
+    } finally {
+      setSaving(prev => ({ ...prev, [studentId]: false }))
+    }
+  }
+
+  // 検索フィルターを適用
   const filteredStudents = students.filter(student => {
     if (searchFilters.studentId && !student.studentId?.toLowerCase().includes(searchFilters.studentId.toLowerCase())) {
       return false
     }
-    if (searchFilters.name && !student.name?.toLowerCase().includes(searchFilters.name.toLowerCase())) {
+    if (searchFilters.name && !student.name?.includes(searchFilters.name)) {
       return false
     }
-    if (searchFilters.tutor && !student.tutor?.toLowerCase().includes(searchFilters.tutor.toLowerCase())) {
+    if (searchFilters.tutor && !student.tutor?.includes(searchFilters.tutor)) {
       return false
     }
     return true
@@ -100,11 +150,8 @@ function ProPlanList() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">読み込み中...</p>
-        </div>
+      <div className="flex justify-center items-center h-64">
+        <div className="text-xl text-gray-600">読み込み中...</div>
       </div>
     )
   }
@@ -113,6 +160,12 @@ function ProPlanList() {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-6">
         <p className="text-red-800">エラー: {error}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+        >
+          ページをリロード
+        </button>
       </div>
     )
   }
@@ -122,7 +175,7 @@ function ProPlanList() {
       {/* ヘッダー */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Proプラン管理</h2>
+          <h2 className="text-2xl font-bold text-gray-800">👑 Proプラン管理</h2>
           <p className="text-sm text-gray-600 mt-1">
             永久会員: {filteredStudents.length} / {students.length} 名
           </p>
@@ -198,7 +251,82 @@ function ProPlanList() {
       </div>
 
       {/* 生徒テーブル */}
-      <StudentTable students={filteredStudents} type="pro-plan" onRefresh={fetchProPlanStudents} />
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">学籍番号</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">名前</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">担任</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">契約プラン</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">レッスン開始月</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proプラン開始月</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proプラン</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredStudents.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
+                    該当する生徒が見つかりません
+                  </td>
+                </tr>
+              ) : (
+                filteredStudents.map((student) => (
+                  <tr key={student.studentId} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm">
+                      {student.notionUrl ? (
+                        <a 
+                          href={student.notionUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          {student.studentId}
+                        </a>
+                      ) : (
+                        student.studentId
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm">{student.name}</td>
+                    <td className="px-4 py-3 text-sm">{student.tutor}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                        {student.plan}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm">{student.lessonStartDate}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <input
+                        type="month"
+                        value={student.proPlanStartMonth || ''}
+                        onChange={(e) => handleProPlanStartMonthChange(student.studentId, e.target.value)}
+                        disabled={saving[student.studentId]}
+                        className="px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      />
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={student.proPlan || false}
+                          onChange={(e) => handleProPlanToggle(student.studentId, e.target.checked)}
+                          disabled={saving[student.studentId]}
+                          className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
+                        />
+                        {saving[student.studentId] && (
+                          <span className="ml-2 text-xs text-gray-500">保存中...</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   )
 }
