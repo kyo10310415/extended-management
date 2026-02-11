@@ -15,6 +15,7 @@ import notionRoutes from './routes/notion.js';
 import studentsRoutes from './routes/students.js';
 import sheetsRoutes from './routes/sheets.js';
 import notificationsRoutes from './routes/notifications.js';
+import proPlanRoutes from './routes/pro-plan.js';
 
 // Background services
 import { 
@@ -64,6 +65,7 @@ app.use('/api/notion', notionRoutes);
 app.use('/api/students', studentsRoutes);
 app.use('/api/sheets', sheetsRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/pro-plan', proPlanRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

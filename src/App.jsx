@@ -4,6 +4,7 @@ import HearingList from './components/HearingList'
 import ExaminationList from './components/ExaminationList'
 import StudentMaster from './components/StudentMaster'
 import SuspensionList from './components/SuspensionList'
+import ProPlanList from './components/ProPlanList'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -13,6 +14,7 @@ function App() {
     { id: 'hearing', name: 'ヒアリング一覧', icon: '🎤' },
     { id: 'examination', name: '延長審査一覧', icon: '📋' },
     { id: 'suspension', name: '休会歴一覧', icon: '⏸️' },
+    { id: 'pro-plan', name: 'Proプラン', icon: '⭐' },
     { id: 'master', name: '生徒情報マスタ', icon: '👥' },
   ]
 
