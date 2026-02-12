@@ -25,7 +25,8 @@ async function ensureProPlanTableExists() {
           id SERIAL PRIMARY KEY,
           student_id VARCHAR(50) UNIQUE NOT NULL,
           pro_plan_start_month VARCHAR(7),
-          pro_plan_enabled BOOLEAN DEFAULT FALSE,
+          promotion_reviewed BOOLEAN DEFAULT FALSE,
+          pro_plan_status VARCHAR(20) DEFAULT '',
           notes TEXT,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -50,6 +51,46 @@ async function ensureProPlanTableExists() {
       `);
       
       console.log('✅ pro_plan_data table created successfully');
+    } else {
+      // テーブルが存在する場合、新しいカラムを追加（存在しない場合のみ）
+      try {
+        await pool.query(`
+          DO $$ 
+          BEGIN
+            -- promotion_reviewed カラムを追加
+            IF NOT EXISTS (
+              SELECT FROM information_schema.columns 
+              WHERE table_name = 'pro_plan_data' AND column_name = 'promotion_reviewed'
+            ) THEN
+              ALTER TABLE pro_plan_data ADD COLUMN promotion_reviewed BOOLEAN DEFAULT FALSE;
+            END IF;
+            
+            -- pro_plan_status カラムを追加
+            IF NOT EXISTS (
+              SELECT FROM information_schema.columns 
+              WHERE table_name = 'pro_plan_data' AND column_name = 'pro_plan_status'
+            ) THEN
+              ALTER TABLE pro_plan_data ADD COLUMN pro_plan_status VARCHAR(20) DEFAULT '';
+            END IF;
+            
+            -- 古い pro_plan_enabled カラムのデータを pro_plan_status に移行
+            IF EXISTS (
+              SELECT FROM information_schema.columns 
+              WHERE table_name = 'pro_plan_data' AND column_name = 'pro_plan_enabled'
+            ) THEN
+              UPDATE pro_plan_data 
+              SET pro_plan_status = CASE 
+                WHEN pro_plan_enabled = true THEN '確定'
+                ELSE ''
+              END
+              WHERE pro_plan_status = '' OR pro_plan_status IS NULL;
+            END IF;
+          END $$;
+        `);
+        console.log('✅ pro_plan_data columns updated successfully');
+      } catch (updateError) {
+        console.log('⚠️  Column update warning (may already exist):', updateError.message);
+      }
     }
   } catch (error) {
     console.error('❌ Error ensuring pro_plan_data table exists:', error);
@@ -102,7 +143,8 @@ router.get('/students', async (req, res) => {
       proPlanResult.rows.forEach(row => {
         proPlanMap[row.student_id] = {
           proPlanStartMonth: row.pro_plan_start_month,
-          proPlan: row.pro_plan_enabled,
+          promotionReviewed: row.promotion_reviewed || false,
+          proPlanStatus: row.pro_plan_status || '',
           notes: row.notes,
           updatedAt: row.updated_at,
         };
@@ -122,7 +164,8 @@ router.get('/students', async (req, res) => {
       status: student.status,
       notionUrl: student.notionUrl,
       proPlanStartMonth: null,
-      proPlan: false,
+      promotionReviewed: false,
+      proPlanStatus: '',
       ...proPlanMap[student.studentId], // Proプランデータをマージ（存在する場合）
     }));
 
@@ -195,27 +238,28 @@ router.get('/:studentId', async (req, res) => {
  */
 router.post('/:studentId', async (req, res) => {
   const { studentId } = req.params;
-  const { pro_plan_start_month, pro_plan_enabled, notes } = req.body;
+  const { pro_plan_start_month, promotion_reviewed, pro_plan_status, notes } = req.body;
   
   console.log('📝 POST /api/pro-plan/:studentId');
   console.log('  学籍番号:', studentId);
-  console.log('  データ:', { pro_plan_start_month, pro_plan_enabled, notes });
+  console.log('  データ:', { pro_plan_start_month, promotion_reviewed, pro_plan_status, notes });
 
   try {
     // テーブルの存在を確認（存在しない場合は作成）
     await ensureProPlanTableExists();
     
     const result = await pool.query(
-      `INSERT INTO pro_plan_data (student_id, pro_plan_start_month, pro_plan_enabled, notes)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO pro_plan_data (student_id, pro_plan_start_month, promotion_reviewed, pro_plan_status, notes)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (student_id)
        DO UPDATE SET
          pro_plan_start_month = EXCLUDED.pro_plan_start_month,
-         pro_plan_enabled = EXCLUDED.pro_plan_enabled,
+         promotion_reviewed = EXCLUDED.promotion_reviewed,
+         pro_plan_status = EXCLUDED.pro_plan_status,
          notes = EXCLUDED.notes,
          updated_at = CURRENT_TIMESTAMP
        RETURNING *`,
-      [studentId, pro_plan_start_month, pro_plan_enabled, notes]
+      [studentId, pro_plan_start_month, promotion_reviewed, pro_plan_status, notes]
     );
 
     res.json({
@@ -266,7 +310,8 @@ router.post('/bulk', async (req, res) => {
       proPlanMap[row.student_id] = {
         student_id: row.student_id,
         pro_plan_start_month: row.pro_plan_start_month,
-        pro_plan_enabled: row.pro_plan_enabled,
+        promotion_reviewed: row.promotion_reviewed || false,
+        pro_plan_status: row.pro_plan_status || '',
         notes: row.notes,
         updated_at: row.updated_at,
         created_at: row.created_at,

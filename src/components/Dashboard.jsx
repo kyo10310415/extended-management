@@ -235,14 +235,14 @@ function Dashboard() {
       
       // Proプラン成約率の計算
       const proPlanTotalCount = proPlanData.count || 0
-      const proPlanEnabledCount = (proPlanData.data || []).filter(s => s.proPlan === true).length
+      const proPlanEnabledCount = (proPlanData.data || []).filter(s => s.proPlanStatus === '確定').length
       const proPlanRate = proPlanTotalCount > 0 
         ? (proPlanEnabledCount / proPlanTotalCount * 100) 
         : 0
       
       console.log('  Proプラン:');
       console.log('    永久会員数:', proPlanTotalCount);
-      console.log('    Proプラン数:', proPlanEnabledCount);
+      console.log('    Proプラン確定数:', proPlanEnabledCount);
       console.log('    成約率:', proPlanRate.toFixed(2) + '%');
       
       console.log('✅ KPI計算完了');

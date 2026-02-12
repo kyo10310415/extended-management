@@ -82,7 +82,8 @@ function ProPlanList() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pro_plan_start_month: value,
-          pro_plan_enabled: student?.proPlan || false,
+          promotion_reviewed: student?.promotionReviewed || false,
+          pro_plan_status: student?.proPlanStatus || '',
         }),
       })
 
@@ -106,8 +107,8 @@ function ProPlanList() {
     }
   }
 
-  // Proプランチェックボックスを更新
-  const handleProPlanToggle = async (studentId, checked) => {
+  // 昇格審査済みチェックボックスを更新
+  const handlePromotionReviewedToggle = async (studentId, checked) => {
     try {
       setSaving({ ...saving, [studentId]: true })
       
@@ -118,7 +119,8 @@ function ProPlanList() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pro_plan_start_month: student?.proPlanStartMonth || null,
-          pro_plan_enabled: checked,
+          promotion_reviewed: checked,
+          pro_plan_status: student?.proPlanStatus || '',
         }),
       })
 
@@ -128,14 +130,51 @@ function ProPlanList() {
         // ローカル状態を更新
         setStudents(prev => prev.map(s => 
           s.studentId === studentId 
-            ? { ...s, proPlan: checked }
+            ? { ...s, promotionReviewed: checked }
             : s
         ))
       } else {
         alert(`保存エラー: ${data.error}`)
       }
     } catch (err) {
-      console.error('Error saving pro plan toggle:', err)
+      console.error('Error saving promotion reviewed:', err)
+      alert(`保存エラー: ${err.message}`)
+    } finally {
+      setSaving(prev => ({ ...prev, [studentId]: false }))
+    }
+  }
+
+  // Proプランステータスを更新
+  const handleProPlanStatusChange = async (studentId, status) => {
+    try {
+      setSaving({ ...saving, [studentId]: true })
+      
+      const student = students.find(s => s.studentId === studentId)
+      
+      const response = await fetch(`/api/pro-plan/${studentId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pro_plan_start_month: student?.proPlanStartMonth || null,
+          promotion_reviewed: student?.promotionReviewed || false,
+          pro_plan_status: status,
+        }),
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        // ローカル状態を更新
+        setStudents(prev => prev.map(s => 
+          s.studentId === studentId 
+            ? { ...s, proPlanStatus: status }
+            : s
+        ))
+      } else {
+        alert(`保存エラー: ${data.error}`)
+      }
+    } catch (err) {
+      console.error('Error saving pro plan status:', err)
       alert(`保存エラー: ${err.message}`)
     } finally {
       setSaving(prev => ({ ...prev, [studentId]: false }))
@@ -283,13 +322,14 @@ function ProPlanList() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">契約プラン</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">レッスン開始月</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proプラン開始月</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">昇格審査済み</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proプラン</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan="8" className="px-4 py-8 text-center text-gray-500">
                     該当する生徒が見つかりません
                   </td>
                 </tr>
@@ -331,11 +371,24 @@ function ProPlanList() {
                       <div className="flex items-center">
                         <input
                           type="checkbox"
-                          checked={student.proPlan || false}
-                          onChange={(e) => handleProPlanToggle(student.studentId, e.target.checked)}
+                          checked={student.promotionReviewed || false}
+                          onChange={(e) => handlePromotionReviewedToggle(student.studentId, e.target.checked)}
                           disabled={saving[student.studentId]}
                           className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
                         />
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <div className="flex items-center">
+                        <select
+                          value={student.proPlanStatus || ''}
+                          onChange={(e) => handleProPlanStatusChange(student.studentId, e.target.value)}
+                          disabled={saving[student.studentId]}
+                          className="px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                        >
+                          <option value="">空白</option>
+                          <option value="確定">確定</option>
+                        </select>
                         {saving[student.studentId] && (
                           <span className="ml-2 text-xs text-gray-500">保存中...</span>
                         )}
