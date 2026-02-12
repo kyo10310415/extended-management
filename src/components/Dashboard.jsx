@@ -8,6 +8,10 @@ function Dashboard() {
     totalStudents: 0,
     hearingStudents: [],
     examinationStudents: [],
+    // Proプラン
+    proPlanTotalCount: 0,
+    proPlanEnabledCount: 0,
+    proPlanRate: 0,
     // KPI設定
     extensionRateKPI: 80, // デフォルト80%
     // 計算されたKPI
@@ -39,18 +43,21 @@ function Dashboard() {
     try {
       console.log('📊 Dashboard: データ取得開始');
       
-      const [allRes, hearingRes, examRes] = await Promise.all([
+      const [allRes, hearingRes, examRes, proPlanRes] = await Promise.all([
         fetch('/api/notion/students'),
         fetch('/api/notion/hearing'),
         fetch('/api/notion/examination'),
+        fetch('/api/pro-plan/students'),
       ])
 
       const allData = await allRes.json()
       const hearingData = await hearingRes.json()
       const examData = await examRes.json()
+      const proPlanData = await proPlanRes.json()
 
       console.log('  ヒアリング対象:', hearingData.data?.length);
       console.log('  延長審査対象:', examData.data?.length);
+      console.log('  永久会員:', proPlanData.count);
 
       // ヒアリングデータを4ヶ月と10ヶ月に分ける
       const hearing4Month = (hearingData.data || []).filter(s => s.monthsElapsed === 4);
@@ -226,6 +233,18 @@ function Dashboard() {
       console.log('    延長数:', exam2ndExtensionCount);
       console.log('    延長率:', exam2ndExtensionRate.toFixed(2) + '%');
       
+      // Proプラン成約率の計算
+      const proPlanTotalCount = proPlanData.count || 0
+      const proPlanEnabledCount = (proPlanData.data || []).filter(s => s.proPlan === true).length
+      const proPlanRate = proPlanTotalCount > 0 
+        ? (proPlanEnabledCount / proPlanTotalCount * 100) 
+        : 0
+      
+      console.log('  Proプラン:');
+      console.log('    永久会員数:', proPlanTotalCount);
+      console.log('    Proプラン数:', proPlanEnabledCount);
+      console.log('    成約率:', proPlanRate.toFixed(2) + '%');
+      
       console.log('✅ KPI計算完了');
 
       setStats(prev => ({
@@ -234,6 +253,9 @@ function Dashboard() {
         totalStudents: allData.count || 0,
         hearingStudents,
         examinationStudents,
+        proPlanTotalCount,
+        proPlanEnabledCount,
+        proPlanRate,
         extensionCountKPI: Math.ceil(examinationCount * prev.extensionRateKPI / 100),
         certaintyFilledCount,
         extensionCount,
@@ -386,7 +408,7 @@ function Dashboard() {
       </div>
 
       {/* 延長率 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow p-4">
           <p className="text-xs text-gray-600 mb-1">延長率（対 審査対象）</p>
           <p className="text-3xl font-bold text-purple-600">{stats.extensionRate.toFixed(2)}%</p>
@@ -400,6 +422,14 @@ function Dashboard() {
           <p className="text-3xl font-bold text-indigo-600">{stats.extensionRateVsResult.toFixed(2)}%</p>
           <p className="text-xs text-gray-500 mt-1">
             {stats.extensionCount} / {stats.extensionCount + stats.withdrawalCount} × 100
+          </p>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-4">
+          <p className="text-xs text-gray-600 mb-1">👑 Proプラン成約率</p>
+          <p className="text-3xl font-bold text-yellow-600">{stats.proPlanRate.toFixed(2)}%</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {stats.proPlanEnabledCount} / {stats.proPlanTotalCount} × 100
           </p>
         </div>
 
