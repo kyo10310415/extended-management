@@ -5,6 +5,7 @@ function ActiveProPlanList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [saving, setSaving] = useState({})
   
   // 検索フィルター
   const [searchFilters, setSearchFilters] = useState({
@@ -81,6 +82,41 @@ function ActiveProPlanList() {
     } catch (err) {
       console.error('Error refreshing data:', err)
       alert(`更新エラー: ${err.message}`)
+    }
+  }
+
+  // Proプラン開始月を更新
+  const handleProPlanStartMonthChange = async (studentId, value) => {
+    try {
+      setSaving({ ...saving, [studentId]: true })
+      
+      const response = await fetch(`/api/pro-plan/${studentId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pro_plan_start_month: value,
+          promotion_reviewed: false,
+          pro_plan_status: '',
+        }),
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        // ローカル状態を更新
+        setStudents(prev => prev.map(s => 
+          s.studentId === studentId 
+            ? { ...s, proPlanStartMonth: value }
+            : s
+        ))
+      } else {
+        alert(`保存エラー: ${data.error}`)
+      }
+    } catch (err) {
+      console.error('Error saving pro plan start month:', err)
+      alert(`保存エラー: ${err.message}`)
+    } finally {
+      setSaving(prev => ({ ...prev, [studentId]: false }))
     }
   }
 
@@ -227,7 +263,18 @@ function ActiveProPlanList() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm">
-                      {student.proPlanStartMonth || '-'}
+                      <div className="flex items-center">
+                        <input
+                          type="month"
+                          value={student.proPlanStartMonth || ''}
+                          onChange={(e) => handleProPlanStartMonthChange(student.studentId, e.target.value)}
+                          disabled={saving[student.studentId]}
+                          className="px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                        />
+                        {saving[student.studentId] && (
+                          <span className="ml-2 text-xs text-gray-500">保存中...</span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

@@ -386,7 +386,7 @@ function ProPlanList() {
                           disabled={saving[student.studentId]}
                           className="px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                         >
-                          <option value="">空白</option>
+                          <option value=""></option>
                           <option value="確定">確定</option>
                         </select>
                         {saving[student.studentId] && (
