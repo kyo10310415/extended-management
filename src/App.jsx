@@ -69,6 +69,7 @@ function App() {
         {activeTab === 'hearing' && <HearingList />}
         {activeTab === 'examination' && <ExaminationList />}
         {activeTab === 'suspension' && <SuspensionList />}
+        {activeTab === 'pro-plan' && <ProPlanList />}
         {activeTab === 'master' && <StudentMaster />}
       </main>
 
