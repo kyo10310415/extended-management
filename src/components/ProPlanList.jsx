@@ -20,26 +20,34 @@ function ProPlanList() {
 
   const fetchProPlanStudents = async () => {
     try {
+      console.log('🔄 Fetching Pro plan students...')
       setLoading(true)
       setRefreshing(false)
       
       // 永久会員の生徒一覧を取得（Proプランデータも含む）
       const response = await fetch('/api/pro-plan/students')
+      console.log('📡 Response status:', response.status)
+      
       const data = await response.json()
-
-      console.log('Pro plan students API response:', data)
+      console.log('📦 Pro plan students API response:', data)
+      console.log('📊 Student count:', data.count)
+      console.log('👥 Students array length:', data.data?.length)
 
       if (data.success) {
-        setStudents(data.data || [])
+        const studentsData = data.data || []
+        console.log('✅ Setting students state with', studentsData.length, 'students')
+        setStudents(studentsData)
       } else {
+        console.error('❌ API error:', data.error)
         setError(data.error)
       }
     } catch (err) {
-      console.error('Error fetching pro plan students:', err)
+      console.error('❌ Error fetching pro plan students:', err)
       setError(err.message)
     } finally {
       setLoading(false)
       setRefreshing(false)
+      console.log('✅ Fetch complete')
     }
   }
 
@@ -148,7 +156,17 @@ function ProPlanList() {
     return true
   })
 
+  // デバッグログ
+  console.log('🎨 Rendering ProPlanList component')
+  console.log('📊 State:', {
+    loading,
+    error,
+    studentsCount: students.length,
+    filteredStudentsCount: filteredStudents.length,
+  })
+
   if (loading) {
+    console.log('⏳ Showing loading state')
     return (
       <div className="flex justify-center items-center h-64">
         <div className="text-xl text-gray-600">読み込み中...</div>
@@ -157,6 +175,7 @@ function ProPlanList() {
   }
 
   if (error) {
+    console.log('❌ Showing error state:', error)
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-6">
         <p className="text-red-800">エラー: {error}</p>
@@ -169,6 +188,8 @@ function ProPlanList() {
       </div>
     )
   }
+
+  console.log('✅ Rendering table with', filteredStudents.length, 'students')
 
   return (
     <div className="space-y-6">
