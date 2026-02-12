@@ -235,7 +235,7 @@ function ProPlanList() {
       {/* ヘッダー */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">👑 Proプラン管理</h2>
+          <h2 className="text-2xl font-bold text-gray-800">👑 永久会員</h2>
           <p className="text-sm text-gray-600 mt-1">
             永久会員: {filteredStudents.length} / {students.length} 名
           </p>
