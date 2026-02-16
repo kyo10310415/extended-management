@@ -115,37 +115,22 @@ async function calculateKPIData() {
   console.log(`✅ Active students: ${activeStudents.length}`);
 
   // ========================================
-  // 延長審査対象の抽出（休会を考慮した経過月数）
+  // 延長審査対象の抽出（経過月数ベース）
   // ========================================
   
-  // 休会データを取得
-  const suspensionQuery = `
-    SELECT 
-      student_id,
-      suspension_months
-    FROM student_extensions
-    WHERE suspension_months IS NOT NULL AND suspension_months > 0
-  `;
-  const suspensionResult = await pool.query(suspensionQuery);
-  const suspensionMap = new Map(
-    suspensionResult.rows.map(row => [row.student_id, row.suspension_months])
-  );
-
-  // 各生徒の調整後経過月数を計算
-  const studentsWithAdjustedMonths = activeStudents.map(student => {
+  // 各生徒の経過月数を計算（休会は考慮しない）
+  const studentsWithMonths = activeStudents.map(student => {
     const monthsElapsed = calculateMonthsElapsed(student.lessonStartDate);
-    const suspensionMonths = suspensionMap.get(student.studentId) || 0;
-    const adjustedMonths = Math.max(0, monthsElapsed - suspensionMonths);
     
     return {
       ...student,
-      monthsElapsed: adjustedMonths,
+      monthsElapsed,
     };
   });
 
   // 延長審査対象を抽出
-  const exam1stTargets = studentsWithAdjustedMonths.filter(s => s.monthsElapsed === 5);
-  const exam2ndTargets = studentsWithAdjustedMonths.filter(s => s.monthsElapsed === 11);
+  const exam1stTargets = studentsWithMonths.filter(s => s.monthsElapsed === 5);
+  const exam2ndTargets = studentsWithMonths.filter(s => s.monthsElapsed === 11);
 
   console.log(`📊 延長審査1回目対象: ${exam1stTargets.length}人`);
   console.log(`📊 延長審査2回目対象: ${exam2ndTargets.length}人`);
