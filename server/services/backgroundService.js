@@ -5,6 +5,10 @@ import { sendSuspensionEndNotification } from './slackService.js';
 import { sendMonthlyStudentListToTutors, sendIncompleteStudentListToTutors } from './discordService.js';
 import { enrichStudentsWithMonths, filterStudentsByMonth } from '../utils/dateUtils.js';
 import cacheService from './cacheService.js';
+import { appendMonthlyKPI, formatKPIData } from './kpiExportService.js';
+import { pool } from '../index.js';
+import { fetchStudents } from './notionService.js';
+import { calculateMonthsElapsed } from '../utils/dateUtils.js';
 
 /**
  * バックグラウンドでデータを取得してキャッシュに保存
@@ -488,12 +492,171 @@ export async function getSuspensionEndingStudents() {
   }
 }
 
+/**
+ * 月末KPIエクスポートスケジュール（毎月末日）
+ */
+export function scheduleMonthlyKPIExport() {
+  // 毎月末日 PM 11:00 JST (UTC 14:00)
+  // Cron形式で月末日を指定: L は last day of month（node-cronでは使えないため別実装）
+  // 毎日チェックして月末日なら実行
+  const cronExpression = '0 14 * * *'; // 毎日 14:00 UTC = 23:00 JST
+
+  console.log('⏰ Scheduling monthly KPI export check at 11:00 PM JST every day');
+
+  const task = cron.schedule(cronExpression, async () => {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    // 明日が翌月の1日かチェック（つまり今日が月末日）
+    if (tomorrow.getDate() === 1) {
+      console.log('⏰ Monthly KPI export triggered on last day of the month at 11:00 PM JST');
+      await exportMonthlyKPITask();
+    }
+  }, {
+    timezone: 'UTC'
+  });
+
+  task.start();
+  console.log('✅ Monthly KPI export scheduler started');
+
+  return task;
+}
+
+/**
+ * 月末KPIエクスポートタスク
+ */
+async function exportMonthlyKPITask() {
+  try {
+    console.log('📊 Starting monthly KPI export task...');
+    
+    // 環境変数からスプレッドシートIDを取得
+    const spreadsheetId = process.env.KPI_SPREADSHEET_ID;
+    
+    if (!spreadsheetId) {
+      console.warn('⚠️ KPI_SPREADSHEET_ID not configured, skipping monthly export');
+      console.warn('   Set KPI_SPREADSHEET_ID environment variable to enable automatic monthly export');
+      return;
+    }
+    
+    // KPIデータを計算
+    const kpiData = await calculateKPIDataForExport();
+    
+    // スプレッドシートに追加
+    const result = await appendMonthlyKPI(spreadsheetId, kpiData);
+    
+    console.log(`✅ Monthly KPI export completed: ${result.month} added to column ${result.column}`);
+    console.log(`   URL: ${result.url}`);
+    
+    return result;
+  } catch (error) {
+    console.error('❌ Monthly KPI export task failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * KPIデータを計算する内部関数（エクスポート用）
+ */
+async function calculateKPIDataForExport() {
+  // Notionから生徒データを取得
+  const students = await fetchStudents();
+  console.log(`✅ Fetched ${students.length} students from Notion`);
+
+  // アクティブな生徒のみをフィルタ
+  const activeStudents = students.filter(s => s.status === 'アクティブ');
+  console.log(`✅ Active students: ${activeStudents.length}`);
+
+  // 各生徒の経過月数を計算（休会は考慮しない）
+  const studentsWithMonths = activeStudents.map(student => {
+    const monthsElapsed = calculateMonthsElapsed(student.lessonStartDate);
+    
+    return {
+      ...student,
+      monthsElapsed,
+    };
+  });
+
+  // 延長審査対象を抽出
+  const exam1stTargets = studentsWithMonths.filter(s => s.monthsElapsed === 5);
+  const exam2ndTargets = studentsWithMonths.filter(s => s.monthsElapsed === 11);
+
+  console.log(`📊 延長審査1回目対象: ${exam1stTargets.length}人`);
+  console.log(`📊 延長審査2回目対象: ${exam2ndTargets.length}人`);
+
+  // 延長審査結果を取得
+  const exam1stExtensions = await getExtensionResultsForExport(exam1stTargets.map(s => s.studentId), 1);
+  const exam1stExtensionCount = exam1stExtensions.length;
+  const exam1stExtensionRate = exam1stTargets.length > 0 
+    ? (exam1stExtensionCount / exam1stTargets.length) * 100 
+    : 0;
+
+  const exam2ndExtensions = await getExtensionResultsForExport(exam2ndTargets.map(s => s.studentId), 2);
+  const exam2ndExtensionCount = exam2ndExtensions.length;
+  const exam2ndExtensionRate = exam2ndTargets.length > 0 
+    ? (exam2ndExtensionCount / exam2ndTargets.length) * 100 
+    : 0;
+
+  // 永久会員の数を取得
+  const lifetimeMembers = students.filter(s => s.plan === '永久会員');
+  const lifetimeMemberCount = lifetimeMembers.length;
+  
+  // Proプランステータスが「確定」の数を取得
+  const proPlanQuery = `
+    SELECT COUNT(*) as count
+    FROM pro_plan_data
+    WHERE pro_plan_status = '確定'
+  `;
+  const proPlanResult = await pool.query(proPlanQuery);
+  const proPlanConfirmedCount = parseInt(proPlanResult.rows[0]?.count || 0);
+
+  const proPlanSuccessRate = lifetimeMemberCount > 0 
+    ? (proPlanConfirmedCount / lifetimeMemberCount) * 100 
+    : 0;
+
+  console.log(`📊 Proプラン成約率: ${proPlanConfirmedCount}/${lifetimeMemberCount} = ${proPlanSuccessRate.toFixed(2)}%`);
+
+  // KPIデータを返す
+  return formatKPIData({
+    exam1stTargetCount: exam1stTargets.length,
+    exam1stExtensionCount,
+    exam1stExtensionRate,
+    exam2ndTargetCount: exam2ndTargets.length,
+    exam2ndExtensionCount,
+    exam2ndExtensionRate,
+    proPlanSuccessRate,
+  });
+}
+
+/**
+ * 延長結果を取得する内部関数
+ */
+async function getExtensionResultsForExport(studentIds, cycle) {
+  if (studentIds.length === 0) {
+    return [];
+  }
+
+  const columnSuffix = cycle === 1 ? '_1' : '_2';
+  
+  const query = `
+    SELECT student_id
+    FROM student_extensions
+    WHERE student_id = ANY($1)
+      AND examination_result${columnSuffix} = '延長'
+  `;
+  
+  const result = await pool.query(query, [studentIds]);
+  
+  return result.rows.map(row => row.student_id);
+}
+
 export default {
   initializeDataPreload,
   scheduleDailyUpdate,
   scheduleSuspensionEndNotifications,
   scheduleMonthlyStudentListNotifications,
   scheduleIncompleteListNotifications,
+  scheduleMonthlyKPIExport,
   manualUpdate,
   manualSendSuspensionEndNotifications,
   manualSendMonthlyStudentList,

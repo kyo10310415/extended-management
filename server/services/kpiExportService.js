@@ -115,23 +115,24 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData) {
 
     console.log(`📊 Adding KPI data to column ${nextColumn} (${monthLabel})`);
 
-    // データを整形
+    // データを整形（数値はそのまま、パーセンテージも数値として）
     const values = [
       [monthLabel], // ヘッダー
       [kpiData.exam1stTargetCount || 0],
       [kpiData.exam1stExtensionCount || 0],
-      [kpiData.exam1stExtensionRate?.toFixed(2) || '0.00'],
+      [kpiData.exam1stExtensionRate || 0], // 数値として保存
       [kpiData.exam2ndTargetCount || 0],
       [kpiData.exam2ndExtensionCount || 0],
-      [kpiData.exam2ndExtensionRate?.toFixed(2) || '0.00'],
-      [kpiData.proPlanSuccessRate?.toFixed(2) || '0.00'],
+      [kpiData.exam2ndExtensionRate || 0], // 数値として保存
+      [kpiData.proPlanSuccessRate || 0], // 数値として保存
     ];
 
     // データを書き込み（デフォルトシート）
+    // USER_ENTEREDを使用して、数値は数値として解釈される
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `${nextColumn}1:${nextColumn}8`,
-      valueInputOption: 'RAW',
+      valueInputOption: 'USER_ENTERED',
       requestBody: { values },
     });
 
