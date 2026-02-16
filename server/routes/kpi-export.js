@@ -182,6 +182,20 @@ async function calculateKPIData() {
 
   console.log(`📊 Proプラン成約率: ${proPlanConfirmedCount}/${lifetimeMemberCount} = ${proPlanSuccessRate.toFixed(2)}%`);
 
+  // ========================================
+  // 延長率（対 審査対象）を計算
+  // ========================================
+  
+  // 全延長審査対象数と延長数
+  const totalExamTargetCount = exam1stTargets.length + exam2ndTargets.length;
+  const totalExtensionCount = exam1stExtensionCount + exam2ndExtensionCount;
+  
+  const overallExtensionRate = totalExamTargetCount > 0 
+    ? (totalExtensionCount / totalExamTargetCount) * 100 
+    : 0;
+  
+  console.log(`📊 延長率（対 審査対象）: ${totalExtensionCount}/${totalExamTargetCount} = ${overallExtensionRate.toFixed(2)}%`);
+
   // KPIデータを返す
   return formatKPIData({
     exam1stTargetCount: exam1stTargets.length,
@@ -191,6 +205,7 @@ async function calculateKPIData() {
     exam2ndExtensionCount,
     exam2ndExtensionRate,
     proPlanSuccessRate,
+    overallExtensionRate, // 追加
   });
 }
 

@@ -85,12 +85,13 @@ async function initializeKPISheet(spreadsheetId, sheetTitle) {
       ['延長審査2回目_延長数'],
       ['延長審査2回目_延長率(%)'],
       ['Proプラン成約率(%)'],
+      ['延長率（対 審査対象）(%)'], // 新規追加
     ];
 
     // シート名を指定してデータを書き込み
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `${sheetTitle}!A1:A8`,
+      range: `${sheetTitle}!A1:A9`, // A8 → A9 に変更
       valueInputOption: 'RAW',
       requestBody: { values },
     });
@@ -371,12 +372,81 @@ async function createChartSheet(spreadsheetId, sheets, dataSheetId, dataSheetTit
                 }
               }
             }
+          },
+          // グラフ4: 延長率（対 審査対象）(%)
+          {
+            addChart: {
+              chart: {
+                spec: {
+                  title: '延長率（対 審査対象）推移',
+                  basicChart: {
+                    chartType: 'LINE',
+                    legendPosition: 'BOTTOM_LEGEND',
+                    axis: [
+                      {
+                        position: 'BOTTOM_AXIS',
+                        title: '月'
+                      },
+                      {
+                        position: 'LEFT_AXIS',
+                        title: '延長率(%)'
+                      }
+                    ],
+                    domains: [
+                      {
+                        domain: {
+                          sourceRange: {
+                            sources: [
+                              {
+                                sheetId: dataSheetId,
+                                startRowIndex: 0,
+                                endRowIndex: 1,
+                                startColumnIndex: 1,
+                                endColumnIndex: 100
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ],
+                    series: [
+                      {
+                        series: {
+                          sourceRange: {
+                            sources: [
+                              {
+                                sheetId: dataSheetId,
+                                startRowIndex: 8, // 9行目（延長率（対 審査対象））
+                                endRowIndex: 9,
+                                startColumnIndex: 1,
+                                endColumnIndex: 100
+                              }
+                            ]
+                          }
+                        },
+                        targetAxis: 'LEFT_AXIS'
+                      }
+                    ],
+                    headerCount: 1
+                  }
+                },
+                position: {
+                  overlayPosition: {
+                    anchorCell: {
+                      sheetId: chartSheetId,
+                      rowIndex: 20,
+                      columnIndex: 6
+                    }
+                  }
+                }
+              }
+            }
           }
         ]
       }
     });
     
-    console.log('✅ Created 3 charts on chart sheet');
+    console.log('✅ Created 4 charts on chart sheet');
   } catch (error) {
     console.error('❌ Error creating chart sheet:', error);
     throw error;
@@ -429,12 +499,13 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData) {
       [kpiData.exam2ndExtensionCount || 0],
       [Math.round((kpiData.exam2ndExtensionRate || 0) * 100) / 100], // 小数点以下2桁
       [Math.round((kpiData.proPlanSuccessRate || 0) * 100) / 100], // 小数点以下2桁
+      [Math.round((kpiData.overallExtensionRate || 0) * 100) / 100], // 延長率（対 審査対象）
     ];
 
     // データを書き込み
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `${dataSheetTitle}!${nextColumn}1:${nextColumn}8`,
+      range: `${dataSheetTitle}!${nextColumn}1:${nextColumn}9`, // 8 → 9 に変更
       valueInputOption: 'USER_ENTERED',
       requestBody: { values },
     });
@@ -465,6 +536,7 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData) {
  * @param {number} exam2ndExtensionCount - 2回目延長数
  * @param {number} exam2ndExtensionRate - 2回目延長率
  * @param {number} proPlanSuccessRate - Proプラン成約率
+ * @param {number} overallExtensionRate - 延長率（対 審査対象）
  */
 export function formatKPIData({
   exam1stTargetCount,
@@ -474,6 +546,7 @@ export function formatKPIData({
   exam2ndExtensionCount,
   exam2ndExtensionRate,
   proPlanSuccessRate,
+  overallExtensionRate,
 }) {
   return {
     exam1stTargetCount,
@@ -483,5 +556,6 @@ export function formatKPIData({
     exam2ndExtensionCount,
     exam2ndExtensionRate,
     proPlanSuccessRate,
+    overallExtensionRate,
   };
 }
