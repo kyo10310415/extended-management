@@ -35,6 +35,14 @@ function Dashboard() {
     exam2ndExtensionRate: 0,
   })
 
+  // KPIエクスポート関連の状態
+  const [kpiExport, setKpiExport] = useState({
+    spreadsheetId: localStorage.getItem('kpi_spreadsheet_id') || '', // localStorageから復元
+    spreadsheetUrl: localStorage.getItem('kpi_spreadsheet_url') || '',
+    creating: false,
+    exporting: false,
+  })
+
   useEffect(() => {
     fetchStats()
   }, [])
@@ -318,6 +326,91 @@ function Dashboard() {
     }
   }
 
+  // KPIスプレッドシートを新規作成
+  const handleCreateKPISheet = async () => {
+    if (kpiExport.creating) return;
+
+    const confirmed = window.confirm(
+      '新しいKPIスプレッドシートを作成しますか？\n\n※既存のスプレッドシートIDがある場合は上書きされます。'
+    );
+    if (!confirmed) return;
+
+    setKpiExport(prev => ({ ...prev, creating: true }));
+
+    try {
+      console.log('📊 KPIスプレッドシート作成中...');
+      const response = await fetch('/api/kpi-export/create-sheet', {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // localStorageに保存
+        localStorage.setItem('kpi_spreadsheet_id', data.spreadsheetId);
+        localStorage.setItem('kpi_spreadsheet_url', data.url);
+
+        setKpiExport(prev => ({
+          ...prev,
+          spreadsheetId: data.spreadsheetId,
+          spreadsheetUrl: data.url,
+        }));
+
+        alert(`✅ KPIスプレッドシートを作成しました！\n\nタイトル: ${data.title}\nURL: ${data.url}`);
+        console.log('✅ スプレッドシート作成完了:', data);
+      } else {
+        throw new Error(data.error || 'スプレッドシート作成に失敗しました');
+      }
+    } catch (error) {
+      console.error('❌ スプレッドシート作成エラー:', error);
+      alert(`❌ スプレッドシート作成に失敗しました\n\nエラー: ${error.message}`);
+    } finally {
+      setKpiExport(prev => ({ ...prev, creating: false }));
+    }
+  };
+
+  // 月次KPIデータをスプレッドシートに追加
+  const handleExportMonthlyKPI = async () => {
+    if (!kpiExport.spreadsheetId) {
+      alert('⚠️ 先にスプレッドシートを作成してください。');
+      return;
+    }
+
+    if (kpiExport.exporting) return;
+
+    const confirmed = window.confirm(
+      '現在のKPIデータを月次データとしてスプレッドシートに追加しますか？\n\n※追加後は取り消しできません。'
+    );
+    if (!confirmed) return;
+
+    setKpiExport(prev => ({ ...prev, exporting: true }));
+
+    try {
+      console.log('📊 月次KPIデータをエクスポート中...');
+      const response = await fetch('/api/kpi-export/append-monthly', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          spreadsheetId: kpiExport.spreadsheetId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(`✅ ${data.month}のKPIデータを追加しました！\n\n列: ${data.column}\nURL: ${data.url}`);
+        console.log('✅ 月次データ追加完了:', data);
+      } else {
+        throw new Error(data.error || 'データ追加に失敗しました');
+      }
+    } catch (error) {
+      console.error('❌ データ追加エラー:', error);
+      alert(`❌ データ追加に失敗しました\n\nエラー: ${error.message}`);
+    } finally {
+      setKpiExport(prev => ({ ...prev, exporting: false }));
+    }
+  };
+
   if (stats.loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -495,6 +588,88 @@ function Dashboard() {
               <span className="text-sm font-semibold text-gray-700">延長率:</span>
               <span className="text-3xl font-bold text-purple-600">{stats.exam2ndExtensionRate.toFixed(2)}%</span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* KPIエクスポート機能 */}
+      <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg shadow-lg p-6 mb-6 text-white">
+        <h3 className="text-lg font-semibold mb-4">📤 月次KPIデータエクスポート</h3>
+        
+        <div className="space-y-4">
+          {/* スプレッドシート情報 */}
+          {kpiExport.spreadsheetId ? (
+            <div className="bg-white/20 rounded-lg p-4">
+              <p className="text-sm font-medium mb-2">✅ スプレッドシート設定済み</p>
+              <p className="text-xs mb-2">ID: {kpiExport.spreadsheetId}</p>
+              {kpiExport.spreadsheetUrl && (
+                <a
+                  href={kpiExport.spreadsheetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs underline hover:text-white/80"
+                >
+                  📊 スプレッドシートを開く
+                </a>
+              )}
+            </div>
+          ) : (
+            <div className="bg-white/20 rounded-lg p-4">
+              <p className="text-sm">⚠️ スプレッドシートが未作成です</p>
+              <p className="text-xs mt-1">先に「新規スプレッドシート作成」ボタンをクリックしてください</p>
+            </div>
+          )}
+
+          {/* ボタン */}
+          <div className="flex gap-3">
+            <button
+              onClick={handleCreateKPISheet}
+              disabled={kpiExport.creating}
+              className={`flex-1 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+                kpiExport.creating
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-white text-green-600 hover:bg-gray-100'
+              }`}
+            >
+              {kpiExport.creating ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                  作成中...
+                </>
+              ) : (
+                <>
+                  📝 新規スプレッドシート作成
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleExportMonthlyKPI}
+              disabled={!kpiExport.spreadsheetId || kpiExport.exporting}
+              className={`flex-1 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+                !kpiExport.spreadsheetId || kpiExport.exporting
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-yellow-500 text-white hover:bg-yellow-600'
+              }`}
+            >
+              {kpiExport.exporting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  エクスポート中...
+                </>
+              ) : (
+                <>
+                  📤 今月のKPIを追加
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* 説明 */}
+          <div className="text-xs space-y-1 bg-white/10 rounded p-3">
+            <p><strong>📝 新規スプレッドシート作成:</strong> KPI推移を記録する新しいスプレッドシートを作成します（年度ごと推奨）</p>
+            <p><strong>📤 今月のKPIを追加:</strong> 現在のKPIデータを月次データとしてスプレッドシートに追加します（月末に実行）</p>
+            <p className="mt-2 text-yellow-200"><strong>⚠️ 注意:</strong> 「今月のKPIを追加」は月末に1回だけ実行してください。複数回実行すると重複データが追加されます。</p>
           </div>
         </div>
       </div>
