@@ -38,14 +38,28 @@ export async function setupKPISpreadsheet(spreadsheetId) {
   try {
     console.log(`📊 Setting up KPI spreadsheet: ${spreadsheetId}`);
     
+    const auth = getAuth();
+    const sheets = google.sheets({ version: 'v4', auth });
+    
+    // スプレッドシートの情報を取得
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId,
+    });
+    
+    const firstSheetId = spreadsheet.data.sheets[0].properties.sheetId;
+    const firstSheetTitle = spreadsheet.data.sheets[0].properties.title;
+    
     // 初期データを書き込み
-    await initializeKPISheet(spreadsheetId);
+    await initializeKPISheet(spreadsheetId, firstSheetTitle);
+    
+    // グラフシートを作成
+    await createChartSheet(spreadsheetId, sheets, firstSheetId, firstSheetTitle);
 
     return {
       success: true,
       spreadsheetId,
       url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}`,
-      message: 'KPI項目の初期化が完了しました',
+      message: 'KPI項目の初期化とグラフシートの作成が完了しました',
     };
   } catch (error) {
     console.error('❌ Error setting up KPI spreadsheet:', error);
@@ -56,7 +70,7 @@ export async function setupKPISpreadsheet(spreadsheetId) {
 /**
  * KPIシートの初期化（項目名を設定）
  */
-async function initializeKPISheet(spreadsheetId) {
+async function initializeKPISheet(spreadsheetId, sheetTitle) {
   try {
     const auth = getAuth();
     const sheets = google.sheets({ version: 'v4', auth });
@@ -73,10 +87,10 @@ async function initializeKPISheet(spreadsheetId) {
       ['Proプラン成約率(%)'],
     ];
 
-    // デフォルトのシート（シート名指定なし）にデータを書き込み
+    // シート名を指定してデータを書き込み
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: 'A1:A8', // シート名なしでデフォルトシートに書き込み
+      range: `${sheetTitle}!A1:A8`,
       valueInputOption: 'RAW',
       requestBody: { values },
     });
@@ -84,6 +98,259 @@ async function initializeKPISheet(spreadsheetId) {
     console.log('✅ Initialized KPI sheet with item names');
   } catch (error) {
     console.error('❌ Error initializing KPI sheet:', error);
+    throw error;
+  }
+}
+
+/**
+ * グラフシートを作成
+ */
+async function createChartSheet(spreadsheetId, sheets, dataSheetId, dataSheetTitle) {
+  try {
+    console.log('📊 Creating chart sheet...');
+    
+    // 新しいシート「グラフ」を追加
+    const addSheetResponse = await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            addSheet: {
+              properties: {
+                title: 'グラフ',
+                gridProperties: {
+                  rowCount: 100,
+                  columnCount: 10,
+                }
+              }
+            }
+          }
+        ]
+      }
+    });
+    
+    const chartSheetId = addSheetResponse.data.replies[0].addSheet.properties.sheetId;
+    console.log(`✅ Created chart sheet with ID: ${chartSheetId}`);
+    
+    // 3つのグラフを作成
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          // グラフ1: 延長審査1回目_延長率(%)
+          {
+            addChart: {
+              chart: {
+                spec: {
+                  title: '延長審査1回目 延長率推移',
+                  basicChart: {
+                    chartType: 'LINE',
+                    legendPosition: 'BOTTOM_LEGEND',
+                    axis: [
+                      {
+                        position: 'BOTTOM_AXIS',
+                        title: '月'
+                      },
+                      {
+                        position: 'LEFT_AXIS',
+                        title: '延長率(%)'
+                      }
+                    ],
+                    domains: [
+                      {
+                        domain: {
+                          sourceRange: {
+                            sources: [
+                              {
+                                sheetId: dataSheetId,
+                                startRowIndex: 0,
+                                endRowIndex: 1,
+                                startColumnIndex: 1,
+                                endColumnIndex: 100 // 動的に拡張可能
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ],
+                    series: [
+                      {
+                        series: {
+                          sourceRange: {
+                            sources: [
+                              {
+                                sheetId: dataSheetId,
+                                startRowIndex: 3, // 4行目（延長審査1回目_延長率）
+                                endRowIndex: 4,
+                                startColumnIndex: 1,
+                                endColumnIndex: 100 // 動的に拡張可能
+                              }
+                            ]
+                          }
+                        },
+                        targetAxis: 'LEFT_AXIS'
+                      }
+                    ],
+                    headerCount: 1
+                  }
+                },
+                position: {
+                  overlayPosition: {
+                    anchorCell: {
+                      sheetId: chartSheetId,
+                      rowIndex: 0,
+                      columnIndex: 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          // グラフ2: 延長審査2回目_延長率(%)
+          {
+            addChart: {
+              chart: {
+                spec: {
+                  title: '延長審査2回目 延長率推移',
+                  basicChart: {
+                    chartType: 'LINE',
+                    legendPosition: 'BOTTOM_LEGEND',
+                    axis: [
+                      {
+                        position: 'BOTTOM_AXIS',
+                        title: '月'
+                      },
+                      {
+                        position: 'LEFT_AXIS',
+                        title: '延長率(%)'
+                      }
+                    ],
+                    domains: [
+                      {
+                        domain: {
+                          sourceRange: {
+                            sources: [
+                              {
+                                sheetId: dataSheetId,
+                                startRowIndex: 0,
+                                endRowIndex: 1,
+                                startColumnIndex: 1,
+                                endColumnIndex: 100
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ],
+                    series: [
+                      {
+                        series: {
+                          sourceRange: {
+                            sources: [
+                              {
+                                sheetId: dataSheetId,
+                                startRowIndex: 6, // 7行目（延長審査2回目_延長率）
+                                endRowIndex: 7,
+                                startColumnIndex: 1,
+                                endColumnIndex: 100
+                              }
+                            ]
+                          }
+                        },
+                        targetAxis: 'LEFT_AXIS'
+                      }
+                    ],
+                    headerCount: 1
+                  }
+                },
+                position: {
+                  overlayPosition: {
+                    anchorCell: {
+                      sheetId: chartSheetId,
+                      rowIndex: 0,
+                      columnIndex: 6
+                    }
+                  }
+                }
+              }
+            }
+          },
+          // グラフ3: Proプラン成約率(%)
+          {
+            addChart: {
+              chart: {
+                spec: {
+                  title: 'Proプラン成約率推移',
+                  basicChart: {
+                    chartType: 'LINE',
+                    legendPosition: 'BOTTOM_LEGEND',
+                    axis: [
+                      {
+                        position: 'BOTTOM_AXIS',
+                        title: '月'
+                      },
+                      {
+                        position: 'LEFT_AXIS',
+                        title: '成約率(%)'
+                      }
+                    ],
+                    domains: [
+                      {
+                        domain: {
+                          sourceRange: {
+                            sources: [
+                              {
+                                sheetId: dataSheetId,
+                                startRowIndex: 0,
+                                endRowIndex: 1,
+                                startColumnIndex: 1,
+                                endColumnIndex: 100
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ],
+                    series: [
+                      {
+                        series: {
+                          sourceRange: {
+                            sources: [
+                              {
+                                sheetId: dataSheetId,
+                                startRowIndex: 7, // 8行目（Proプラン成約率）
+                                endRowIndex: 8,
+                                startColumnIndex: 1,
+                                endColumnIndex: 100
+                              }
+                            ]
+                          }
+                        },
+                        targetAxis: 'LEFT_AXIS'
+                      }
+                    ],
+                    headerCount: 1
+                  }
+                },
+                position: {
+                  overlayPosition: {
+                    anchorCell: {
+                      sheetId: chartSheetId,
+                      rowIndex: 20,
+                      columnIndex: 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    });
+    
+    console.log('✅ Created 3 charts on chart sheet');
+  } catch (error) {
+    console.error('❌ Error creating chart sheet:', error);
     throw error;
   }
 }
