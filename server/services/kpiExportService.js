@@ -73,9 +73,10 @@ async function initializeKPISheet(spreadsheetId) {
       ['Proプラン成約率(%)'],
     ];
 
+    // デフォルトのシート（シート名指定なし）にデータを書き込み
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: 'KPIデータ!A1:A8',
+      range: 'A1:A8', // シート名なしでデフォルトシートに書き込み
       valueInputOption: 'RAW',
       requestBody: { values },
     });
@@ -106,7 +107,7 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData) {
     // 既存のデータ範囲を取得して、次の列を特定
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'KPIデータ!1:1', // 1行目のヘッダー行を取得
+      range: '1:1', // 1行目のヘッダー行を取得（デフォルトシート）
     });
 
     const existingHeaders = response.data.values?.[0] || ['項目名'];
@@ -126,10 +127,10 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData) {
       [kpiData.proPlanSuccessRate?.toFixed(2) || '0.00'],
     ];
 
-    // データを書き込み
+    // データを書き込み（デフォルトシート）
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `KPIデータ!${nextColumn}1:${nextColumn}8`,
+      range: `${nextColumn}1:${nextColumn}8`,
       valueInputOption: 'RAW',
       requestBody: { values },
     });
