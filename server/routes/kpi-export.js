@@ -3,7 +3,7 @@ import { pool } from '../index.js';
 import { fetchStudents } from '../services/notionService.js';
 import { calculateMonthsElapsed } from '../utils/dateUtils.js';
 import { 
-  createKPISpreadsheet, 
+  setupKPISpreadsheet, 
   appendMonthlyKPI, 
   formatKPIData 
 } from '../services/kpiExportService.js';
@@ -11,18 +11,28 @@ import {
 const router = express.Router();
 
 /**
- * POST /api/kpi-export/create-sheet
- * 新しいKPIスプレッドシートを作成
+ * POST /api/kpi-export/setup-sheet
+ * 既存のスプレッドシートにKPI項目を初期化
+ * Body: { spreadsheetId: string }
  */
-router.post('/create-sheet', async (req, res) => {
+router.post('/setup-sheet', async (req, res) => {
   try {
-    console.log('📊 Creating new KPI spreadsheet...');
+    const { spreadsheetId } = req.body;
     
-    const result = await createKPISpreadsheet();
+    if (!spreadsheetId) {
+      return res.status(400).json({
+        success: false,
+        error: 'spreadsheetId is required',
+      });
+    }
+    
+    console.log('📊 Setting up KPI spreadsheet...');
+    
+    const result = await setupKPISpreadsheet(spreadsheetId);
     
     res.json(result);
   } catch (error) {
-    console.error('Error creating KPI spreadsheet:', error);
+    console.error('Error setting up KPI spreadsheet:', error);
     res.status(500).json({
       success: false,
       error: error.message,

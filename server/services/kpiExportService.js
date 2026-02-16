@@ -31,38 +31,13 @@ function getAuth() {
 }
 
 /**
- * 新しいスプレッドシートを作成
+ * 既存のスプレッドシートにKPI項目を初期化
+ * 新規作成ではなく、既存のスプレッドシートを使用する方式に変更
  */
-export async function createKPISpreadsheet() {
+export async function setupKPISpreadsheet(spreadsheetId) {
   try {
-    const auth = getAuth();
-    const sheets = google.sheets({ version: 'v4', auth });
-
-    const currentDate = new Date();
-    const title = `KPI推移_${currentDate.getFullYear()}年`;
-
-    const response = await sheets.spreadsheets.create({
-      requestBody: {
-        properties: {
-          title,
-        },
-        sheets: [{
-          properties: {
-            title: 'KPIデータ',
-            gridProperties: {
-              frozenRowCount: 1,
-              frozenColumnCount: 1,
-            }
-          }
-        }]
-      }
-    });
-
-    const spreadsheetId = response.data.spreadsheetId;
-    console.log(`✅ Created new KPI spreadsheet: ${title}`);
-    console.log(`   ID: ${spreadsheetId}`);
-    console.log(`   URL: https://docs.google.com/spreadsheets/d/${spreadsheetId}`);
-
+    console.log(`📊 Setting up KPI spreadsheet: ${spreadsheetId}`);
+    
     // 初期データを書き込み
     await initializeKPISheet(spreadsheetId);
 
@@ -70,10 +45,10 @@ export async function createKPISpreadsheet() {
       success: true,
       spreadsheetId,
       url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}`,
-      title,
+      message: 'KPI項目の初期化が完了しました',
     };
   } catch (error) {
-    console.error('❌ Error creating KPI spreadsheet:', error);
+    console.error('❌ Error setting up KPI spreadsheet:', error);
     throw error;
   }
 }

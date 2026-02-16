@@ -326,21 +326,34 @@ function Dashboard() {
     }
   }
 
-  // KPIスプレッドシートを新規作成
-  const handleCreateKPISheet = async () => {
+  // KPIスプレッドシートを設定
+  const handleSetupKPISheet = async () => {
     if (kpiExport.creating) return;
 
-    const confirmed = window.confirm(
-      '新しいKPIスプレッドシートを作成しますか？\n\n※既存のスプレッドシートIDがある場合は上書きされます。'
+    // スプレッドシートIDを入力させる
+    const inputId = window.prompt(
+      '既存のスプレッドシートIDを入力してください：\n\n' +
+      '※ Google Sheets で新しいスプレッドシートを作成し、URLから ID をコピーしてください\n' +
+      '例: https://docs.google.com/spreadsheets/d/【この部分がID】/edit\n\n' +
+      '※ スプレッドシートはサービスアカウント（' + 
+      (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || 'your-service-account@project.iam.gserviceaccount.com') + 
+      '）に「編集者」権限で共有してください',
+      kpiExport.spreadsheetId || ''
     );
-    if (!confirmed) return;
 
+    if (!inputId || inputId.trim() === '') {
+      return; // キャンセルまたは空入力
+    }
+
+    const spreadsheetId = inputId.trim();
     setKpiExport(prev => ({ ...prev, creating: true }));
 
     try {
-      console.log('📊 KPIスプレッドシート作成中...');
-      const response = await fetch('/api/kpi-export/create-sheet', {
+      console.log('📊 KPIスプレッドシートを設定中...');
+      const response = await fetch('/api/kpi-export/setup-sheet', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spreadsheetId }),
       });
 
       const data = await response.json();
@@ -356,14 +369,14 @@ function Dashboard() {
           spreadsheetUrl: data.url,
         }));
 
-        alert(`✅ KPIスプレッドシートを作成しました！\n\nタイトル: ${data.title}\nURL: ${data.url}`);
-        console.log('✅ スプレッドシート作成完了:', data);
+        alert(`✅ KPIスプレッドシートの設定が完了しました！\n\n${data.message}\nURL: ${data.url}`);
+        console.log('✅ スプレッドシート設定完了:', data);
       } else {
-        throw new Error(data.error || 'スプレッドシート作成に失敗しました');
+        throw new Error(data.error || 'スプレッドシート設定に失敗しました');
       }
     } catch (error) {
-      console.error('❌ スプレッドシート作成エラー:', error);
-      alert(`❌ スプレッドシート作成に失敗しました\n\nエラー: ${error.message}`);
+      console.error('❌ スプレッドシート設定エラー:', error);
+      alert(`❌ スプレッドシート設定に失敗しました\n\nエラー: ${error.message}\n\n確認事項：\n1. スプレッドシートIDが正しいか\n2. サービスアカウントに編集権限があるか`);
     } finally {
       setKpiExport(prev => ({ ...prev, creating: false }));
     }
@@ -615,15 +628,15 @@ function Dashboard() {
             </div>
           ) : (
             <div className="bg-white/20 rounded-lg p-4">
-              <p className="text-sm">⚠️ スプレッドシートが未作成です</p>
-              <p className="text-xs mt-1">先に「新規スプレッドシート作成」ボタンをクリックしてください</p>
+              <p className="text-sm">⚠️ スプレッドシートが未設定です</p>
+              <p className="text-xs mt-1">先に Google Sheets でスプレッドシートを作成し、「スプレッドシート設定」ボタンで登録してください</p>
             </div>
           )}
 
           {/* ボタン */}
           <div className="flex gap-3">
             <button
-              onClick={handleCreateKPISheet}
+              onClick={handleSetupKPISheet}
               disabled={kpiExport.creating}
               className={`flex-1 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
                 kpiExport.creating
@@ -634,11 +647,11 @@ function Dashboard() {
               {kpiExport.creating ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
-                  作成中...
+                  設定中...
                 </>
               ) : (
                 <>
-                  📝 新規スプレッドシート作成
+                  📝 スプレッドシート設定
                 </>
               )}
             </button>
@@ -667,8 +680,15 @@ function Dashboard() {
 
           {/* 説明 */}
           <div className="text-xs space-y-1 bg-white/10 rounded p-3">
-            <p><strong>📝 新規スプレッドシート作成:</strong> KPI推移を記録する新しいスプレッドシートを作成します（年度ごと推奨）</p>
-            <p><strong>📤 今月のKPIを追加:</strong> 現在のKPIデータを月次データとしてスプレッドシートに追加します（月末に実行）</p>
+            <p><strong>📝 スプレッドシート設定:</strong> 既存のスプレッドシートを登録し、KPI項目を初期化します</p>
+            <p className="mt-2"><strong>手順:</strong></p>
+            <ol className="list-decimal list-inside space-y-1 ml-2">
+              <li>Google Sheets で新しい空のスプレッドシートを作成</li>
+              <li>スプレッドシートのURLから「ID」をコピー（例: /d/【この部分】/edit）</li>
+              <li>サービスアカウント（環境変数 GOOGLE_SERVICE_ACCOUNT_EMAIL）に「編集者」権限で共有</li>
+              <li>「スプレッドシート設定」ボタンをクリックして ID を入力</li>
+            </ol>
+            <p className="mt-2"><strong>📤 今月のKPIを追加:</strong> 現在のKPIデータを月次データとしてスプレッドシートに追加します（月末に実行）</p>
             <p className="mt-2 text-yellow-200"><strong>⚠️ 注意:</strong> 「今月のKPIを追加」は月末に1回だけ実行してください。複数回実行すると重複データが追加されます。</p>
           </div>
         </div>
