@@ -115,16 +115,16 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData) {
 
     console.log(`📊 Adding KPI data to column ${nextColumn} (${monthLabel})`);
 
-    // データを整形（数値はそのまま、パーセンテージも数値として）
+    // データを整形（パーセンテージは小数点以下2桁に丸める）
     const values = [
       [monthLabel], // ヘッダー
       [kpiData.exam1stTargetCount || 0],
       [kpiData.exam1stExtensionCount || 0],
-      [kpiData.exam1stExtensionRate || 0], // 数値として保存
+      [Math.round((kpiData.exam1stExtensionRate || 0) * 100) / 100], // 小数点以下2桁
       [kpiData.exam2ndTargetCount || 0],
       [kpiData.exam2ndExtensionCount || 0],
-      [kpiData.exam2ndExtensionRate || 0], // 数値として保存
-      [kpiData.proPlanSuccessRate || 0], // 数値として保存
+      [Math.round((kpiData.exam2ndExtensionRate || 0) * 100) / 100], // 小数点以下2桁
+      [Math.round((kpiData.proPlanSuccessRate || 0) * 100) / 100], // 小数点以下2桁
     ];
 
     // データを書き込み（デフォルトシート）
