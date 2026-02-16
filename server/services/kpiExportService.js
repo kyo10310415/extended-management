@@ -103,6 +103,34 @@ async function initializeKPISheet(spreadsheetId, sheetTitle) {
 }
 
 /**
+ * グラフシートを確認し、存在しなければ作成
+ */
+async function ensureChartSheet(spreadsheetId, sheets, dataSheetId, dataSheetTitle) {
+  try {
+    // スプレッドシート情報を取得
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId,
+    });
+
+    // 「グラフ」シートが既に存在するか確認
+    const chartSheet = spreadsheet.data.sheets.find(
+      sheet => sheet.properties.title === 'グラフ'
+    );
+
+    if (chartSheet) {
+      console.log('📊 Chart sheet already exists, skipping creation');
+      return;
+    }
+
+    console.log('📊 Creating chart sheet...');
+    await createChartSheet(spreadsheetId, sheets, dataSheetId, dataSheetTitle);
+  } catch (error) {
+    console.error('❌ Error ensuring chart sheet:', error);
+    // エラーでも処理を継続（グラフ作成失敗してもデータ追加は成功とする）
+  }
+}
+
+/**
  * グラフシートを作成
  */
 async function createChartSheet(spreadsheetId, sheets, dataSheetId, dataSheetTitle) {
@@ -365,6 +393,15 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData) {
     const auth = getAuth();
     const sheets = google.sheets({ version: 'v4', auth });
 
+    // スプレッドシート情報を取得
+    const spreadsheet = await sheets.spreadsheets.get({
+      spreadsheetId,
+    });
+
+    const dataSheet = spreadsheet.data.sheets[0];
+    const dataSheetId = dataSheet.properties.sheetId;
+    const dataSheetTitle = dataSheet.properties.title;
+
     // 現在の月を取得
     const currentDate = new Date();
     const year = currentDate.getFullYear();
@@ -374,7 +411,7 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData) {
     // 既存のデータ範囲を取得して、次の列を特定
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: '1:1', // 1行目のヘッダー行を取得（デフォルトシート）
+      range: `${dataSheetTitle}!1:1`, // 1行目のヘッダー行を取得
     });
 
     const existingHeaders = response.data.values?.[0] || ['項目名'];
@@ -394,16 +431,18 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData) {
       [Math.round((kpiData.proPlanSuccessRate || 0) * 100) / 100], // 小数点以下2桁
     ];
 
-    // データを書き込み（デフォルトシート）
-    // USER_ENTEREDを使用して、数値は数値として解釈される
+    // データを書き込み
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `${nextColumn}1:${nextColumn}8`,
+      range: `${dataSheetTitle}!${nextColumn}1:${nextColumn}8`,
       valueInputOption: 'USER_ENTERED',
       requestBody: { values },
     });
 
     console.log(`✅ Added KPI data for ${monthLabel} to column ${nextColumn}`);
+
+    // グラフシートを確認・作成
+    await ensureChartSheet(spreadsheetId, sheets, dataSheetId, dataSheetTitle);
 
     return {
       success: true,
