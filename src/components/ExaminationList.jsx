@@ -193,13 +193,35 @@ function ExaminationList() {
       }
       
       // 延長確度フィルター
-      if (searchFilters.extension_certainty && student.extensionData?.extension_certainty !== searchFilters.extension_certainty) {
-        return false;
+      if (searchFilters.extension_certainty) {
+        // "空白"が選択された場合はデータが空またはnullのものを検索
+        if (searchFilters.extension_certainty === '空白') {
+          const value = student.extensionData?.extension_certainty;
+          if (value && value !== '') {
+            return false;
+          }
+        } else {
+          // 通常の検索
+          if (student.extensionData?.extension_certainty !== searchFilters.extension_certainty) {
+            return false;
+          }
+        }
       }
       
       // 審査結果フィルター
-      if (searchFilters.examination_result && student.extensionData?.examination_result !== searchFilters.examination_result) {
-        return false;
+      if (searchFilters.examination_result) {
+        // "空白"が選択された場合はデータが空またはnullのものを検索
+        if (searchFilters.examination_result === '空白') {
+          const value = student.extensionData?.examination_result;
+          if (value && value !== '') {
+            return false;
+          }
+        } else {
+          // 通常の検索
+          if (student.extensionData?.examination_result !== searchFilters.examination_result) {
+            return false;
+          }
+        }
       }
       
       return true;
@@ -355,6 +377,7 @@ function ExaminationList() {
               <option value="中">中</option>
               <option value="低">低</option>
               <option value="対象外">対象外</option>
+              <option value="空白">空白（未入力）</option>
             </select>
           </div>
           <div>
@@ -369,6 +392,7 @@ function ExaminationList() {
               <option value="在籍">在籍</option>
               <option value="退会">退会</option>
               <option value="永久会員">永久会員</option>
+              <option value="空白">空白（未入力）</option>
             </select>
           </div>
         </div>
