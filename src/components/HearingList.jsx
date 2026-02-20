@@ -29,9 +29,9 @@ function HearingList() {
       const data = await response.json()
 
       if (data.success) {
-        // 4ヶ月目と10ヶ月目の生徒を分ける
-        const month4Students = data.data.filter(s => s.monthsElapsed === 4);
-        const month10Students = data.data.filter(s => s.monthsElapsed === 10);
+        // 調整後月数が4ヶ月目と10ヶ月目の生徒を分ける
+        const month4Students = data.data.filter(s => s.adjustedMonths === 4);
+        const month10Students = data.data.filter(s => s.adjustedMonths === 10);
         
         // それぞれのサイクルで一括取得
         const cycle1Ids = month4Students.map(s => s.studentId);
@@ -63,7 +63,7 @@ function HearingList() {
 
         // データをマージ（各生徒のサイクルを個別に判定）
         const enrichedStudents = data.data.map(student => {
-          const cycle = student.monthsElapsed === 10 ? 2 : 1;
+          const cycle = student.adjustedMonths === 10 ? 2 : 1;
           const extensionData = cycle === 1 ? cycle1Data[student.studentId] : cycle2Data[student.studentId];
           
           return {

@@ -81,36 +81,26 @@ router.get('/hearing', async (req, res) => {
     const formUpdates = await fetchFormUpdates();
     const suspensionData = await fetchSuspensionData();
     
-    // 4ヶ月目と10ヶ月目の生徒をフィルタリング（アクティブのみ）
-    const month4Students = filterStudentsByMonth(students, 4, monthOffset)
+    // すべてのアクティブな生徒を対象に、調整後月数を計算
+    const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
       .filter(s => s.status === 'アクティブ')
       .map(student => {
         const suspension = suspensionData[student.studentId];
-        const adjustedMonths = suspension ? 4 - suspension.suspensionMonths : 4;
+        const suspensionMonths = suspension?.suspensionMonths || 0;
+        const adjustedMonths = Math.max(0, student.monthsElapsed - suspensionMonths);
+        
         return {
           ...student,
-          monthsElapsed: 4,
-          adjustedMonths: adjustedMonths >= 0 ? adjustedMonths : 0,
-          suspensionMonths: suspension?.suspensionMonths || 0,
+          adjustedMonths,
+          suspensionMonths,
           hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
           formLastUpdate: formUpdates[student.studentId] || null,
         };
       });
-
-    const month10Students = filterStudentsByMonth(students, 10, monthOffset)
-      .filter(s => s.status === 'アクティブ')
-      .map(student => {
-        const suspension = suspensionData[student.studentId];
-        const adjustedMonths = suspension ? 10 - suspension.suspensionMonths : 10;
-        return {
-          ...student,
-          monthsElapsed: 10,
-          adjustedMonths: adjustedMonths >= 0 ? adjustedMonths : 0,
-          suspensionMonths: suspension?.suspensionMonths || 0,
-          hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
-          formLastUpdate: formUpdates[student.studentId] || null,
-        };
-      });
+    
+    // 調整後月数が4ヶ月または10ヶ月の生徒を抽出
+    const month4Students = allActiveStudents.filter(s => s.adjustedMonths === 4);
+    const month10Students = allActiveStudents.filter(s => s.adjustedMonths === 10);
 
     const hearingStudents = [...month4Students, ...month10Students];
 
@@ -147,36 +137,26 @@ router.get('/examination', async (req, res) => {
     const formUpdates = await fetchFormUpdates();
     const suspensionData = await fetchSuspensionData();
     
-    // 5ヶ月目と11ヶ月目の生徒をフィルタリング（アクティブのみ）
-    const month5Students = filterStudentsByMonth(students, 5, monthOffset)
+    // すべてのアクティブな生徒を対象に、調整後月数を計算
+    const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
       .filter(s => s.status === 'アクティブ')
       .map(student => {
         const suspension = suspensionData[student.studentId];
-        const adjustedMonths = suspension ? 5 - suspension.suspensionMonths : 5;
+        const suspensionMonths = suspension?.suspensionMonths || 0;
+        const adjustedMonths = Math.max(0, student.monthsElapsed - suspensionMonths);
+        
         return {
           ...student,
-          monthsElapsed: 5,
-          adjustedMonths: adjustedMonths >= 0 ? adjustedMonths : 0,
-          suspensionMonths: suspension?.suspensionMonths || 0,
+          adjustedMonths,
+          suspensionMonths,
           hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
           formLastUpdate: formUpdates[student.studentId] || null,
         };
       });
-
-    const month11Students = filterStudentsByMonth(students, 11, monthOffset)
-      .filter(s => s.status === 'アクティブ')
-      .map(student => {
-        const suspension = suspensionData[student.studentId];
-        const adjustedMonths = suspension ? 11 - suspension.suspensionMonths : 11;
-        return {
-          ...student,
-          monthsElapsed: 11,
-          adjustedMonths: adjustedMonths >= 0 ? adjustedMonths : 0,
-          suspensionMonths: suspension?.suspensionMonths || 0,
-          hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
-          formLastUpdate: formUpdates[student.studentId] || null,
-        };
-      });
+    
+    // 調整後月数が5ヶ月または11ヶ月の生徒を抽出
+    const month5Students = allActiveStudents.filter(s => s.adjustedMonths === 5);
+    const month11Students = allActiveStudents.filter(s => s.adjustedMonths === 11);
 
     const examinationStudents = [...month5Students, ...month11Students];
 

@@ -150,9 +150,20 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                     {student.lessonStartDate}
                   </td>
                   <td className="px-2 py-1 whitespace-nowrap">
-                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                      {student.monthsElapsed}ヶ月
-                    </span>
+                    {student.suspensionMonths > 0 ? (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                          {student.adjustedMonths}ヶ月
+                        </span>
+                        <span className="text-xs text-gray-400">
+                          (実{student.monthsElapsed}ヶ月-休{student.suspensionMonths}ヶ月)
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                        {student.adjustedMonths || student.monthsElapsed}ヶ月
+                      </span>
+                    )}
                   </td>
                   
                   {/* 延長確度 */}

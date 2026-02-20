@@ -29,9 +29,9 @@ function ExaminationList() {
       const data = await response.json()
 
       if (data.success) {
-        // 5ヶ月目と11ヶ月目の生徒を分ける
-        const month5Students = data.data.filter(s => s.monthsElapsed === 5);
-        const month11Students = data.data.filter(s => s.monthsElapsed === 11);
+        // 調整後月数が5ヶ月目と11ヶ月目の生徒を分ける
+        const month5Students = data.data.filter(s => s.adjustedMonths === 5);
+        const month11Students = data.data.filter(s => s.adjustedMonths === 11);
         
         // それぞれのサイクルで一括取得
         const cycle1Ids = month5Students.map(s => s.studentId);
@@ -63,7 +63,7 @@ function ExaminationList() {
 
         // データをマージ（各生徒のサイクルを個別に判定）
         const enrichedStudents = data.data.map(student => {
-          const cycle = student.monthsElapsed === 11 ? 2 : 1;
+          const cycle = student.adjustedMonths === 11 ? 2 : 1;
           const extensionData = cycle === 1 ? cycle1Data[student.studentId] : cycle2Data[student.studentId];
           
           return {
