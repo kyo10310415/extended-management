@@ -67,9 +67,9 @@ function Dashboard() {
       console.log('  延長審査対象:', examData.data?.length);
       console.log('  永久会員:', proPlanData.count);
 
-      // ヒアリングデータを4ヶ月と10ヶ月に分ける
-      const hearing4Month = (hearingData.data || []).filter(s => s.monthsElapsed === 4);
-      const hearing10Month = (hearingData.data || []).filter(s => s.monthsElapsed === 10);
+      // ヒアリングデータを調整後月数4ヶ月と10ヶ月に分ける
+      const hearing4Month = (hearingData.data || []).filter(s => s.adjustedMonths === 4);
+      const hearing10Month = (hearingData.data || []).filter(s => s.adjustedMonths === 10);
       
       console.log('  - 4ヶ月目:', hearing4Month.length);
       console.log('  - 10ヶ月目:', hearing10Month.length);
@@ -100,9 +100,9 @@ function Dashboard() {
         hearing2Data = data2.data || {};
       }
 
-      // 延長審査データを5ヶ月と11ヶ月に分ける
-      const exam5Month = (examData.data || []).filter(s => s.monthsElapsed === 5);
-      const exam11Month = (examData.data || []).filter(s => s.monthsElapsed === 11);
+      // 延長審査データを調整後月数5ヶ月と11ヶ月に分ける
+      const exam5Month = (examData.data || []).filter(s => s.adjustedMonths === 5);
+      const exam11Month = (examData.data || []).filter(s => s.adjustedMonths === 11);
       
       console.log('  - 5ヶ月目:', exam5Month.length);
       console.log('  - 11ヶ月目:', exam11Month.length);
@@ -137,7 +137,7 @@ function Dashboard() {
 
       // データマージ（各生徒に正しいサイクルのデータを紐付け）
       const hearingStudents = (hearingData.data || []).map(s => {
-        const cycle = s.monthsElapsed === 10 ? 2 : 1;
+        const cycle = s.adjustedMonths === 10 ? 2 : 1;
         const extensionData = cycle === 1 ? hearing1Data[s.studentId] : hearing2Data[s.studentId];
         return {
           ...s,
@@ -146,7 +146,7 @@ function Dashboard() {
       });
 
       const examinationStudents = (examData.data || []).map(s => {
-        const cycle = s.monthsElapsed === 11 ? 2 : 1;
+        const cycle = s.adjustedMonths === 11 ? 2 : 1;
         const extensionData = cycle === 1 ? exam1Data[s.studentId] : exam2Data[s.studentId];
         return {
           ...s,
@@ -211,8 +211,8 @@ function Dashboard() {
         s.extensionData?.extension_certainty === '低'
       ).length
 
-      // 延長審査1回目（5ヶ月目）
-      const exam1stStudents = examinationStudents.filter(s => s.monthsElapsed === 5)
+      // 延長審査1回目（調整後月数5ヶ月目）
+      const exam1stStudents = examinationStudents.filter(s => s.adjustedMonths === 5)
       const exam1stTargetCount = exam1stStudents.length
       const exam1stExtensionCount = exam1stStudents.filter(s => 
         s.extensionData?.examination_result === '延長'
@@ -221,13 +221,13 @@ function Dashboard() {
         ? (exam1stExtensionCount / exam1stTargetCount * 100) 
         : 0
       
-      console.log('  1回目（5ヶ月目）:');
+      console.log('  1回目（調整後5ヶ月目）:');
       console.log('    対象数:', exam1stTargetCount);
       console.log('    延長数:', exam1stExtensionCount);
       console.log('    延長率:', exam1stExtensionRate.toFixed(2) + '%');
 
-      // 延長審査2回目（11ヶ月目）
-      const exam2ndStudents = examinationStudents.filter(s => s.monthsElapsed === 11)
+      // 延長審査2回目（調整後月数11ヶ月目）
+      const exam2ndStudents = examinationStudents.filter(s => s.adjustedMonths === 11)
       const exam2ndTargetCount = exam2ndStudents.length
       const exam2ndExtensionCount = exam2ndStudents.filter(s => 
         s.extensionData?.examination_result === '延長'
@@ -236,7 +236,7 @@ function Dashboard() {
         ? (exam2ndExtensionCount / exam2ndTargetCount * 100) 
         : 0
       
-      console.log('  2回目（11ヶ月目）:');
+      console.log('  2回目（調整後11ヶ月目）:');
       console.log('    対象数:', exam2ndTargetCount);
       console.log('    延長数:', exam2ndExtensionCount);
       console.log('    延長率:', exam2ndExtensionRate.toFixed(2) + '%');
