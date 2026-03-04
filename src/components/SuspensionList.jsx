@@ -4,6 +4,7 @@ function SuspensionList() {
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [refreshing, setRefreshing] = useState(false) // 手動更新中フラグ
   const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
@@ -31,6 +32,30 @@ function SuspensionList() {
       setError(err.message)
     } finally {
       setLoading(false)
+      setRefreshing(false)
+    }
+  }
+
+  // 手動更新機能（キャッシュクリア）
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true)
+      
+      // キャッシュクリア
+      await fetch('/api/notion/cache/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      
+      // データ再取得
+      await fetchSuspensionStudents()
+      
+      // 成功アラート
+      alert('✅ 最新データに更新しました！スプレッドシートの変更が反映されています。')
+    } catch (err) {
+      console.error('更新エラー:', err)
+      alert('❌ 更新に失敗しました: ' + err.message)
+      setRefreshing(false)
     }
   }
 
@@ -44,11 +69,35 @@ function SuspensionList() {
     )
   })
 
-  if (loading) {
+  if (loading && !refreshing) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
       </div>
+    )
+  }
+
+  // 読み込み中オーバーレイ
+  if (refreshing) {
+    return (
+      <>
+        {/* 読み込み中オーバーレイ */}
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 shadow-xl flex flex-col items-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mb-4"></div>
+            <p className="text-lg font-semibold text-gray-800">読み込み中...</p>
+            <p className="text-sm text-gray-600 mt-2">最新データを取得しています</p>
+          </div>
+        </div>
+        {/* 既存のコンテンツ（薄く表示） */}
+        <div className="opacity-50 pointer-events-none">
+          <div>
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">⏸️ 休会歴一覧</h2>
+            </div>
+          </div>
+        </div>
+      </>
     )
   }
 
@@ -67,10 +116,10 @@ function SuspensionList() {
           ⏸️ 休会歴一覧
         </h2>
         <button
-          onClick={fetchSuspensionStudents}
-          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+          onClick={handleRefresh}
+          className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition shadow"
         >
-          🔄 更新
+          🔄 最新データに更新
         </button>
       </div>
 
