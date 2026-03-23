@@ -29,10 +29,14 @@ function Dashboard() {
     exam1stTargetCount: 0,
     exam1stExtensionCount: 0,
     exam1stExtensionRate: 0,
+    exam1stWithdrawalCount: 0,
+    exam1stRemainingCount: 0,
     // 延長審査2回目（11ヶ月目）
     exam2ndTargetCount: 0,
     exam2ndExtensionCount: 0,
     exam2ndExtensionRate: 0,
+    exam2ndWithdrawalCount: 0,
+    exam2ndRemainingCount: 0,
   })
 
   // KPIエクスポート関連の状態
@@ -217,6 +221,10 @@ function Dashboard() {
       const exam1stExtensionCount = exam1stStudents.filter(s => 
         s.extensionData?.examination_result === '延長'
       ).length
+      const exam1stWithdrawalCount = exam1stStudents.filter(s => 
+        s.extensionData?.examination_result === '退会'
+      ).length
+      const exam1stRemainingCount = exam1stTargetCount - exam1stExtensionCount - exam1stWithdrawalCount
       const exam1stExtensionRate = exam1stTargetCount > 0 
         ? (exam1stExtensionCount / exam1stTargetCount * 100) 
         : 0
@@ -224,6 +232,8 @@ function Dashboard() {
       console.log('  1回目（調整後5ヶ月目）:');
       console.log('    対象数:', exam1stTargetCount);
       console.log('    延長数:', exam1stExtensionCount);
+      console.log('    退会数:', exam1stWithdrawalCount);
+      console.log('    残弾数:', exam1stRemainingCount);
       console.log('    延長率:', exam1stExtensionRate.toFixed(2) + '%');
 
       // 延長審査2回目（調整後月数11ヶ月目）
@@ -232,6 +242,10 @@ function Dashboard() {
       const exam2ndExtensionCount = exam2ndStudents.filter(s => 
         s.extensionData?.examination_result === '延長'
       ).length
+      const exam2ndWithdrawalCount = exam2ndStudents.filter(s => 
+        s.extensionData?.examination_result === '退会'
+      ).length
+      const exam2ndRemainingCount = exam2ndTargetCount - exam2ndExtensionCount - exam2ndWithdrawalCount
       const exam2ndExtensionRate = exam2ndTargetCount > 0 
         ? (exam2ndExtensionCount / exam2ndTargetCount * 100) 
         : 0
@@ -239,6 +253,8 @@ function Dashboard() {
       console.log('  2回目（調整後11ヶ月目）:');
       console.log('    対象数:', exam2ndTargetCount);
       console.log('    延長数:', exam2ndExtensionCount);
+      console.log('    退会数:', exam2ndWithdrawalCount);
+      console.log('    残弾数:', exam2ndRemainingCount);
       console.log('    延長率:', exam2ndExtensionRate.toFixed(2) + '%');
       
       // Proプラン成約率の計算
@@ -277,9 +293,13 @@ function Dashboard() {
         exam1stTargetCount,
         exam1stExtensionCount,
         exam1stExtensionRate,
+        exam1stWithdrawalCount,
+        exam1stRemainingCount,
         exam2ndTargetCount,
         exam2ndExtensionCount,
         exam2ndExtensionRate,
+        exam2ndWithdrawalCount,
+        exam2ndRemainingCount,
       }))
     } catch (error) {
       console.error('Error fetching stats:', error)
@@ -579,6 +599,14 @@ function Dashboard() {
               <span className="text-sm text-gray-600">延長数:</span>
               <span className="text-2xl font-bold text-green-600">{stats.exam1stExtensionCount}</span>
             </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">退会数:</span>
+              <span className="text-2xl font-bold text-red-600">{stats.exam1stWithdrawalCount}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">残弾数:</span>
+              <span className="text-2xl font-bold text-blue-600">{stats.exam1stRemainingCount}</span>
+            </div>
             <div className="flex justify-between items-center pt-3 border-t">
               <span className="text-sm font-semibold text-gray-700">延長率:</span>
               <span className="text-3xl font-bold text-purple-600">{stats.exam1stExtensionRate.toFixed(2)}%</span>
@@ -596,6 +624,14 @@ function Dashboard() {
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">延長数:</span>
               <span className="text-2xl font-bold text-green-600">{stats.exam2ndExtensionCount}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">退会数:</span>
+              <span className="text-2xl font-bold text-red-600">{stats.exam2ndWithdrawalCount}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">残弾数:</span>
+              <span className="text-2xl font-bold text-blue-600">{stats.exam2ndRemainingCount}</span>
             </div>
             <div className="flex justify-between items-center pt-3 border-t">
               <span className="text-sm font-semibold text-gray-700">延長率:</span>
