@@ -73,7 +73,12 @@ function ExaminationList() {
           };
         });
 
-        setStudents(enrichedStudents)
+        // 延長確度が「対象外」の生徒を除外
+        const filteredStudents = enrichedStudents.filter(student => 
+          student.extensionData?.extension_certainty !== '対象外'
+        );
+
+        setStudents(filteredStudents)
       } else {
         setError(data.error)
       }

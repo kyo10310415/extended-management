@@ -156,7 +156,10 @@ function Dashboard() {
           ...s,
           extensionData: extensionData || null,
         };
-      });
+      }).filter(s => 
+        // 延長確度が「対象外」の生徒を除外
+        s.extensionData?.extension_certainty !== '対象外'
+      );
 
       // KPI計算
       const examinationCount = examinationStudents.length
