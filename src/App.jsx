@@ -2,6 +2,8 @@ import { useState } from 'react'
 import Dashboard from './components/Dashboard'
 import HearingList from './components/HearingList'
 import ExaminationList from './components/ExaminationList'
+import ProHearingList from './components/ProHearingList'
+import ProExaminationList from './components/ProExaminationList'
 import StudentMaster from './components/StudentMaster'
 import SuspensionList from './components/SuspensionList'
 import ProPlanList from './components/ProPlanList'
@@ -14,6 +16,8 @@ function App() {
     { id: 'dashboard', name: 'ダッシュボード', icon: '📊' },
     { id: 'hearing', name: 'ヒアリング一覧', icon: '🎤' },
     { id: 'examination', name: '延長審査一覧', icon: '📋' },
+    { id: 'pro-hearing', name: 'Proヒアリング', icon: '🎯' },
+    { id: 'pro-examination', name: 'Pro延長審査', icon: '📝' },
     { id: 'suspension', name: '休会歴一覧', icon: '⏸️' },
     { id: 'lifetime-members', name: '永久会員', icon: '👑' },
     { id: 'active-pro-plan', name: 'Proプラン受講中', icon: '⭐' },
@@ -70,6 +74,8 @@ function App() {
         {activeTab === 'dashboard' && <Dashboard />}
         {activeTab === 'hearing' && <HearingList />}
         {activeTab === 'examination' && <ExaminationList />}
+        {activeTab === 'pro-hearing' && <ProHearingList />}
+        {activeTab === 'pro-examination' && <ProExaminationList />}
         {activeTab === 'suspension' && <SuspensionList />}
         {activeTab === 'lifetime-members' && <ProPlanList />}
         {activeTab === 'active-pro-plan' && <ActiveProPlanList />}

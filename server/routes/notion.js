@@ -180,6 +180,108 @@ router.get('/examination', async (req, res) => {
 });
 
 /**
+ * GET /api/notion/pro-hearing
+ * 16ヶ月目の生徒（Proプランヒアリング一覧）を取得
+ * ステータスが「アクティブ」の生徒のみ
+ * 休会情報も含む
+ * @query {number} monthOffset - 月オフセット (-1: 前月, 0: 今月, 1: 翌月)
+ */
+router.get('/pro-hearing', async (req, res) => {
+  try {
+    const monthOffset = parseInt(req.query.monthOffset) || 0;
+    const students = await fetchStudents();
+    const formUpdates = await fetchFormUpdates();
+    const suspensionData = await fetchSuspensionData();
+    
+    // すべてのアクティブな生徒を対象に、調整後月数を計算
+    const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
+      .filter(s => s.status === 'アクティブ')
+      .map(student => {
+        const suspension = suspensionData[student.studentId];
+        const suspensionMonths = suspension?.suspensionMonths || 0;
+        const adjustedMonths = Math.max(0, student.monthsElapsed - suspensionMonths);
+        
+        return {
+          ...student,
+          adjustedMonths,
+          suspensionMonths,
+          hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
+          formLastUpdate: formUpdates[student.studentId] || null,
+        };
+      });
+    
+    // 調整後月数が16ヶ月の生徒を抽出
+    const month16Students = allActiveStudents.filter(s => s.adjustedMonths === 16);
+
+    const proHearingStudents = month16Students;
+
+    res.json({
+      success: true,
+      data: proHearingStudents,
+      count: proHearingStudents.length,
+      monthOffset,
+    });
+  } catch (error) {
+    console.error('Error in /api/notion/pro-hearing:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/notion/pro-examination
+ * 17ヶ月目の生徒（Pro延長審査一覧）を取得
+ * ステータスが「アクティブ」の生徒のみ
+ * 休会情報も含む
+ * @query {number} monthOffset - 月オフセット (-1: 前月, 0: 今月, 1: 翌月)
+ */
+router.get('/pro-examination', async (req, res) => {
+  try {
+    const monthOffset = parseInt(req.query.monthOffset) || 0;
+    const students = await fetchStudents();
+    const formUpdates = await fetchFormUpdates();
+    const suspensionData = await fetchSuspensionData();
+    
+    // すべてのアクティブな生徒を対象に、調整後月数を計算
+    const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
+      .filter(s => s.status === 'アクティブ')
+      .map(student => {
+        const suspension = suspensionData[student.studentId];
+        const suspensionMonths = suspension?.suspensionMonths || 0;
+        const adjustedMonths = Math.max(0, student.monthsElapsed - suspensionMonths);
+        
+        return {
+          ...student,
+          adjustedMonths,
+          suspensionMonths,
+          hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
+          formLastUpdate: formUpdates[student.studentId] || null,
+        };
+      });
+    
+    // 調整後月数が17ヶ月の生徒を抽出
+    const month17Students = allActiveStudents.filter(s => s.adjustedMonths === 17);
+
+    const proExaminationStudents = month17Students;
+
+    res.json({
+      success: true,
+      data: proExaminationStudents,
+      count: proExaminationStudents.length,
+      monthOffset,
+    });
+  } catch (error) {
+    console.error('Error in /api/notion/pro-examination:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
  * GET /api/notion/export-spreadsheet
  * スプレッドシート用にデータを出力（CSV形式）
  */
