@@ -5,6 +5,7 @@ import { sendSuspensionEndNotification } from './slackService.js';
 import { sendMonthlyStudentListToTutors, sendIncompleteStudentListToTutors } from './discordService.js';
 import { enrichStudentsWithMonths, filterStudentsByMonth } from '../utils/dateUtils.js';
 import cacheService from './cacheService.js';
+import databaseCacheService from './databaseCacheService.js';
 import { appendMonthlyKPI, formatKPIData } from './kpiExportService.js';
 import { pool } from '../index.js';
 import { fetchStudents } from './notionService.js';
