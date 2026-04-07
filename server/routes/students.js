@@ -4,17 +4,20 @@ import { pool } from '../index.js';
 const router = express.Router();
 
 /**
- * サイクル（1回目/2回目）を判定
+ * サイクル（1回目/2回目/3回目）を判定
  * @param {number} monthsElapsed - 継続月数
- * @returns {number} - 1 or 2
+ * @returns {number} - 1, 2, or 3
  */
 function determineCycle(monthsElapsed) {
   // 4ヶ月目・5ヶ月目 → 1回目
   // 10ヶ月目・11ヶ月目 → 2回目
+  // 16ヶ月目・17ヶ月目 → 3回目（Proプラン）
   if (monthsElapsed === 4 || monthsElapsed === 5) {
     return 1;
   } else if (monthsElapsed === 10 || monthsElapsed === 11) {
     return 2;
+  } else if (monthsElapsed === 16 || monthsElapsed === 17) {
+    return 3;
   }
   // デフォルトは1回目
   return 1;
@@ -24,7 +27,7 @@ function determineCycle(monthsElapsed) {
  * POST /api/students/bulk
  * 複数の生徒の延長管理データを一括取得
  * @body {Array} studentIds - 学籍番号の配列
- * @body {number} cycle - サイクル（1 or 2）
+ * @body {number} cycle - サイクル（1, 2, or 3）
  * 
  * 重要: このルートは /:studentId より前に定義する必要がある
  */
@@ -84,7 +87,7 @@ router.post('/bulk', async (req, res) => {
 /**
  * GET /api/students/:studentId
  * 特定の生徒の延長管理データを取得
- * @query {number} cycle - サイクル（1 or 2）
+ * @query {number} cycle - サイクル（1, 2, or 3）
  */
 router.get('/:studentId', async (req, res) => {
   const { studentId } = req.params;
@@ -132,7 +135,7 @@ router.get('/:studentId', async (req, res) => {
 /**
  * POST /api/students/:studentId
  * 生徒の延長管理データを作成または更新
- * @body {number} cycle - サイクル（1 or 2）
+ * @body {number} cycle - サイクル（1, 2, or 3）
  */
 router.post('/:studentId', async (req, res) => {
   const { studentId } = req.params;

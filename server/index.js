@@ -140,6 +140,17 @@ async function initDatabase() {
           ADD COLUMN examination_result_2 VARCHAR(50),
           ADD COLUMN notes_2 TEXT;
       END IF;
+
+      -- 3回目（Proプラン用）のカラム追加
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                     WHERE table_name = 'student_extensions' 
+                     AND column_name = 'extension_certainty_3') THEN
+        ALTER TABLE student_extensions 
+          ADD COLUMN extension_certainty_3 VARCHAR(20),
+          ADD COLUMN hearing_status_3 BOOLEAN DEFAULT false,
+          ADD COLUMN examination_result_3 VARCHAR(50),
+          ADD COLUMN notes_3 TEXT;
+      END IF;
     END $$;
   `;
 
