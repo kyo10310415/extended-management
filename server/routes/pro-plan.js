@@ -1,6 +1,8 @@
 import express from 'express';
 import { pool } from '../index.js';
 import { fetchStudents } from '../services/notionService.js';
+import { fetchSuspensionData } from '../services/sheetsService.js';
+import { calculateMonthsElapsed } from '../utils/dateUtils.js';
 
 const router = express.Router();
 
@@ -100,10 +102,10 @@ async function ensureProPlanTableExists() {
 
 /**
  * GET /api/pro-plan/students
- * 永久会員の生徒一覧を取得（Proプランデータと結合）
+ * 永久会員 + 生徒プランで17ヶ月以上の生徒一覧を取得（Proプランデータと結合）
  */
 router.get('/students', async (req, res) => {
-  console.log('📋 GET /api/pro-plan/students - Fetching lifetime members');
+  console.log('📋 GET /api/pro-plan/students - Fetching lifetime members and 17+ month students');
 
   try {
     // テーブルの存在を確認（存在しない場合は作成）
@@ -113,11 +115,41 @@ router.get('/students', async (req, res) => {
     const allStudents = await fetchStudents();
     console.log(`  Total students from Notion: ${allStudents.length}`);
 
-    // 永久会員のみフィルタ
-    const lifetimeMembers = allStudents.filter(s => s.plan === '永久会員');
-    console.log(`  Lifetime members (永久会員): ${lifetimeMembers.length}`);
+    // 休会データを取得
+    const suspensionData = await fetchSuspensionData();
+    console.log(`  Suspension data count: ${Object.keys(suspensionData).length}`);
 
-    if (lifetimeMembers.length === 0) {
+    // 永久会員 + 生徒プランで17ヶ月以上の生徒をフィルタ
+    const targetStudents = allStudents.filter(s => {
+      // 永久会員は常に対象
+      if (s.plan === '永久会員') {
+        return true;
+      }
+      
+      // 生徒プランで、アクティブな生徒のみ対象
+      if (s.plan === '生徒プラン' && s.status === 'アクティブ') {
+        // 継続月数を計算
+        const monthsElapsed = calculateMonthsElapsed(s.lessonStartDate, 0);
+        
+        // 休会期間を取得
+        const suspension = suspensionData[s.studentId];
+        const suspensionMonths = suspension?.suspensionMonths || 0;
+        
+        // 調整後月数を計算
+        const adjustedMonths = Math.max(0, monthsElapsed - suspensionMonths);
+        
+        // 17ヶ月以上の生徒を対象
+        return adjustedMonths >= 17;
+      }
+      
+      return false;
+    });
+    
+    console.log(`  Lifetime members (永久会員): ${allStudents.filter(s => s.plan === '永久会員').length}`);
+    console.log(`  Students with 17+ months (生徒プラン): ${targetStudents.filter(s => s.plan === '生徒プラン').length}`);
+    console.log(`  Total target students: ${targetStudents.length}`);
+
+    if (targetStudents.length === 0) {
       return res.json({
         success: true,
         count: 0,
@@ -126,7 +158,7 @@ router.get('/students', async (req, res) => {
     }
 
     // 学籍番号リストを取得
-    const studentIds = lifetimeMembers.map(s => s.studentId);
+    const studentIds = targetStudents.map(s => s.studentId);
 
     // Proプランデータを一括取得
     let proPlanMap = {};
@@ -155,21 +187,40 @@ router.get('/students', async (req, res) => {
     }
 
     // Notionデータとproプランデータを結合
-    const enrichedStudents = lifetimeMembers.map(student => ({
-      studentId: student.studentId,
-      name: student.name,
-      tutor: student.tutor,
-      plan: student.plan,
-      lessonStartDate: student.lessonStartDate,
-      status: student.status,
-      notionUrl: student.notionUrl,
-      proPlanStartMonth: null,
-      promotionReviewed: false,
-      proPlanStatus: '',
-      ...proPlanMap[student.studentId], // Proプランデータをマージ（存在する場合）
-    }));
+    const enrichedStudents = targetStudents.map(student => {
+      // 継続月数を計算
+      const monthsElapsed = calculateMonthsElapsed(student.lessonStartDate, 0);
+      
+      // 休会期間を取得
+      const suspension = suspensionData[student.studentId];
+      const suspensionMonths = suspension?.suspensionMonths || 0;
+      const hasSuspensionHistory = suspension?.hasSuspensionHistory || false;
+      const suspensionStartDate = suspension?.suspensionStartDate || null;
+      
+      // 調整後月数を計算
+      const adjustedMonths = Math.max(0, monthsElapsed - suspensionMonths);
+      
+      return {
+        studentId: student.studentId,
+        name: student.name,
+        tutor: student.tutor,
+        plan: student.plan,
+        lessonStartDate: student.lessonStartDate,
+        status: student.status,
+        notionUrl: student.notionUrl,
+        monthsElapsed,
+        adjustedMonths,
+        suspensionMonths,
+        hasSuspensionHistory,
+        suspensionStartDate,
+        proPlanStartMonth: null,
+        promotionReviewed: false,
+        proPlanStatus: '',
+        ...proPlanMap[student.studentId], // Proプランデータをマージ（存在する場合）
+      };
+    });
 
-    console.log('  ✅ Successfully enriched lifetime members with pro plan data');
+    console.log('  ✅ Successfully enriched target students with pro plan data');
 
     res.json({
       success: true,

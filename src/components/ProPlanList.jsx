@@ -237,7 +237,7 @@ function ProPlanList() {
         <div>
           <h2 className="text-2xl font-bold text-gray-800">👑 永久会員</h2>
           <p className="text-sm text-gray-600 mt-1">
-            永久会員: {filteredStudents.length} / {students.length} 名
+            永久会員 + 17ヶ月以上の生徒プラン: {filteredStudents.length} / {students.length} 名
           </p>
         </div>
         
@@ -321,6 +321,7 @@ function ProPlanList() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">担任</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">契約プラン</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">レッスン開始月</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">継続月数</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proプラン開始月</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">昇格審査済み</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Proプラン</th>
@@ -329,7 +330,7 @@ function ProPlanList() {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan="9" className="px-4 py-8 text-center text-gray-500">
                     該当する生徒が見つかりません
                   </td>
                 </tr>
@@ -358,6 +359,22 @@ function ProPlanList() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm">{student.lessonStartDate}</td>
+                    <td className="px-4 py-3 text-sm">
+                      {student.hasSuspensionHistory ? (
+                        <div className="flex flex-col">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            {student.adjustedMonths}ヶ月
+                          </span>
+                          <span className="text-xs text-gray-500 mt-1">
+                            実{student.monthsElapsed}ヶ月 - 休{student.suspensionMonths}ヶ月
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {student.adjustedMonths}ヶ月
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm">
                       <input
                         type="month"
