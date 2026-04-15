@@ -451,4 +451,83 @@ router.get('/debug/tutors', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/notion/suspension-history
+ * 休会歴の詳細情報を取得（複数レコード対応）
+ */
+router.get('/suspension-history', async (req, res) => {
+  try {
+    console.log('📋 GET /api/notion/suspension-history - Fetching detailed suspension history');
+    
+    const students = await fetchStudents();
+    const suspensionData = await fetchSuspensionData();
+    
+    // 休会歴がある生徒のみをフィルタし、詳細情報を追加
+    const suspensionHistory = [];
+    
+    students.forEach(student => {
+      const suspension = suspensionData[student.studentId];
+      
+      if (suspension && suspension.hasSuspensionHistory) {
+        const monthsElapsed = student.monthsElapsed || 0;
+        const totalSuspensionMonths = suspension.suspensionMonths || 0;
+        const adjustedMonths = Math.max(0, monthsElapsed - totalSuspensionMonths);
+        
+        // 各休会レコードを展開
+        if (suspension.records && suspension.records.length > 0) {
+          suspension.records.forEach((record, index) => {
+            suspensionHistory.push({
+              id: `${student.studentId}-${index}`,
+              studentId: student.studentId,
+              name: student.name,
+              tutor: student.tutor,
+              status: student.status,
+              lessonStartDate: student.lessonStartDate,
+              monthsElapsed,
+              suspensionStartDate: record.suspensionStartDate,
+              suspensionMonths: record.suspensionMonths,
+              totalSuspensionMonths, // 全休会期間の合計
+              adjustedMonths,
+              recordIndex: index + 1,
+              totalRecords: suspension.records.length,
+            });
+          });
+        } else {
+          // recordsがない場合（旧データ）は1件として扱う
+          suspensionHistory.push({
+            id: student.studentId,
+            studentId: student.studentId,
+            name: student.name,
+            tutor: student.tutor,
+            status: student.status,
+            lessonStartDate: student.lessonStartDate,
+            monthsElapsed,
+            suspensionStartDate: suspension.suspensionStartDate,
+            suspensionMonths: totalSuspensionMonths,
+            totalSuspensionMonths,
+            adjustedMonths,
+            recordIndex: 1,
+            totalRecords: 1,
+          });
+        }
+      }
+    });
+    
+    console.log(`✅ Found ${suspensionHistory.length} suspension records for ${new Set(suspensionHistory.map(r => r.studentId)).size} students`);
+    
+    res.json({
+      success: true,
+      count: suspensionHistory.length,
+      uniqueStudents: new Set(suspensionHistory.map(r => r.studentId)).size,
+      data: suspensionHistory,
+    });
+  } catch (error) {
+    console.error('❌ Error fetching suspension history:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 export default router;

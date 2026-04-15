@@ -14,16 +14,13 @@ function SuspensionList() {
   const fetchSuspensionStudents = async () => {
     try {
       setLoading(true)
-      // 全生徒データを取得
-      const response = await fetch('/api/notion/students')
+      // 休会歴の詳細データを取得（複数レコード対応）
+      const response = await fetch('/api/notion/suspension-history')
       const data = await response.json()
 
       if (data.success) {
-        // 休会歴がある生徒のみをフィルター
-        const suspensionStudents = data.data.filter(
-          student => student.suspensionMonths > 0 || student.hasSuspensionHistory
-        )
-        setStudents(suspensionStudents)
+        console.log(`📊 Suspension records: ${data.count}, Unique students: ${data.uniqueStudents}`)
+        setStudents(data.data)
       } else {
         setError(data.error)
       }
@@ -136,14 +133,20 @@ function SuspensionList() {
 
       {/* 統計情報 */}
       <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <p className="text-sm text-gray-600">休会歴のある生徒数</p>
-            <p className="text-2xl font-bold text-orange-600">{students.length}名</p>
+            <p className="text-2xl font-bold text-orange-600">
+              {new Set(students.map(s => s.studentId)).size}名
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600">総レコード数</p>
+            <p className="text-2xl font-bold text-gray-900">{students.length}件</p>
           </div>
           <div>
             <p className="text-sm text-gray-600">現在表示中</p>
-            <p className="text-2xl font-bold text-gray-900">{filteredStudents.length}名</p>
+            <p className="text-2xl font-bold text-gray-900">{filteredStudents.length}件</p>
           </div>
           <div>
             <p className="text-sm text-gray-600">平均休会期間</p>
@@ -179,16 +182,22 @@ function SuspensionList() {
                     ステータス
                   </th>
                   <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
-                    開始日
+                    休会開始日
                   </th>
                   <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
                     継続
                   </th>
                   <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
-                    休会
+                    今回休会
+                  </th>
+                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
+                    合計休会
                   </th>
                   <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
                     調整後
+                  </th>
+                  <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
+                    #
                   </th>
                 </tr>
               </thead>
@@ -197,6 +206,11 @@ function SuspensionList() {
                   <tr key={student.id} className="hover:bg-gray-50">
                     <td className="px-2 py-1 whitespace-nowrap text-xs font-medium text-gray-900">
                       {student.studentId}
+                      {student.totalRecords > 1 && (
+                        <span className="ml-1 text-xs text-gray-500">
+                          ({student.recordIndex}/{student.totalRecords})
+                        </span>
+                      )}
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap text-xs text-gray-900">
                       {student.name}
@@ -229,9 +243,17 @@ function SuspensionList() {
                       </span>
                     </td>
                     <td className="px-2 py-1 whitespace-nowrap">
-                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
-                        {student.adjustedMonths || student.monthsElapsed || 0}ヶ月
+                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                        {student.totalSuspensionMonths || 0}ヶ月
                       </span>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                        {student.adjustedMonths || 0}ヶ月
+                      </span>
+                    </td>
+                    <td className="px-2 py-1 whitespace-nowrap text-xs text-gray-500">
+                      {student.recordIndex}/{student.totalRecords}
                     </td>
                   </tr>
                 ))}

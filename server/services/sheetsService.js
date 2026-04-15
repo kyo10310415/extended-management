@@ -193,7 +193,7 @@ export async function fetchSuspensionData() {
     // ヘッダー行をスキップ
     const dataRows = rows.slice(1);
     
-    // 学籍番号をキーとして休会情報を格納
+    // 学籍番号をキーとして休会情報を格納（複数レコード対応）
     const suspensionData = {};
     
     dataRows.forEach((row, index) => {
@@ -221,15 +221,34 @@ export async function fetchSuspensionData() {
       }
       
       if (studentId && suspensionMonths > 0) {
-        suspensionData[studentId] = {
+        // 既存のエントリがない場合は初期化
+        if (!suspensionData[studentId]) {
+          suspensionData[studentId] = {
+            suspensionMonths: 0,
+            suspensionStartDate: null,
+            hasSuspensionHistory: true,
+            records: [], // 複数レコードを保持
+          };
+        }
+        
+        // 休会期間を合計
+        suspensionData[studentId].suspensionMonths += suspensionMonths;
+        
+        // 最初の休会開始日を記録（既存の値がない場合のみ）
+        if (!suspensionData[studentId].suspensionStartDate) {
+          suspensionData[studentId].suspensionStartDate = suspensionStartDate;
+        }
+        
+        // レコードを配列に追加
+        suspensionData[studentId].records.push({
+          suspensionStartDate,
           suspensionMonths,
-          suspensionStartDate, // 休会開始日を追加
-          hasSuspensionHistory: true,
-        };
+          rowIndex: index + 1, // 実際の行番号（ヘッダーを考慮）
+        });
         
         // マッチした場合も表示
         if (index < 10) {
-          console.log(`    ✅ Added to suspensionData`);
+          console.log(`    ✅ Added to suspensionData (total: ${suspensionData[studentId].suspensionMonths} months)`);
         }
       } else {
         if (index < 10) {
@@ -239,6 +258,7 @@ export async function fetchSuspensionData() {
     });
 
     console.log(`✅ Fetched suspension data for ${Object.keys(suspensionData).length} students from "${successSheetName}"`);
+    console.log(`   Total records: ${dataRows.length}, Unique students: ${Object.keys(suspensionData).length}`);
 
     // キャッシュに保存（5分間）
     cacheService.set(cacheKey, suspensionData);
