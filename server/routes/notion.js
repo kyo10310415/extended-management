@@ -462,10 +462,13 @@ router.get('/suspension-history', async (req, res) => {
     const students = await fetchStudents();
     const suspensionData = await fetchSuspensionData();
     
+    // 経過月数を計算
+    const enrichedStudents = enrichStudentsWithMonths(students);
+    
     // 休会歴がある生徒のみをフィルタし、詳細情報を追加
     const suspensionHistory = [];
     
-    students.forEach(student => {
+    enrichedStudents.forEach(student => {
       const suspension = suspensionData[student.studentId];
       
       if (suspension && suspension.hasSuspensionHistory) {
