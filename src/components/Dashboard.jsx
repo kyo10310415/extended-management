@@ -297,15 +297,21 @@ function Dashboard() {
       console.log('    延長率:', exam2ndExtensionRate.toFixed(2) + '%');
 
       // 延長審査3回目（調整後月数17ヶ月目）
+      // ※3回目は計算方法が異なる
+      //   退会数 = 審査結果が「永久会員」
+      //   残弾数 = 審査結果が空欄（未入力）
       const exam3rdStudents = proExaminationStudents
       const exam3rdTargetCount = exam3rdStudents.length
       const exam3rdExtensionCount = exam3rdStudents.filter(s =>
         s.extensionData?.examination_result === '延長'
       ).length
       const exam3rdWithdrawalCount = exam3rdStudents.filter(s =>
-        s.extensionData?.examination_result === '退会'
+        s.extensionData?.examination_result === '永久会員'
       ).length
-      const exam3rdRemainingCount = exam3rdTargetCount - exam3rdExtensionCount - exam3rdWithdrawalCount
+      const exam3rdRemainingCount = exam3rdStudents.filter(s =>
+        !s.extensionData?.examination_result ||
+        s.extensionData.examination_result.trim() === ''
+      ).length
       const exam3rdExtensionRate = exam3rdTargetCount > 0
         ? (exam3rdExtensionCount / exam3rdTargetCount * 100)
         : 0
@@ -313,8 +319,8 @@ function Dashboard() {
       console.log('  3回目（調整後17ヶ月目）:');
       console.log('    対象数:', exam3rdTargetCount);
       console.log('    延長数:', exam3rdExtensionCount);
-      console.log('    退会数:', exam3rdWithdrawalCount);
-      console.log('    残弾数:', exam3rdRemainingCount);
+      console.log('    永久会員数:', exam3rdWithdrawalCount);
+      console.log('    残弾数（空欄）:', exam3rdRemainingCount);
       console.log('    延長率:', exam3rdExtensionRate.toFixed(2) + '%');
 
       // Proプラン成約率の計算
@@ -717,11 +723,11 @@ function Dashboard() {
               <span className="text-2xl font-bold text-green-600">{stats.exam3rdExtensionCount}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">退会数:</span>
+              <span className="text-sm text-gray-600">永久会員数:</span>
               <span className="text-2xl font-bold text-red-600">{stats.exam3rdWithdrawalCount}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">残弾数:</span>
+              <span className="text-sm text-gray-600">残弾数（空欄）:</span>
               <span className="text-2xl font-bold text-blue-600">{stats.exam3rdRemainingCount}</span>
             </div>
             <div className="flex justify-between items-center pt-3 border-t">
