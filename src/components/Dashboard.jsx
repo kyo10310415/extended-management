@@ -197,35 +197,45 @@ function Dashboard() {
         s.extensionData?.extension_certainty !== '対象外'
       );
 
-      // KPI計算
-      const examinationCount = examinationStudents.length
-      
+      // KPI計算（1回目＋2回目＋3回目の合計）
+      // --- 3回目の中間値（統計用）---
+      const _exam3rdExtCount = proExaminationStudents.filter(s =>
+        s.extensionData?.examination_result === '延長'
+      ).length
+      const _exam3rdLifetimeCount = proExaminationStudents.filter(s =>
+        s.extensionData?.examination_result === '永久会員'
+      ).length
+      const _exam3rdRemainingCount = proExaminationStudents.filter(s =>
+        !s.extensionData?.examination_result ||
+        s.extensionData.examination_result.trim() === ''
+      ).length
+
+      // 全体の延長審査対象数（1回目＋2回目＋3回目）
+      const examinationCount = examinationStudents.length + proExaminationStudents.length
+
       console.log('📊 KPI計算開始');
-      console.log('  延長審査対象:', examinationCount);
-      
+      console.log('  延長審査対象（全体）:', examinationCount,
+        `(1・2回目: ${examinationStudents.length}, 3回目: ${proExaminationStudents.length})`);
+
       // 延長確度記入済み = 確度が入力されている - 「対象外」
       const certaintyFilledCount = hearingStudents.filter(s => 
         s.extensionData?.extension_certainty && 
         s.extensionData.extension_certainty !== '対象外'
       ).length
 
-      // 延長数 = 審査結果が「延長」
+      // 延長数 = 1・2回目「延長」 + 3回目「延長」
       const extensionCount = examinationStudents.filter(s => 
         s.extensionData?.examination_result === '延長'
-      ).length
-      
-      console.log('  延長数（全体）:', extensionCount);
-      console.log('  延長の生徒:', examinationStudents
-        .filter(s => s.extensionData?.examination_result === '延長')
-        .map(s => `${s.studentId} (${s.monthsElapsed}ヶ月目)`)
-      );
+      ).length + _exam3rdExtCount
 
-      // 退会数 = 審査結果が「退会」
+      console.log('  延長数（全体）:', extensionCount);
+
+      // 退会数 = 1・2回目「退会」 + 3回目「永久会員」
       const withdrawalCount = examinationStudents.filter(s => 
         s.extensionData?.examination_result === '退会'
-      ).length
-      
-      console.log('  退会数:', withdrawalCount);
+      ).length + _exam3rdLifetimeCount
+
+      console.log('  退会 / 永久会員数（全体）:', withdrawalCount);
 
       // 延長率 = 延長数 / 延長審査対象 × 100
       const extensionRate = examinationCount > 0 
@@ -238,8 +248,11 @@ function Dashboard() {
         ? (extensionCount / totalDecided * 100) 
         : 0
 
-      // 残弾数 = 延長審査対象 - 延長数 - 退会数
-      const remainingCount = examinationCount - extensionCount - withdrawalCount
+      // 残弾数 = 1・2回目（対象-延長-退会） + 3回目（空欄件数）
+      const remaining12Count = examinationStudents.length -
+        examinationStudents.filter(s => s.extensionData?.examination_result === '延長').length -
+        examinationStudents.filter(s => s.extensionData?.examination_result === '退会').length
+      const remainingCount = remaining12Count + _exam3rdRemainingCount
 
       // 延長確度別カウント
       const certaintyHigh = hearingStudents.filter(s => 
@@ -380,7 +393,8 @@ function Dashboard() {
 
   const handleKPIChange = (value) => {
     const kpi = Number(value)
-    const examinationCount = stats.examinationStudents.length
+    // 全体対象数 = 1・2回目 + 3回目
+    const examinationCount = stats.examinationStudents.length + stats.exam3rdTargetCount
     const extensionCountKPI = Math.ceil(examinationCount * kpi / 100)
     
     setStats(prev => ({
@@ -523,7 +537,8 @@ function Dashboard() {
     )
   }
 
-  const examinationTargetCount = stats.examinationStudents.length
+  // 全体の延長審査対象数（1・2回目 + 3回目）
+  const examinationTargetCount = stats.examinationStudents.length + stats.exam3rdTargetCount
 
   return (
     <div>
@@ -578,6 +593,9 @@ function Dashboard() {
         <div className="bg-white rounded-lg shadow p-4">
           <p className="text-xs text-gray-600 mb-1">延長審査対象</p>
           <p className="text-3xl font-bold text-gray-900">{examinationTargetCount}</p>
+          <p className="text-xs text-gray-500 mt-1">
+            1・2回目 {stats.examinationStudents.length} + Pro {stats.exam3rdTargetCount}
+          </p>
         </div>
         
         <div className="bg-white rounded-lg shadow p-4">
@@ -599,8 +617,11 @@ function Dashboard() {
         </div>
 
         <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-xs text-gray-600 mb-1">退会数</p>
+          <p className="text-xs text-gray-600 mb-1">退会 / 永久会員数</p>
           <p className="text-3xl font-bold text-red-600">{stats.withdrawalCount}</p>
+          <p className="text-xs text-gray-500 mt-1">
+            1・2回目退会 + Pro永久会員
+          </p>
         </div>
       </div>
 
@@ -618,7 +639,7 @@ function Dashboard() {
           <p className="text-xs text-gray-600 mb-1">延長率（対 結果お伝え）</p>
           <p className="text-3xl font-bold text-indigo-600">{stats.extensionRateVsResult.toFixed(2)}%</p>
           <p className="text-xs text-gray-500 mt-1">
-            {stats.extensionCount} / {stats.extensionCount + stats.withdrawalCount} × 100
+            {stats.extensionCount} / ({stats.extensionCount} + {stats.withdrawalCount}) × 100
           </p>
         </div>
 
@@ -634,7 +655,7 @@ function Dashboard() {
           <p className="text-xs text-gray-600 mb-1">残弾数</p>
           <p className="text-3xl font-bold text-orange-600">{stats.remainingCount}</p>
           <p className="text-xs text-gray-500 mt-1">
-            未決定の対象者
+            1・2回目未決定 + Pro空欄
           </p>
         </div>
       </div>
