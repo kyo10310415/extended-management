@@ -488,7 +488,7 @@ function Dashboard() {
   };
 
   // 月次KPIデータをスプレッドシートに追加
-  const handleExportMonthlyKPI = async () => {
+  const handleExportMonthlyKPI = async (monthOffset = 0) => {
     if (!kpiExport.spreadsheetId) {
       alert('⚠️ 先にスプレッドシートを作成してください。');
       return;
@@ -496,20 +496,28 @@ function Dashboard() {
 
     if (kpiExport.exporting) return;
 
+    // 対象月のラベルを生成
+    const targetDate = new Date();
+    targetDate.setMonth(targetDate.getMonth() + monthOffset);
+    const targetYear = targetDate.getFullYear();
+    const targetMonth = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const targetLabel = `${targetYear}年${targetMonth}月`;
+
     const confirmed = window.confirm(
-      '現在のKPIデータを月次データとしてスプレッドシートに追加しますか？\n\n※追加後は取り消しできません。'
+      `${targetLabel}のKPIデータをスプレッドシートに追加しますか？\n\n※追加後は取り消しできません。`
     );
     if (!confirmed) return;
 
     setKpiExport(prev => ({ ...prev, exporting: true }));
 
     try {
-      console.log('📊 月次KPIデータをエクスポート中...');
+      console.log(`📊 ${targetLabel}の月次KPIデータをエクスポート中...`);
       const response = await fetch('/api/kpi-export/append-monthly', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           spreadsheetId: kpiExport.spreadsheetId,
+          monthOffset,
         }),
       });
 
@@ -827,6 +835,27 @@ function Dashboard() {
               ) : (
                 <>
                   📤 今月のKPIを追加
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => handleExportMonthlyKPI(-1)}
+              disabled={!kpiExport.spreadsheetId || kpiExport.exporting}
+              className={`flex-1 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+                !kpiExport.spreadsheetId || kpiExport.exporting
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-orange-500 text-white hover:bg-orange-600'
+              }`}
+            >
+              {kpiExport.exporting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  エクスポート中...
+                </>
+              ) : (
+                <>
+                  📤 先月のKPIを追加
                 </>
               )}
             </button>
