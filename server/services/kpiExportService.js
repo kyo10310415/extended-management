@@ -463,8 +463,9 @@ async function createChartSheet(spreadsheetId, sheets, dataSheetId, dataSheetTit
  * KPIデータを月次列として追加
  * @param {string} spreadsheetId - スプレッドシートID
  * @param {object} kpiData - KPIデータオブジェクト
+ * @param {number} monthOffset - 0: 今月（デフォルト）, -1: 先月
  */
-export async function appendMonthlyKPI(spreadsheetId, kpiData) {
+export async function appendMonthlyKPI(spreadsheetId, kpiData, monthOffset = 0) {
   try {
     const auth = getAuth();
     const sheets = google.sheets({ version: 'v4', auth });
@@ -478,10 +479,11 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData) {
     const dataSheetId = dataSheet.properties.sheetId;
     const dataSheetTitle = dataSheet.properties.title;
 
-    // 現在の月を取得
-    const currentDate = new Date();
-    const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+    // 対象月を取得（monthOffset 分ずらす）
+    const targetDate = new Date();
+    targetDate.setMonth(targetDate.getMonth() + monthOffset);
+    const year = targetDate.getFullYear();
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0');
     const monthLabel = `${year}年${month}月`;
 
     // 既存のデータ範囲を取得して、次の列を特定

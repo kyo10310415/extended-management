@@ -44,11 +44,12 @@ router.post('/setup-sheet', async (req, res) => {
 /**
  * POST /api/kpi-export/append-monthly
  * 月次KPIデータをスプレッドシートに追加
- * Body: { spreadsheetId: string }
+ * Body: { spreadsheetId: string, monthOffset?: number }
+ *   monthOffset: 0 = 今月（デフォルト）, -1 = 先月
  */
 router.post('/append-monthly', async (req, res) => {
   try {
-    const { spreadsheetId } = req.body;
+    const { spreadsheetId, monthOffset = 0 } = req.body;
     
     if (!spreadsheetId) {
       return res.status(400).json({
@@ -57,15 +58,15 @@ router.post('/append-monthly', async (req, res) => {
       });
     }
 
-    console.log('📊 Fetching KPI data...');
+    console.log(`📊 Fetching KPI data (monthOffset: ${monthOffset})...`);
     
     // KPIデータを計算
-    const kpiData = await calculateKPIData();
+    const kpiData = await calculateKPIData(monthOffset);
     
     console.log('📊 KPI Data calculated:', kpiData);
     
     // スプレッドシートに追加
-    const result = await appendMonthlyKPI(spreadsheetId, kpiData);
+    const result = await appendMonthlyKPI(spreadsheetId, kpiData, monthOffset);
     
     res.json({
       ...result,
@@ -83,12 +84,14 @@ router.post('/append-monthly', async (req, res) => {
 /**
  * GET /api/kpi-export/current-kpi
  * 現在のKPIデータを取得（確認用）
+ * @query {number} monthOffset - 0: 今月（デフォルト）, -1: 先月
  */
 router.get('/current-kpi', async (req, res) => {
   try {
-    console.log('📊 Fetching current KPI data...');
+    const monthOffset = parseInt(req.query.monthOffset) || 0;
+    console.log(`📊 Fetching current KPI data (monthOffset: ${monthOffset})...`);
     
-    const kpiData = await calculateKPIData();
+    const kpiData = await calculateKPIData(monthOffset);
     
     res.json({
       success: true,
@@ -105,8 +108,9 @@ router.get('/current-kpi', async (req, res) => {
 
 /**
  * KPIデータを計算する内部関数
+ * @param {number} monthOffset - 0: 今月（デフォルト）, -1: 先月
  */
-async function calculateKPIData() {
+async function calculateKPIData(monthOffset = 0) {
   // Notionから生徒データを取得
   const students = await fetchStudents();
   console.log(`✅ Fetched ${students.length} students from Notion`);
@@ -122,18 +126,18 @@ async function calculateKPIData() {
   // 休会データを取得
   const suspensionData = await fetchSuspensionData();
 
-  // 各生徒の経過月数を計算（休会は考慮しない: 1・2回目用）
+  // 各生徒の経過月数を計算（monthOffset適用・休会は考慮しない: 1・2回目用）
   const studentsWithMonths = activeStudents.map(student => {
-    const monthsElapsed = calculateMonthsElapsed(student.lessonStartDate);
+    const monthsElapsed = calculateMonthsElapsed(student.lessonStartDate, monthOffset);
     return {
       ...student,
       monthsElapsed,
     };
   });
 
-  // 調整後月数付きの生徒リスト（3回目用: 休会期間を差し引く）
+  // 調整後月数付きの生徒リスト（3回目用: 休会期間を差し引く・monthOffset適用）
   const studentsWithAdjustedMonths = activeStudents.map(student => {
-    const monthsElapsed = calculateMonthsElapsed(student.lessonStartDate);
+    const monthsElapsed = calculateMonthsElapsed(student.lessonStartDate, monthOffset);
     const suspension = suspensionData[student.studentId];
     const suspensionMonths = suspension?.suspensionMonths || 0;
     const adjustedMonths = Math.max(0, monthsElapsed - suspensionMonths);
