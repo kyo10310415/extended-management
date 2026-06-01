@@ -77,21 +77,27 @@ async function initializeKPISheet(spreadsheetId, sheetTitle) {
 
     // A列に項目名を設定
     const values = [
-      ['項目名'], // A1
-      ['延長審査1回目_対象数'],
-      ['延長審査1回目_延長数'],
-      ['延長審査1回目_延長率(%)'],
-      ['延長審査2回目_対象数'],
-      ['延長審査2回目_延長数'],
-      ['延長審査2回目_延長率(%)'],
-      ['Proプラン成約率(%)'],
-      ['延長率（対 審査対象）(%)'], // 新規追加
+      ['項目名'],                     // A1
+      ['延長審査1回目_対象数'],       // A2
+      ['延長審査1回目_延長数'],       // A3
+      ['延長審査1回目_退会数'],       // A4 ★追加
+      ['延長審査1回目_延長率(%)'],    // A5
+      ['延長審査2回目_対象数'],       // A6
+      ['延長審査2回目_延長数'],       // A7
+      ['延長審査2回目_退会数'],       // A8 ★追加
+      ['延長審査2回目_延長率(%)'],    // A9
+      ['延長審査3回目_対象数'],       // A10 ★追加
+      ['延長審査3回目_延長数'],       // A11 ★追加
+      ['延長審査3回目_永久会員数'],   // A12 ★追加（退会に相当）
+      ['延長審査3回目_延長率(%)'],    // A13 ★追加
+      ['Proプラン成約率(%)'],         // A14
+      ['延長率（対 審査対象）(%)'],   // A15
     ];
 
     // シート名を指定してデータを書き込み
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `${sheetTitle}!A1:A9`, // A8 → A9 に変更
+      range: `${sheetTitle}!A1:A15`,
       valueInputOption: 'RAW',
       requestBody: { values },
     });
@@ -491,21 +497,27 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData) {
 
     // データを整形（パーセンテージは小数点以下2桁に丸める）
     const values = [
-      [monthLabel], // ヘッダー
-      [kpiData.exam1stTargetCount || 0],
-      [kpiData.exam1stExtensionCount || 0],
-      [Math.round((kpiData.exam1stExtensionRate || 0) * 100) / 100], // 小数点以下2桁
-      [kpiData.exam2ndTargetCount || 0],
-      [kpiData.exam2ndExtensionCount || 0],
-      [Math.round((kpiData.exam2ndExtensionRate || 0) * 100) / 100], // 小数点以下2桁
-      [Math.round((kpiData.proPlanSuccessRate || 0) * 100) / 100], // 小数点以下2桁
-      [Math.round((kpiData.overallExtensionRate || 0) * 100) / 100], // 延長率（対 審査対象）
+      [monthLabel],                                                               // 1行: ヘッダー
+      [kpiData.exam1stTargetCount || 0],                                          // 2行: 1回目_対象数
+      [kpiData.exam1stExtensionCount || 0],                                       // 3行: 1回目_延長数
+      [kpiData.exam1stWithdrawalCount || 0],                                      // 4行: 1回目_退会数 ★
+      [Math.round((kpiData.exam1stExtensionRate || 0) * 100) / 100],              // 5行: 1回目_延長率
+      [kpiData.exam2ndTargetCount || 0],                                          // 6行: 2回目_対象数
+      [kpiData.exam2ndExtensionCount || 0],                                       // 7行: 2回目_延長数
+      [kpiData.exam2ndWithdrawalCount || 0],                                      // 8行: 2回目_退会数 ★
+      [Math.round((kpiData.exam2ndExtensionRate || 0) * 100) / 100],              // 9行: 2回目_延長率
+      [kpiData.exam3rdTargetCount || 0],                                          // 10行: 3回目_対象数 ★
+      [kpiData.exam3rdExtensionCount || 0],                                       // 11行: 3回目_延長数 ★
+      [kpiData.exam3rdLifetimeCount || 0],                                        // 12行: 3回目_永久会員数 ★
+      [Math.round((kpiData.exam3rdExtensionRate || 0) * 100) / 100],              // 13行: 3回目_延長率 ★
+      [Math.round((kpiData.proPlanSuccessRate || 0) * 100) / 100],                // 14行: Proプラン成約率
+      [Math.round((kpiData.overallExtensionRate || 0) * 100) / 100],              // 15行: 延長率（対 審査対象）
     ];
 
     // データを書き込み
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `${dataSheetTitle}!${nextColumn}1:${nextColumn}9`, // 8 → 9 に変更
+      range: `${dataSheetTitle}!${nextColumn}1:${nextColumn}15`,
       valueInputOption: 'USER_ENTERED',
       requestBody: { values },
     });
@@ -541,20 +553,32 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData) {
 export function formatKPIData({
   exam1stTargetCount,
   exam1stExtensionCount,
+  exam1stWithdrawalCount,
   exam1stExtensionRate,
   exam2ndTargetCount,
   exam2ndExtensionCount,
+  exam2ndWithdrawalCount,
   exam2ndExtensionRate,
+  exam3rdTargetCount,
+  exam3rdExtensionCount,
+  exam3rdLifetimeCount,
+  exam3rdExtensionRate,
   proPlanSuccessRate,
   overallExtensionRate,
 }) {
   return {
     exam1stTargetCount,
     exam1stExtensionCount,
+    exam1stWithdrawalCount,
     exam1stExtensionRate,
     exam2ndTargetCount,
     exam2ndExtensionCount,
+    exam2ndWithdrawalCount,
     exam2ndExtensionRate,
+    exam3rdTargetCount,
+    exam3rdExtensionCount,
+    exam3rdLifetimeCount,
+    exam3rdExtensionRate,
     proPlanSuccessRate,
     overallExtensionRate,
   };
