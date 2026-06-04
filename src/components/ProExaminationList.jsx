@@ -239,6 +239,12 @@ function ProExaminationList() {
         {/* 既存のコンテンツ（薄く表示） */}
         <div className="opacity-50 pointer-events-none">
           <div>
+            {/* 注意書きバナー */}
+            <div className="bg-red-50 border-l-4 border-red-600 rounded-lg p-4 mb-5">
+              <p className="text-red-600 text-lg font-bold leading-snug">
+                ⚠️ 永久会員（PROプランを受けない）が確定するまでは永久会員の説明をしない
+              </p>
+            </div>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-gray-900">📋 Pro延長審査一覧</h2>
             </div>
@@ -258,6 +264,13 @@ function ProExaminationList() {
 
   return (
     <div>
+      {/* 注意書きバナー */}
+      <div className="bg-red-50 border-l-4 border-red-600 rounded-lg p-4 mb-5">
+        <p className="text-red-600 text-lg font-bold leading-snug">
+          ⚠️ 永久会員（PROプランを受けない）が確定するまでは永久会員の説明をしない
+        </p>
+      </div>
+
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">
           📋 Pro延長審査一覧（17ヶ月目）
