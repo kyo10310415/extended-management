@@ -17,6 +17,7 @@ import sheetsRoutes from './routes/sheets.js';
 import notificationsRoutes from './routes/notifications.js';
 import proPlanRoutes from './routes/pro-plan.js';
 import kpiExportRoutes from './routes/kpi-export.js';
+import kpiSnapshotsRoutes from './routes/kpi-snapshots.js';
 
 // Background services
 import { 
@@ -69,6 +70,7 @@ app.use('/api/sheets', sheetsRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/pro-plan', proPlanRoutes);
 app.use('/api/kpi-export', kpiExportRoutes);
+app.use('/api/kpi-snapshots', kpiSnapshotsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -157,6 +159,21 @@ async function initDatabase() {
   try {
     await pool.query(createTableQuery);
     await pool.query(migrationQuery);
+
+    // KPI月次スナップショットテーブルの作成
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kpi_monthly_snapshots (
+        id SERIAL PRIMARY KEY,
+        year_month VARCHAR(7) NOT NULL,           -- 例: '2026-05'
+        month_label VARCHAR(20) NOT NULL,         -- 例: '2026年05月'
+        snapshot_data JSONB NOT NULL,             -- 全体KPI（examination/extension/withdrawal/remaining/rates）
+        tutor_data JSONB DEFAULT '[]'::jsonb,     -- Tutor別KPI配列
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(year_month)
+      );
+      CREATE INDEX IF NOT EXISTS idx_kpi_snapshots_year_month ON kpi_monthly_snapshots(year_month);
+    `);
+
     console.log('✅ Database tables initialized and migrated');
   } catch (error) {
     console.error('❌ Database initialization error:', error);

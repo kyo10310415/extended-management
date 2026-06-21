@@ -8,6 +8,9 @@ import StudentMaster from './components/StudentMaster'
 import SuspensionList from './components/SuspensionList'
 import ProPlanList from './components/ProPlanList'
 import ActiveProPlanList from './components/ActiveProPlanList'
+import KpiHistory from './components/KpiHistory'
+import KpiChart from './components/KpiChart'
+import KpiByTutor from './components/KpiByTutor'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -22,6 +25,9 @@ function App() {
     { id: 'lifetime-members', name: '永久会員', icon: '👑' },
     { id: 'active-pro-plan', name: 'Proプラン受講中', icon: '⭐' },
     { id: 'master', name: '生徒情報マスタ', icon: '👥' },
+    { id: 'kpi-history', name: 'KPI履歴', icon: '📅' },
+    { id: 'kpi-chart',   name: 'KPIグラフ', icon: '📈' },
+    { id: 'kpi-tutor',  name: 'Tutor別KPI', icon: '👤' },
   ]
 
   return (
@@ -80,6 +86,9 @@ function App() {
         {activeTab === 'lifetime-members' && <ProPlanList />}
         {activeTab === 'active-pro-plan' && <ActiveProPlanList />}
         {activeTab === 'master' && <StudentMaster />}
+        {activeTab === 'kpi-history' && <KpiHistory />}
+        {activeTab === 'kpi-chart'   && <KpiChart />}
+        {activeTab === 'kpi-tutor'   && <KpiByTutor />}
       </main>
 
       {/* Footer */}
