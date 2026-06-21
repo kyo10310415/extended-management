@@ -54,6 +54,13 @@ function KpiHistory() {
   const [monthOffset, setMonthOffset] = useState(0)           // 保存対象: 0=今月, -1=先月
   const [error, setError]             = useState(null)
 
+  // --- CSV インポート state ---
+  const [showCsvPanel, setShowCsvPanel]   = useState(false)
+  const [csvText, setCsvText]             = useState('')
+  const [csvOverwrite, setCsvOverwrite]   = useState(false)
+  const [csvImporting, setCsvImporting]   = useState(false)
+  const [csvResult, setCsvResult]         = useState(null)   // { imported, skipped, message }
+
   useEffect(() => { fetchList() }, [])
 
   const fetchList = async () => {
@@ -122,12 +129,45 @@ function KpiHistory() {
 
   const s = detail?.snapshotData
 
+  // --- CSV インポート処理 ---
+  const handleCsvImport = async () => {
+    if (!csvText.trim()) {
+      alert('CSVテキストを貼り付けてください。')
+      return
+    }
+    try {
+      setCsvImporting(true)
+      setCsvResult(null)
+      const res = await fetch('/api/kpi-snapshots/import-csv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ csvText: csvText.trim(), overwrite: csvOverwrite }),
+      })
+      const d = await res.json()
+      if (d.success) {
+        setCsvResult(d)
+        await fetchList()
+        if (d.imported.length > 0) {
+          // 最後にインポートした月を自動選択
+          const lastYm = d.imported[d.imported.length - 1].yearMonth
+          await fetchDetail(lastYm)
+        }
+      } else {
+        alert(`❌ インポート失敗: ${d.error}`)
+      }
+    } catch (e) {
+      alert(`❌ インポート失敗: ${e.message}`)
+    } finally {
+      setCsvImporting(false)
+    }
+  }
+
   return (
     <div>
       <h2 className="text-2xl font-bold text-gray-900 mb-6">📅 KPI履歴（月別スナップショット）</h2>
 
       {/* 保存パネル */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-5 mb-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-5 mb-4">
         <h3 className="font-semibold text-blue-800 mb-3">📸 スナップショットを保存</h3>
         <p className="text-sm text-blue-700 mb-3">
           保存時点のNotionデータをもとにKPIを計算し、DBに固定保存します。<br/>
@@ -153,6 +193,78 @@ function KpiHistory() {
             {saving ? '保存中...' : '📸 スナップショット保存'}
           </button>
         </div>
+      </div>
+
+      {/* CSV インポートパネル */}
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-5 mb-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-amber-800">📂 過去データをCSVからインポート</h3>
+          <button
+            onClick={() => { setShowCsvPanel(v => !v); setCsvResult(null) }}
+            className="text-xs text-amber-700 underline hover:no-underline"
+          >
+            {showCsvPanel ? '▲ 閉じる' : '▼ 開く'}
+          </button>
+        </div>
+
+        {showCsvPanel && (
+          <div>
+            <p className="text-xs text-amber-700 mb-3">
+              スプレッドシートからコピーしたCSVを貼り付けると、月ごとのスナップショットを一括登録できます。<br/>
+              ヘッダー行: <code className="bg-amber-100 px-1 rounded">項目名,平均,2026年02月,2026年03月,...</code>
+            </p>
+
+            <textarea
+              value={csvText}
+              onChange={e => setCsvText(e.target.value)}
+              placeholder={"項目名,平均,2026年02月,2026年03月,...\n延長審査1回目_対象数,,60,28,...\n..."}
+              className="w-full h-40 text-xs font-mono border border-amber-300 rounded-lg p-3 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 mb-3"
+            />
+
+            <div className="flex items-center gap-4 flex-wrap">
+              <label className="flex items-center gap-2 text-xs text-amber-800 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={csvOverwrite}
+                  onChange={e => setCsvOverwrite(e.target.checked)}
+                  className="w-3.5 h-3.5"
+                />
+                既存データを上書きする
+              </label>
+
+              <button
+                onClick={handleCsvImport}
+                disabled={csvImporting || !csvText.trim()}
+                className={`px-5 py-2 rounded-lg font-semibold text-white text-sm transition ${
+                  csvImporting || !csvText.trim()
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-amber-600 hover:bg-amber-700'
+                }`}
+              >
+                {csvImporting ? 'インポート中...' : '📥 インポート実行'}
+              </button>
+            </div>
+
+            {/* インポート結果 */}
+            {csvResult && (
+              <div className="mt-3 p-3 bg-white rounded-lg border border-amber-200 text-xs">
+                <p className="font-semibold text-amber-800 mb-2">✅ {csvResult.message}</p>
+                {csvResult.imported.length > 0 && (
+                  <div className="mb-2">
+                    <span className="text-green-700 font-medium">インポート済み: </span>
+                    {csvResult.imported.map(r => r.monthLabel).join('、')}
+                  </div>
+                )}
+                {csvResult.skipped.length > 0 && (
+                  <div>
+                    <span className="text-gray-500 font-medium">スキップ: </span>
+                    {csvResult.skipped.map(r => `${r.monthLabel}（${r.reason}）`).join('、')}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex gap-6">
