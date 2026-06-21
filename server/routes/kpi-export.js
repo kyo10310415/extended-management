@@ -107,10 +107,10 @@ router.get('/current-kpi', async (req, res) => {
 });
 
 /**
- * KPIデータを計算する内部関数
+ * KPIデータを計算する内部関数（外部からも利用可能）
  * @param {number} monthOffset - 0: 今月（デフォルト）, -1: 先月
  */
-async function calculateKPIData(monthOffset = 0) {
+export async function calculateKPIData(monthOffset = 0) {
   // Notionから生徒データを取得
   const students = await fetchStudents();
   console.log(`✅ Fetched ${students.length} students from Notion`);
@@ -232,23 +232,98 @@ async function calculateKPIData(monthOffset = 0) {
   
   console.log(`📊 延長率（対 審査対象）: ${totalExtensionCount}/${totalExamTargetCount} = ${overallExtensionRate.toFixed(2)}%`);
 
+  // ========================================
+  // Tutor別集計
+  // ========================================
+  const tutorKpi = await calculateTutorKPI(
+    exam1stTargets, exam2ndTargets, exam3rdTargets, monthOffset
+  );
+
   // KPIデータを返す
-  return formatKPIData({
-    exam1stTargetCount: exam1stTargets.length,
-    exam1stExtensionCount,
-    exam1stWithdrawalCount,
-    exam1stExtensionRate,
-    exam2ndTargetCount: exam2ndTargets.length,
-    exam2ndExtensionCount,
-    exam2ndWithdrawalCount,
-    exam2ndExtensionRate,
-    exam3rdTargetCount: exam3rdTargets.length,
-    exam3rdExtensionCount,
-    exam3rdLifetimeCount,
-    exam3rdExtensionRate,
-    proPlanSuccessRate,
-    overallExtensionRate,
-  });
+  return {
+    ...formatKPIData({
+      exam1stTargetCount: exam1stTargets.length,
+      exam1stExtensionCount,
+      exam1stWithdrawalCount,
+      exam1stExtensionRate,
+      exam2ndTargetCount: exam2ndTargets.length,
+      exam2ndExtensionCount,
+      exam2ndWithdrawalCount,
+      exam2ndExtensionRate,
+      exam3rdTargetCount: exam3rdTargets.length,
+      exam3rdExtensionCount,
+      exam3rdLifetimeCount,
+      exam3rdExtensionRate,
+      proPlanSuccessRate,
+      overallExtensionRate,
+    }),
+    tutorKpi,
+  };
+}
+
+/**
+ * Tutor別KPIを集計する内部関数
+ */
+async function calculateTutorKPI(exam1stTargets, exam2ndTargets, exam3rdTargets, monthOffset = 0) {
+  // 全審査対象生徒を tutor でグループ化
+  const allTargets = [
+    ...exam1stTargets.map(s => ({ ...s, cycle: 1 })),
+    ...exam2ndTargets.map(s => ({ ...s, cycle: 2 })),
+    ...exam3rdTargets.map(s => ({ ...s, cycle: 3 })),
+  ];
+
+  // tutorごとに生徒IDを集める
+  const tutorMap = {};
+  for (const s of allTargets) {
+    const tutor = s.tutor || '未設定';
+    if (!tutorMap[tutor]) tutorMap[tutor] = { c1: [], c2: [], c3: [] };
+    if (s.cycle === 1) tutorMap[tutor].c1.push(s.studentId);
+    if (s.cycle === 2) tutorMap[tutor].c2.push(s.studentId);
+    if (s.cycle === 3) tutorMap[tutor].c3.push(s.studentId);
+  }
+
+  const result = [];
+  for (const [tutor, ids] of Object.entries(tutorMap)) {
+    // 1回目
+    const ext1 = (await getExtensionResults(ids.c1, 1)).length;
+    const wd1  = await getWithdrawalCount(ids.c1, 1);
+    const rate1 = ids.c1.length > 0 ? (ext1 / ids.c1.length * 100) : 0;
+    // 2回目
+    const ext2 = (await getExtensionResults(ids.c2, 2)).length;
+    const wd2  = await getWithdrawalCount(ids.c2, 2);
+    const rate2 = ids.c2.length > 0 ? (ext2 / ids.c2.length * 100) : 0;
+    // 3回目
+    const ext3 = (await getExtensionResults(ids.c3, 3)).length;
+    const life3 = await getLifetimeMemberCount(ids.c3);
+    const rate3 = ids.c3.length > 0 ? (ext3 / ids.c3.length * 100) : 0;
+    // 全体
+    const totalTarget = ids.c1.length + ids.c2.length + ids.c3.length;
+    const totalExt    = ext1 + ext2 + ext3;
+    const totalRate   = totalTarget > 0 ? (totalExt / totalTarget * 100) : 0;
+
+    result.push({
+      tutor,
+      exam1stTargetCount: ids.c1.length,
+      exam1stExtensionCount: ext1,
+      exam1stWithdrawalCount: wd1,
+      exam1stExtensionRate: Math.round(rate1 * 100) / 100,
+      exam2ndTargetCount: ids.c2.length,
+      exam2ndExtensionCount: ext2,
+      exam2ndWithdrawalCount: wd2,
+      exam2ndExtensionRate: Math.round(rate2 * 100) / 100,
+      exam3rdTargetCount: ids.c3.length,
+      exam3rdExtensionCount: ext3,
+      exam3rdLifetimeCount: life3,
+      exam3rdExtensionRate: Math.round(rate3 * 100) / 100,
+      totalTargetCount: totalTarget,
+      totalExtensionCount: totalExt,
+      overallExtensionRate: Math.round(totalRate * 100) / 100,
+    });
+  }
+
+  // 全体延長率の降順でソート
+  result.sort((a, b) => b.overallExtensionRate - a.overallExtensionRate);
+  return result;
 }
 
 /**
