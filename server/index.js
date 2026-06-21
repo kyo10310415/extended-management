@@ -26,7 +26,8 @@ import {
   scheduleSuspensionEndNotifications,
   scheduleMonthlyStudentListNotifications,
   scheduleIncompleteListNotifications,
-  scheduleMonthlyKPIExport
+  scheduleMonthlyKPIExport,
+  scheduleMonthlyKPISnapshot
 } from './services/backgroundService.js';
 
 dotenv.config();
@@ -198,7 +199,7 @@ app.listen(PORT, async () => {
   scheduleMonthlyStudentListNotifications(); // 毎月1日 AM 9:00 JST
   scheduleIncompleteListNotifications(); // 毎月20日 AM 9:00 JST
   scheduleMonthlyKPIExport(); // 毎月末日 PM 11:00 JST
-  
+  scheduleMonthlyKPISnapshot(); // 毎月1日 AM 2:00 JST（前月分スナップショット自動保存）
   console.log('✅ Server initialization completed');
 });
 
