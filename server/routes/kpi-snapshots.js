@@ -163,10 +163,12 @@ router.post('/import-csv', async (req, res) => {
       return res.status(400).json({ success: false, error: 'csvText is required' });
     }
 
-    // --- CSV パース ---
-    const lines = csvText
-      .split(/\r?\n/)
-      .map(l => l.split(','))
+    // --- CSV / TSV 自動判定パース ---
+    // スプレッドシートからコピーした場合はタブ区切り、CSVファイルはカンマ区切り
+    const rawLines = csvText.split(/\r?\n/).filter(l => l.trim() !== '');
+    const delimiter = rawLines[0]?.includes('\t') ? '\t' : ',';
+    const lines = rawLines
+      .map(l => l.split(delimiter))
       .filter(cols => cols.length >= 2);
 
     if (lines.length < 2) {
