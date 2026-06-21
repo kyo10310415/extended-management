@@ -7,6 +7,7 @@ import { enrichStudentsWithMonths, filterStudentsByMonth } from '../utils/dateUt
 import cacheService from './cacheService.js';
 import databaseCacheService from './databaseCacheService.js';
 import { appendMonthlyKPI, formatKPIData } from './kpiExportService.js';
+import { calculateKPIData } from '../routes/kpi-export.js';
 import { pool } from '../index.js';
 import { fetchStudents } from './notionService.js';
 import { calculateMonthsElapsed } from '../utils/dateUtils.js';
@@ -494,6 +495,66 @@ export async function getSuspensionEndingStudents() {
 }
 
 /**
+ * 毎月1日 AM2:00 JSTに前月分KPIスナップショットを自動保存
+ */
+export function scheduleMonthlyKPISnapshot() {
+  // 毎月1日 02:00 JST = 17:00 UTC (前日)
+  // わかりやすい表現: '0 17 28-31,1 * *' ではなく、毎月1日のみ実行
+  const cronExpression = '0 17 1 * *'; // UTC 17:00 on 1st = JST 02:00 on 1st
+
+  console.log('⏰ Scheduling monthly KPI snapshot on 1st of each month at 2:00 AM JST (17:00 UTC)');
+
+  const task = cron.schedule(cronExpression, async () => {
+    console.log('⏰ Monthly KPI snapshot triggered on 1st of the month at 2:00 AM JST');
+    await saveMonthlyKPISnapshotTask();
+  }, {
+    timezone: 'UTC',
+  });
+
+  task.start();
+  console.log('✅ Monthly KPI snapshot scheduler started');
+  return task;
+}
+
+/**
+ * 前月分KPIスナップショットをDBに保存する内部タスク
+ */
+async function saveMonthlyKPISnapshotTask() {
+  try {
+    console.log('📸 Starting monthly KPI snapshot task (previous month)...');
+
+    // monthOffset=-1 で前月分のKPIを計算
+    const kpiData = await calculateKPIData(-1);
+    const { tutorKpi, ...snapshotData } = kpiData;
+
+    // 前月の年月ラベルを生成
+    const prevDate = new Date();
+    prevDate.setMonth(prevDate.getMonth() - 1);
+    const year = prevDate.getFullYear();
+    const month = String(prevDate.getMonth() + 1).padStart(2, '0');
+    const yearMonth = `${year}-${month}`;
+    const monthLabel = `${year}年${month}月`;
+
+    // UPSERT（既存でも上書き）
+    await pool.query(
+      `INSERT INTO kpi_monthly_snapshots (year_month, month_label, snapshot_data, tutor_data)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (year_month) DO UPDATE SET
+         snapshot_data = EXCLUDED.snapshot_data,
+         tutor_data    = EXCLUDED.tutor_data,
+         created_at    = CURRENT_TIMESTAMP`,
+      [yearMonth, monthLabel, JSON.stringify(snapshotData), JSON.stringify(tutorKpi || [])]
+    );
+
+    console.log(`✅ Monthly KPI snapshot saved: ${monthLabel}`);
+    return { success: true, yearMonth, monthLabel };
+  } catch (error) {
+    console.error('❌ Monthly KPI snapshot task failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * 月末KPIエクスポートスケジュール（毎月末日）
  */
 export function scheduleMonthlyKPIExport() {
@@ -673,6 +734,7 @@ export default {
   scheduleMonthlyStudentListNotifications,
   scheduleIncompleteListNotifications,
   scheduleMonthlyKPIExport,
+  scheduleMonthlyKPISnapshot,
   manualUpdate,
   manualSendSuspensionEndNotifications,
   manualSendMonthlyStudentList,
