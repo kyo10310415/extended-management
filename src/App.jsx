@@ -14,6 +14,13 @@ import KpiByTutor from './components/KpiByTutor'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
+  // 一度でも開いたタブを記録（初回だけマウントするため）
+  const [visitedTabs, setVisitedTabs] = useState(new Set(['dashboard']))
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId)
+    setVisitedTabs(prev => new Set([...prev, tabId]))
+  }
 
   const tabs = [
     { id: 'dashboard', name: 'ダッシュボード', icon: '📊' },
@@ -28,6 +35,22 @@ function App() {
     { id: 'kpi-history', name: 'KPI履歴', icon: '📅' },
     { id: 'kpi-chart',   name: 'KPIグラフ', icon: '📈' },
     { id: 'kpi-tutor',  name: 'Tutor別KPI', icon: '👤' },
+  ]
+
+  // タブのコンテンツ定義（コンポーネントとidの対応）
+  const tabContents = [
+    { id: 'dashboard',        component: <Dashboard /> },
+    { id: 'hearing',          component: <HearingList /> },
+    { id: 'examination',      component: <ExaminationList /> },
+    { id: 'pro-hearing',      component: <ProHearingList /> },
+    { id: 'pro-examination',  component: <ProExaminationList /> },
+    { id: 'suspension',       component: <SuspensionList /> },
+    { id: 'lifetime-members', component: <ProPlanList /> },
+    { id: 'active-pro-plan',  component: <ActiveProPlanList /> },
+    { id: 'master',           component: <StudentMaster /> },
+    { id: 'kpi-history',      component: <KpiHistory /> },
+    { id: 'kpi-chart',        component: <KpiChart /> },
+    { id: 'kpi-tutor',        component: <KpiByTutor /> },
   ]
 
   return (
@@ -57,7 +80,7 @@ function App() {
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 className={`
                   py-4 px-1 border-b-2 font-medium text-sm transition-colors
                   ${
@@ -75,20 +98,17 @@ function App() {
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Main Content
+          一度開いたタブは display:none で隠すだけ（unmountしない）
+          → useEffect の再実行・APIの再fetchが発生しない */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'dashboard' && <Dashboard />}
-        {activeTab === 'hearing' && <HearingList />}
-        {activeTab === 'examination' && <ExaminationList />}
-        {activeTab === 'pro-hearing' && <ProHearingList />}
-        {activeTab === 'pro-examination' && <ProExaminationList />}
-        {activeTab === 'suspension' && <SuspensionList />}
-        {activeTab === 'lifetime-members' && <ProPlanList />}
-        {activeTab === 'active-pro-plan' && <ActiveProPlanList />}
-        {activeTab === 'master' && <StudentMaster />}
-        {activeTab === 'kpi-history' && <KpiHistory />}
-        {activeTab === 'kpi-chart'   && <KpiChart />}
-        {activeTab === 'kpi-tutor'   && <KpiByTutor />}
+        {tabContents.map(({ id, component }) =>
+          visitedTabs.has(id) ? (
+            <div key={id} style={{ display: activeTab === id ? 'block' : 'none' }}>
+              {component}
+            </div>
+          ) : null
+        )}
       </main>
 
       {/* Footer */}
