@@ -10,6 +10,25 @@ const notion = new Client({
 
 const databaseId = process.env.NOTION_DATABASE_ID;
 
+import { Client } from '@notionhq/client';
+import dotenv from 'dotenv';
+import databaseCacheService from './databaseCacheService.js';
+
+dotenv.config();
+
+const notion = new Client({
+  auth: process.env.NOTION_API_KEY,
+});
+
+const databaseId = process.env.NOTION_DATABASE_ID;
+
+/**
+ * 同時並走防止: 進行中の fetchStudentsFromNotion() があれば同じPromiseを返す
+ * Dashboard が Promise.all で5エンドポイントを同時に叩いたとき、
+ * Notion API への実際のリクエストは1本だけになる
+ */
+let _inflightFetch = null;
+
 /**
  * Notion データベースから生徒情報を取得（データベースキャッシュ優先）
  */
@@ -50,8 +69,17 @@ export async function fetchStudents(forceRefresh = false) {
   }
   
   // データベースキャッシュが無い、または古い場合、Notionから取得
+  // 既に進行中のfetchがあれば同じPromiseを共有して Notion API への同時並走を防ぐ
+  if (_inflightFetch) {
+    console.log('⏳ Notion fetch already in-flight, reusing existing request...');
+    return await _inflightFetch;
+  }
+
   console.log('🔄 Fetching fresh data from Notion API...');
-  return await fetchStudentsFromNotion();
+  _inflightFetch = fetchStudentsFromNotion().finally(() => {
+    _inflightFetch = null; // 完了・エラーのいずれでもリセット
+  });
+  return await _inflightFetch;
 }
 
 /**

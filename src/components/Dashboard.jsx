@@ -61,15 +61,18 @@ function Dashboard() {
     try {
       console.log('📊 Dashboard: データ取得開始');
       
-      const [allRes, hearingRes, examRes, proExamRes, proPlanRes] = await Promise.all([
-        fetch('/api/notion/students'),
+      // Notion API への同時並走を防ぐため、students を先に取得してから
+      // 残りのエンドポイントを並列で叩く（全5本同時ではなく、1本→4本に分割）
+      const allRes = await fetch('/api/notion/students')
+      const allData = await allRes.json()
+
+      const [hearingRes, examRes, proExamRes, proPlanRes] = await Promise.all([
         fetch('/api/notion/hearing'),
         fetch('/api/notion/examination'),
         fetch('/api/notion/pro-examination'),
         fetch('/api/pro-plan/students'),
       ])
 
-      const allData = await allRes.json()
       const hearingData = await hearingRes.json()
       const examData = await examRes.json()
       const proExamData = await proExamRes.json()
