@@ -1,24 +1,21 @@
 import { Client } from '@notionhq/client';
-import nodeFetch from 'node-fetch';
 import dotenv from 'dotenv';
 import databaseCacheService from './databaseCacheService.js';
 
 dotenv.config();
 
 /**
- * gzip圧縮を無効化したカスタムfetch
- * node-fetch v2 + Node.js v18以降の組み合わせで発生する
- * "Premature close" (ERR_STREAM_PREMATURE_CLOSE) を回避する
+ * ERR_STREAM_PREMATURE_CLOSE 根本解消
+ *
+ * 問題: node-fetch v2 は Node.js v18+ で Accept-Encoding: gzip を強制送信し、
+ *      Gunzip ストリームが途中切断される (ERR_STREAM_PREMATURE_CLOSE) 。
+ *
+ * 解決: Node.js 18+ 組み込みの globalThis.fetch (undici ベース) を使用。
+ *      undici は独自の HTTP スタックを持ち、gzip を正しく解凍できる。
  */
-function noCompressFetch(url, options = {}) {
-  // Accept-Encoding を identity にして gzip/deflate を要求しない
-  const headers = { ...(options.headers || {}), 'Accept-Encoding': 'identity' };
-  return nodeFetch(url, { ...options, headers, compress: false });
-}
-
 const notion = new Client({
   auth: process.env.NOTION_API_KEY,
-  fetch: noCompressFetch,
+  fetch: globalThis.fetch,
 });
 
 const databaseId = process.env.NOTION_DATABASE_ID;
