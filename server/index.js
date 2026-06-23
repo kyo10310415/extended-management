@@ -7,6 +7,19 @@ import pkg from 'pg';
 import cookieParser from 'cookie-parser';
 const { Pool } = pkg;
 
+// ─────────────────────────────────────────────────────────────
+// gzip Premature close 対策: gaxios (googleapis内部のHTTPクライアント) に
+// gzip無効化したカスタムfetchをグローバル設定する
+// node-fetch v2 + Node.js v18以降で発生する ERR_STREAM_PREMATURE_CLOSE を回避
+// ─────────────────────────────────────────────────────────────
+import nodeFetch from 'node-fetch';
+import { instance as gaxiosInstance } from 'gaxios';
+function noCompressFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}), 'Accept-Encoding': 'identity' };
+  return nodeFetch(url, { ...options, headers, compress: false });
+}
+gaxiosInstance.defaults = { ...gaxiosInstance.defaults, fetchImplementation: noCompressFetch };
+
 // SSO Authentication Middleware
 import ssoAuthMiddleware from './middleware/sso-auth-middleware.js';
 
