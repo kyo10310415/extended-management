@@ -1,4 +1,6 @@
 import { google } from 'googleapis';
+import { Gaxios } from 'gaxios';
+import nodeFetch from 'node-fetch';
 import dotenv from 'dotenv';
 import cacheService from './cacheService.js';
 
@@ -7,6 +9,23 @@ dotenv.config();
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
 const SUSPENSION_SPREADSHEET_ID = '17ys2PZpDpffG3j4EQrXiLlwGbFxiNosBqMivL2quVEA';
 const EXAMINATION_FORM_SPREADSHEET_ID = '1m7P2nsX-M9BGP2RHIj3CjAZiDPs2K9gu1Y_md7xiazQ';
+
+/**
+ * gzip を無効化するカスタム fetch
+ * node-fetch v2 が Accept-Encoding: gzip を送りつつ Node.js v18+ の
+ * Gunzip ストリームが途中切断される ERR_STREAM_PREMATURE_CLOSE を防ぐ
+ */
+function noCompressFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}), 'Accept-Encoding': 'identity' };
+  return nodeFetch(url, { ...options, headers, compress: false });
+}
+
+/**
+ * noCompressFetch を fetchImplementation として持つ Gaxios インスタンス
+ * GoogleAuth の clientOptions.transporter に渡すことで
+ * JWT(サービスアカウント) の OAuth2 トークン取得にも適用される
+ */
+const customTransporter = new Gaxios({ fetchImplementation: noCompressFetch });
 
 /**
  * Google Sheets 認証の取得
@@ -19,6 +38,10 @@ function getAuth() {
       return new google.auth.GoogleAuth({
         credentials,
         scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+        // カスタムトランスポーターを clientOptions 経由で JWT クライアントに渡す
+        // → OAuth2 トークン取得リクエストも noCompressFetch を使用し
+        //   ERR_STREAM_PREMATURE_CLOSE を解消する
+        clientOptions: { transporter: customTransporter },
       });
     } catch (error) {
       console.error('❌ Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY:', error.message);

@@ -1,7 +1,24 @@
 import { google } from 'googleapis';
+import { Gaxios } from 'gaxios';
+import nodeFetch from 'node-fetch';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+/**
+ * gzip を無効化するカスタム fetch
+ * node-fetch v2 が Accept-Encoding: gzip を送りつつ Node.js v18+ の
+ * Gunzip ストリームが途中切断される ERR_STREAM_PREMATURE_CLOSE を防ぐ
+ */
+function noCompressFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}), 'Accept-Encoding': 'identity' };
+  return nodeFetch(url, { ...options, headers, compress: false });
+}
+
+/**
+ * noCompressFetch を fetchImplementation として持つ Gaxios インスタンス
+ */
+const customTransporter = new Gaxios({ fetchImplementation: noCompressFetch });
 
 /**
  * Google Sheets認証を取得
@@ -14,6 +31,10 @@ function getAuth() {
       return new google.auth.GoogleAuth({
         credentials,
         scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        // カスタムトランスポーターを clientOptions 経由で JWT クライアントに渡す
+        // → OAuth2 トークン取得リクエストも noCompressFetch を使用し
+        //   ERR_STREAM_PREMATURE_CLOSE を解消する
+        clientOptions: { transporter: customTransporter },
       });
     }
     
