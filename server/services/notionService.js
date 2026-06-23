@@ -1,11 +1,24 @@
 import { Client } from '@notionhq/client';
+import nodeFetch from 'node-fetch';
 import dotenv from 'dotenv';
 import databaseCacheService from './databaseCacheService.js';
 
 dotenv.config();
 
+/**
+ * gzip圧縮を無効化したカスタムfetch
+ * node-fetch v2 + Node.js v18以降の組み合わせで発生する
+ * "Premature close" (ERR_STREAM_PREMATURE_CLOSE) を回避する
+ */
+function noCompressFetch(url, options = {}) {
+  // Accept-Encoding を identity にして gzip/deflate を要求しない
+  const headers = { ...(options.headers || {}), 'Accept-Encoding': 'identity' };
+  return nodeFetch(url, { ...options, headers, compress: false });
+}
+
 const notion = new Client({
   auth: process.env.NOTION_API_KEY,
+  fetch: noCompressFetch,
 });
 
 const databaseId = process.env.NOTION_DATABASE_ID;
@@ -72,8 +85,11 @@ export async function fetchStudents(forceRefresh = false) {
 
 /**
  * Notionから直接生徒情報を取得してデータベースに保存
+ * Premature close 対策: 最大3回リトライ（exponential backoff）
  */
-export async function fetchStudentsFromNotion() {
+export async function fetchStudentsFromNotion(retryCount = 0) {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = [2000, 4000, 8000]; // 2s, 4s, 8s
 
   try {
     let allStudents = [];
@@ -154,7 +170,23 @@ export async function fetchStudentsFromNotion() {
 
     return filteredStudents;
   } catch (error) {
-    console.error('Error fetching from Notion:', error);
+    console.error(`Error fetching from Notion (attempt ${retryCount + 1}):`, error);
+
+    // Premature close / 接続エラーはリトライ対象
+    const isRetryable = 
+      error?.code === 'ERR_STREAM_PREMATURE_CLOSE' ||
+      error?.type === 'system' ||
+      error?.message?.includes('Premature close') ||
+      error?.message?.includes('ECONNRESET') ||
+      error?.message?.includes('socket hang up');
+
+    if (isRetryable && retryCount < MAX_RETRIES) {
+      const delay = RETRY_DELAY_MS[retryCount] || 8000;
+      console.log(`🔄 Retrying Notion fetch in ${delay}ms... (attempt ${retryCount + 2}/${MAX_RETRIES + 1})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchStudentsFromNotion(retryCount + 1);
+    }
+
     throw error;
   }
 }
