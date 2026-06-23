@@ -10,18 +10,6 @@ const notion = new Client({
 
 const databaseId = process.env.NOTION_DATABASE_ID;
 
-import { Client } from '@notionhq/client';
-import dotenv from 'dotenv';
-import databaseCacheService from './databaseCacheService.js';
-
-dotenv.config();
-
-const notion = new Client({
-  auth: process.env.NOTION_API_KEY,
-});
-
-const databaseId = process.env.NOTION_DATABASE_ID;
-
 /**
  * 同時並走防止: 進行中の fetchStudentsFromNotion() があれば同じPromiseを返す
  * Dashboard が Promise.all で5エンドポイントを同時に叩いたとき、
