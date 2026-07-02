@@ -154,6 +154,39 @@ async function initDatabase() {
           ADD COLUMN examination_result_3 VARCHAR(50),
           ADD COLUMN notes_3 TEXT;
       END IF;
+
+      -- 4回目（PROプラン継続4か月目ヒアリング）のカラム追加
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                     WHERE table_name = 'student_extensions' 
+                     AND column_name = 'extension_certainty_4') THEN
+        ALTER TABLE student_extensions 
+          ADD COLUMN extension_certainty_4 VARCHAR(20),
+          ADD COLUMN hearing_status_4 BOOLEAN DEFAULT false,
+          ADD COLUMN examination_result_4 VARCHAR(50),
+          ADD COLUMN notes_4 TEXT;
+      END IF;
+
+      -- 5回目（PROプラン継続10か月目ヒアリング）のカラム追加
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                     WHERE table_name = 'student_extensions' 
+                     AND column_name = 'extension_certainty_5') THEN
+        ALTER TABLE student_extensions 
+          ADD COLUMN extension_certainty_5 VARCHAR(20),
+          ADD COLUMN hearing_status_5 BOOLEAN DEFAULT false,
+          ADD COLUMN examination_result_5 VARCHAR(50),
+          ADD COLUMN notes_5 TEXT;
+      END IF;
+
+      -- 6回目（PROプラン継続16か月目ヒアリング）のカラム追加
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                     WHERE table_name = 'student_extensions' 
+                     AND column_name = 'extension_certainty_6') THEN
+        ALTER TABLE student_extensions 
+          ADD COLUMN extension_certainty_6 VARCHAR(20),
+          ADD COLUMN hearing_status_6 BOOLEAN DEFAULT false,
+          ADD COLUMN examination_result_6 VARCHAR(50),
+          ADD COLUMN notes_6 TEXT;
+      END IF;
     END $$;
   `;
 
