@@ -613,4 +613,55 @@ router.post('/pro-months/bulk', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/pro-plan/external-db/test
+ * 外部DB（wannav-student-management）への接続テスト
+ * pro_plan_start_date が設定されている生徒件数を返す
+ */
+router.get('/external-db/test', async (req, res) => {
+  try {
+    const envUrl = process.env.EXTERNAL_DB_URL;
+    if (!envUrl) {
+      return res.status(500).json({
+        success: false,
+        error: 'EXTERNAL_DB_URL environment variable is not set',
+        hint: 'Render Dashboard → Environment → EXTERNAL_DB_URL を設定してください',
+      });
+    }
+
+    // pg を直接使って接続テスト
+    const pkg = await import('pg');
+    const { Pool } = pkg.default;
+    const testPool = new Pool({
+      connectionString: envUrl,
+      ssl: { rejectUnauthorized: false },
+      max: 1,
+      connectionTimeoutMillis: 8000,
+    });
+
+    const result = await testPool.query(`
+      SELECT
+        COUNT(*)                                          AS total_students,
+        COUNT(*) FILTER (WHERE pro_plan_start_date IS NOT NULL) AS with_pro_start,
+        MIN(pro_plan_start_date)                          AS earliest,
+        MAX(pro_plan_start_date)                          AS latest
+      FROM students
+    `);
+    await testPool.end();
+
+    const row = result.rows[0];
+    res.json({
+      success: true,
+      connection: 'OK',
+      total_students: parseInt(row.total_students),
+      with_pro_start: parseInt(row.with_pro_start),
+      earliest: row.earliest,
+      latest: row.latest,
+    });
+  } catch (err) {
+    console.error('❌ /api/pro-plan/external-db/test error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
