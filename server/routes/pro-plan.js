@@ -3,6 +3,15 @@ import { pool } from '../index.js';
 import { fetchStudents } from '../services/notionService.js';
 import { fetchSuspensionData } from '../services/sheetsService.js';
 import { calculateMonthsElapsed } from '../utils/dateUtils.js';
+import {
+  fetchAdvancedHearingStudents,
+  fetchAdvancedExaminationStudents,
+  fetchProStartDates,
+  calculateProPlanMonths,
+  hearingMonth,
+  examMonth,
+  enrichStudentsWithProPlanMonths,
+} from '../services/proPlanExternalService.js';
 
 const router = express.Router();
 
@@ -381,6 +390,226 @@ router.post('/bulk', async (req, res) => {
       success: false,
       error: error.message,
     });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// PRO プラン 4 回目以降ヒアリング・審査 API
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/pro-plan/advanced-hearing
+ * PROプラン継続月数が N 回目ヒアリング対象の生徒一覧を返す。
+ *
+ * Query params:
+ *   round       - 対象回数（4 以上、デフォルト 4）
+ *   monthOffset - 月オフセット（-1:前月, 0:今月, 1:翌月、デフォルト 0）
+ *
+ * 複数回まとめて取得したい場合は round を省略し allRounds=true を渡すと
+ * round 4〜10 の全対象を返す（将来拡張用）。
+ */
+router.get('/advanced-hearing', async (req, res) => {
+  const round = parseInt(req.query.round ?? '4', 10);
+  const monthOffset = parseInt(req.query.monthOffset ?? '0', 10);
+
+  console.log(`📡 GET /api/pro-plan/advanced-hearing round=${round} monthOffset=${monthOffset}`);
+
+  try {
+    // Notion から全生徒取得
+    const allStudents = await fetchStudents();
+
+    // 外部 DB から pro_plan_start_date を取得してフィルタ
+    const targetStudents = await fetchAdvancedHearingStudents(allStudents, round, monthOffset);
+
+    // student_extensions データ（extension_certainty 等）を結合
+    const studentIds = targetStudents.map(s => s.studentId);
+    let extensionsMap = {};
+    if (studentIds.length > 0) {
+      const cycleCol = `extension_certainty_${round}`;
+      // 既存の cycle ベースのカラム（cycle=3 が Proプラン相当）を使う
+      // 4 回目以降は専用カラムが未作成のため cycle=4 以降はまず取得を試みる
+      try {
+        const placeholders = studentIds.map((_, i) => `$${i + 1}`).join(',');
+        const extResult = await pool.query(
+          `SELECT student_id,
+                  extension_certainty_4, hearing_status_4,
+                  extension_certainty_5, hearing_status_5,
+                  extension_certainty_6, hearing_status_6
+             FROM student_extensions
+            WHERE student_id IN (${placeholders})`,
+          studentIds
+        );
+        extResult.rows.forEach(row => {
+          extensionsMap[row.student_id] = row;
+        });
+      } catch (_e) {
+        // カラム未作成の場合は空で続行
+        console.warn('[advanced-hearing] student_extensions extra columns not yet created, skipping');
+      }
+    }
+
+    const enriched = targetStudents.map(s => ({
+      ...s,
+      extensionData: extensionsMap[s.studentId] ?? null,
+    }));
+
+    res.json({
+      success: true,
+      round,
+      targetMonths: hearingMonth(round),
+      monthOffset,
+      count: enriched.length,
+      data: enriched,
+    });
+  } catch (err) {
+    console.error('❌ /api/pro-plan/advanced-hearing error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/pro-plan/advanced-examination
+ * PROプラン継続月数が N 回目審査対象の生徒一覧を返す。
+ *
+ * Query params:
+ *   round       - 対象回数（4 以上、デフォルト 4）
+ *   monthOffset - 月オフセット（-1:前月, 0:今月, 1:翌月、デフォルト 0）
+ */
+router.get('/advanced-examination', async (req, res) => {
+  const round = parseInt(req.query.round ?? '4', 10);
+  const monthOffset = parseInt(req.query.monthOffset ?? '0', 10);
+
+  console.log(`📡 GET /api/pro-plan/advanced-examination round=${round} monthOffset=${monthOffset}`);
+
+  try {
+    const allStudents = await fetchStudents();
+    const targetStudents = await fetchAdvancedExaminationStudents(allStudents, round, monthOffset);
+
+    const studentIds = targetStudents.map(s => s.studentId);
+    let extensionsMap = {};
+    if (studentIds.length > 0) {
+      try {
+        const placeholders = studentIds.map((_, i) => `$${i + 1}`).join(',');
+        const extResult = await pool.query(
+          `SELECT student_id,
+                  extension_certainty_4, examination_result_4,
+                  extension_certainty_5, examination_result_5,
+                  extension_certainty_6, examination_result_6
+             FROM student_extensions
+            WHERE student_id IN (${placeholders})`,
+          studentIds
+        );
+        extResult.rows.forEach(row => {
+          extensionsMap[row.student_id] = row;
+        });
+      } catch (_e) {
+        console.warn('[advanced-examination] student_extensions extra columns not yet created, skipping');
+      }
+    }
+
+    const enriched = targetStudents.map(s => ({
+      ...s,
+      extensionData: extensionsMap[s.studentId] ?? null,
+    }));
+
+    res.json({
+      success: true,
+      round,
+      targetMonths: examMonth(round),
+      monthOffset,
+      count: enriched.length,
+      data: enriched,
+    });
+  } catch (err) {
+    console.error('❌ /api/pro-plan/advanced-examination error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/pro-plan/advanced-all
+ * 4回目以降の全ヒアリング・審査を月数でグループ化して返す。
+ * (フロントエンドで任意の round を表示するためのヘルパー)
+ *
+ * Query params:
+ *   monthOffset - 月オフセット（デフォルト 0）
+ *   maxRound    - 最大回数（デフォルト 10）
+ */
+router.get('/advanced-all', async (req, res) => {
+  const monthOffset = parseInt(req.query.monthOffset ?? '0', 10);
+  const maxRound   = Math.min(parseInt(req.query.maxRound ?? '10', 10), 20);
+
+  console.log(`📡 GET /api/pro-plan/advanced-all monthOffset=${monthOffset} maxRound=${maxRound}`);
+
+  try {
+    const allStudents = await fetchStudents();
+
+    // 全生徒の pro_plan_start_date を一括取得
+    const allIds = allStudents.map(s => s.studentId);
+    const proStartMap = await fetchProStartDates(allIds);
+
+    // 各生徒の継続月数と round 情報を計算
+    const result = [];
+    for (const student of allStudents) {
+      const { proStartDate } = proStartMap[student.studentId] || {};
+      const proPlanMonths = calculateProPlanMonths(proStartDate, monthOffset);
+      if (!proPlanMonths) continue;
+
+      // 4回目以降に該当するか確認
+      for (let r = 4; r <= maxRound; r++) {
+        if (proPlanMonths === hearingMonth(r)) {
+          result.push({ ...student, proStartDate: proStartDate || null, proPlanMonths, round: r, type: 'hearing' });
+          break;
+        }
+        if (proPlanMonths === examMonth(r)) {
+          result.push({ ...student, proStartDate: proStartDate || null, proPlanMonths, round: r, type: 'examination' });
+          break;
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      monthOffset,
+      count: result.length,
+      data: result,
+    });
+  } catch (err) {
+    console.error('❌ /api/pro-plan/advanced-all error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/pro-plan/pro-months/bulk
+ * 複数生徒の PROプラン継続月数を一括取得（生徒情報マスタ用）
+ *
+ * Body: { studentIds: string[] }
+ * Response: { success: true, data: { [studentId]: { proStartDate, proPlanMonths } } }
+ */
+router.post('/pro-months/bulk', async (req, res) => {
+  const { studentIds } = req.body;
+
+  if (!Array.isArray(studentIds) || studentIds.length === 0) {
+    return res.status(400).json({ success: false, error: 'studentIds must be a non-empty array' });
+  }
+
+  try {
+    const proStartMap = await fetchProStartDates(studentIds);
+
+    const data = {};
+    studentIds.forEach(id => {
+      const { proStartDate } = proStartMap[id] || {};
+      data[id] = {
+        proStartDate: proStartDate || null,
+        proPlanMonths: calculateProPlanMonths(proStartDate, 0),
+      };
+    });
+
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('❌ /api/pro-plan/pro-months/bulk error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
