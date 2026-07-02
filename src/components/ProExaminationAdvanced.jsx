@@ -323,6 +323,7 @@ function ProExaminationAdvanced() {
             }))}
             onUpdate={handleUpdate}
             showHearingColumn={false}
+            showExaminationColumn={true}
           />
         </>
       )}
