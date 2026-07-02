@@ -43,6 +43,12 @@ function Dashboard() {
     exam3rdExtensionRate: 0,
     exam3rdWithdrawalCount: 0,
     exam3rdRemainingCount: 0,
+    // 延長審査4回目（PROプラン継続5か月目）
+    exam4thTargetCount: 0,
+    exam4thExtensionCount: 0,
+    exam4thExtensionRate: 0,
+    exam4thWithdrawalCount: 0,
+    exam4thRemainingCount: 0,
   })
 
   // KPIエクスポート関連の状態
@@ -66,17 +72,19 @@ function Dashboard() {
       const allRes = await fetch('/api/notion/students')
       const allData = await allRes.json()
 
-      const [hearingRes, examRes, proExamRes, proPlanRes] = await Promise.all([
+      const [hearingRes, examRes, proExamRes, proPlanRes, proExam4thRes] = await Promise.all([
         fetch('/api/notion/hearing'),
         fetch('/api/notion/examination'),
         fetch('/api/notion/pro-examination'),
         fetch('/api/pro-plan/students'),
+        fetch('/api/pro-plan/advanced-examination?round=4&monthOffset=0'),
       ])
 
       const hearingData = await hearingRes.json()
       const examData = await examRes.json()
       const proExamData = await proExamRes.json()
       const proPlanData = await proPlanRes.json()
+      const proExam4thData = await proExam4thRes.json()
 
       console.log('  ヒアリング対象:', hearingData.data?.length);
       console.log('  延長審査対象:', examData.data?.length);
@@ -167,6 +175,11 @@ function Dashboard() {
         console.log('  サイクル3延長審査データ取得:', Object.keys(exam3Data).length);
       }
 
+      // 4回目延長審査データ（PROプラン継続5か月目）
+      // /api/pro-plan/advanced-examination はすでに extensionData を含む
+      const proExam4thStudents = (proExam4thData.data || []);
+      console.log('  - PRO継続5か月目（4回目審査）:', proExam4thStudents.length);
+
       // データマージ（各生徒に正しいサイクルのデータを紐付け）
       const hearingStudents = (hearingData.data || []).map(s => {
         const cycle = s.adjustedMonths === 10 ? 2 : 1;
@@ -200,7 +213,23 @@ function Dashboard() {
         s.extensionData?.extension_certainty !== '対象外'
       );
 
-      // KPI計算（1回目＋2回目＋3回目の合計）
+      // 4回目（PRO継続5か月目）の審査生徒
+      // advanced-examination API はすでに extensionData を含む
+      // extensionData は { extension_certainty_4, examination_result_4, ... } 形式なので
+      // 3回目と同じフィールド名に正規化する
+      const proExamination4thStudents = proExam4thStudents.map(s => ({
+        ...s,
+        extensionData: s.extensionData
+          ? {
+              extension_certainty: s.extensionData.extension_certainty_4,
+              examination_result:  s.extensionData.examination_result_4,
+              hearing_status:      s.extensionData.hearing_status_4,
+              notes:               s.extensionData.notes_4,
+            }
+          : null,
+      })).filter(s => s.extensionData?.extension_certainty !== '対象外');
+
+      // KPI計算（1回目＋2回目＋3回目＋4回目の合計）
       // --- 3回目の中間値（統計用）---
       const _exam3rdExtCount = proExaminationStudents.filter(s =>
         s.extensionData?.examination_result === '延長'
@@ -213,12 +242,24 @@ function Dashboard() {
         s.extensionData.examination_result.trim() === ''
       ).length
 
-      // 全体の延長審査対象数（1回目＋2回目＋3回目）
-      const examinationCount = examinationStudents.length + proExaminationStudents.length
+      // --- 4回目の中間値（統計用）---
+      const _exam4thExtCount = proExamination4thStudents.filter(s =>
+        s.extensionData?.examination_result === '延長'
+      ).length
+      const _exam4thLifetimeCount = proExamination4thStudents.filter(s =>
+        s.extensionData?.examination_result === '永久会員'
+      ).length
+      const _exam4thRemainingCount = proExamination4thStudents.filter(s =>
+        !s.extensionData?.examination_result ||
+        s.extensionData.examination_result.trim() === ''
+      ).length
+
+      // 全体の延長審査対象数（1回目＋2回目＋3回目＋4回目）
+      const examinationCount = examinationStudents.length + proExaminationStudents.length + proExamination4thStudents.length
 
       console.log('📊 KPI計算開始');
       console.log('  延長審査対象（全体）:', examinationCount,
-        `(1・2回目: ${examinationStudents.length}, 3回目: ${proExaminationStudents.length})`);
+        `(1・2回目: ${examinationStudents.length}, 3回目: ${proExaminationStudents.length}, 4回目: ${proExamination4thStudents.length})`);
 
       // 延長確度記入済み = 確度が入力されている - 「対象外」
       const certaintyFilledCount = hearingStudents.filter(s => 
@@ -226,17 +267,17 @@ function Dashboard() {
         s.extensionData.extension_certainty !== '対象外'
       ).length
 
-      // 延長数 = 1・2回目「延長」 + 3回目「延長」
+      // 延長数 = 1・2回目「延長」 + 3回目「延長」 + 4回目「延長」
       const extensionCount = examinationStudents.filter(s => 
         s.extensionData?.examination_result === '延長'
-      ).length + _exam3rdExtCount
+      ).length + _exam3rdExtCount + _exam4thExtCount
 
       console.log('  延長数（全体）:', extensionCount);
 
-      // 退会数 = 1・2回目「退会」 + 3回目「永久会員」
+      // 退会数 = 1・2回目「退会」 + 3回目「永久会員」 + 4回目「永久会員」
       const withdrawalCount = examinationStudents.filter(s => 
         s.extensionData?.examination_result === '退会'
-      ).length + _exam3rdLifetimeCount
+      ).length + _exam3rdLifetimeCount + _exam4thLifetimeCount
 
       console.log('  退会 / 永久会員数（全体）:', withdrawalCount);
 
@@ -251,11 +292,11 @@ function Dashboard() {
         ? (extensionCount / totalDecided * 100) 
         : 0
 
-      // 残弾数 = 1・2回目（対象-延長-退会） + 3回目（空欄件数）
+      // 残弾数 = 1・2回目（対象-延長-退会） + 3回目（空欄件数） + 4回目（空欄件数）
       const remaining12Count = examinationStudents.length -
         examinationStudents.filter(s => s.extensionData?.examination_result === '延長').length -
         examinationStudents.filter(s => s.extensionData?.examination_result === '退会').length
-      const remainingCount = remaining12Count + _exam3rdRemainingCount
+      const remainingCount = remaining12Count + _exam3rdRemainingCount + _exam4thRemainingCount
 
       // 延長確度別カウント
       const certaintyHigh = hearingStudents.filter(s => 
@@ -339,6 +380,23 @@ function Dashboard() {
       console.log('    残弾数（空欄）:', exam3rdRemainingCount);
       console.log('    延長率:', exam3rdExtensionRate.toFixed(2) + '%');
 
+      // 延長審査4回目（PROプラン継続5か月目）
+      const exam4thStudents = proExamination4thStudents
+      const exam4thTargetCount = exam4thStudents.length
+      const exam4thExtensionCount = _exam4thExtCount
+      const exam4thWithdrawalCount = _exam4thLifetimeCount
+      const exam4thRemainingCount = _exam4thRemainingCount
+      const exam4thExtensionRate = exam4thTargetCount > 0
+        ? (exam4thExtensionCount / exam4thTargetCount * 100)
+        : 0
+
+      console.log('  4回目（PRO継続5か月目）:');
+      console.log('    対象数:', exam4thTargetCount);
+      console.log('    延長数:', exam4thExtensionCount);
+      console.log('    永久会員数:', exam4thWithdrawalCount);
+      console.log('    残弾数（空欄）:', exam4thRemainingCount);
+      console.log('    延長率:', exam4thExtensionRate.toFixed(2) + '%');
+
       // Proプラン成約率の計算
       const proPlanTotalCount = proPlanData.count || 0
       const proPlanEnabledCount = (proPlanData.data || []).filter(s => s.proPlanStatus === '確定').length
@@ -387,6 +445,11 @@ function Dashboard() {
         exam3rdExtensionRate,
         exam3rdWithdrawalCount,
         exam3rdRemainingCount,
+        exam4thTargetCount,
+        exam4thExtensionCount,
+        exam4thExtensionRate,
+        exam4thWithdrawalCount,
+        exam4thRemainingCount,
       }))
     } catch (error) {
       console.error('Error fetching stats:', error)
@@ -396,8 +459,8 @@ function Dashboard() {
 
   const handleKPIChange = (value) => {
     const kpi = Number(value)
-    // 全体対象数 = 1・2回目 + 3回目
-    const examinationCount = stats.examinationStudents.length + stats.exam3rdTargetCount
+    // 全体対象数 = 1・2回目 + 3回目 + 4回目
+    const examinationCount = stats.examinationStudents.length + stats.exam3rdTargetCount + stats.exam4thTargetCount
     const extensionCountKPI = Math.ceil(examinationCount * kpi / 100)
     
     setStats(prev => ({
@@ -605,7 +668,7 @@ function Dashboard() {
           <p className="text-xs text-gray-600 mb-1">延長審査対象</p>
           <p className="text-3xl font-bold text-gray-900">{examinationTargetCount}</p>
           <p className="text-xs text-gray-500 mt-1">
-            1・2回目 {stats.examinationStudents.length} + Pro {stats.exam3rdTargetCount}
+            1・2回目 {stats.examinationStudents.length} + 3回目 {stats.exam3rdTargetCount} + 4回目 {stats.exam4thTargetCount}
           </p>
         </div>
         
@@ -631,7 +694,7 @@ function Dashboard() {
           <p className="text-xs text-gray-600 mb-1">退会 / 永久会員数</p>
           <p className="text-3xl font-bold text-red-600">{stats.withdrawalCount}</p>
           <p className="text-xs text-gray-500 mt-1">
-            1・2回目退会 + Pro永久会員
+            1・2回目退会 + 3・4回目永久会員
           </p>
         </div>
       </div>
@@ -666,7 +729,7 @@ function Dashboard() {
           <p className="text-xs text-gray-600 mb-1">残弾数</p>
           <p className="text-3xl font-bold text-orange-600">{stats.remainingCount}</p>
           <p className="text-xs text-gray-500 mt-1">
-            1・2回目未決定 + Pro空欄
+            1・2回目未決定 + 3・4回目空欄
           </p>
         </div>
       </div>
@@ -689,8 +752,8 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* 延長審査1回目・2回目・3回目 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      {/* 延長審査1回目・2回目・3回目・4回目 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">📊 延長審査1回目（5ヶ月目）</h3>
           <div className="space-y-3">
@@ -765,6 +828,32 @@ function Dashboard() {
             <div className="flex justify-between items-center pt-3 border-t">
               <span className="text-sm font-semibold text-gray-700">延長率:</span>
               <span className="text-3xl font-bold text-purple-600">{stats.exam3rdExtensionRate.toFixed(2)}%</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-purple-400">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">📊 延長審査4回目（PRO継続5か月目）</h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">対象数:</span>
+              <span className="text-2xl font-bold text-gray-900">{stats.exam4thTargetCount}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">延長数:</span>
+              <span className="text-2xl font-bold text-green-600">{stats.exam4thExtensionCount}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">永久会員数:</span>
+              <span className="text-2xl font-bold text-red-600">{stats.exam4thWithdrawalCount}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-gray-600">残弾数（空欄）:</span>
+              <span className="text-2xl font-bold text-blue-600">{stats.exam4thRemainingCount}</span>
+            </div>
+            <div className="flex justify-between items-center pt-3 border-t">
+              <span className="text-sm font-semibold text-gray-700">延長率:</span>
+              <span className="text-3xl font-bold text-purple-600">{stats.exam4thExtensionRate.toFixed(2)}%</span>
             </div>
           </div>
         </div>
