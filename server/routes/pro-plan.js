@@ -246,96 +246,6 @@ router.get('/students', async (req, res) => {
 });
 
 /**
- * GET /api/pro-plan/:studentId
- * 特定の生徒のProプラン管理データを取得
- */
-router.get('/:studentId', async (req, res) => {
-  const { studentId } = req.params;
-
-  try {
-    // テーブルの存在を確認（存在しない場合は作成）
-    await ensureProPlanTableExists();
-    
-    const result = await pool.query(
-      'SELECT * FROM pro_plan_data WHERE student_id = $1',
-      [studentId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.json({
-        success: true,
-        data: null,
-      });
-    }
-
-    const row = result.rows[0];
-    
-    const data = {
-      student_id: row.student_id,
-      pro_plan_start_month: row.pro_plan_start_month,
-      pro_plan_enabled: row.pro_plan_enabled,
-      notes: row.notes,
-      updated_at: row.updated_at,
-      created_at: row.created_at,
-    };
-
-    res.json({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    console.error('Error fetching pro plan data:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-/**
- * POST /api/pro-plan/:studentId
- * 生徒のProプラン管理データを作成または更新
- */
-router.post('/:studentId', async (req, res) => {
-  const { studentId } = req.params;
-  const { pro_plan_start_month, promotion_reviewed, pro_plan_status, notes } = req.body;
-  
-  console.log('📝 POST /api/pro-plan/:studentId');
-  console.log('  学籍番号:', studentId);
-  console.log('  データ:', { pro_plan_start_month, promotion_reviewed, pro_plan_status, notes });
-
-  try {
-    // テーブルの存在を確認（存在しない場合は作成）
-    await ensureProPlanTableExists();
-    
-    const result = await pool.query(
-      `INSERT INTO pro_plan_data (student_id, pro_plan_start_month, promotion_reviewed, pro_plan_status, notes)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (student_id)
-       DO UPDATE SET
-         pro_plan_start_month = EXCLUDED.pro_plan_start_month,
-         promotion_reviewed = EXCLUDED.promotion_reviewed,
-         pro_plan_status = EXCLUDED.pro_plan_status,
-         notes = EXCLUDED.notes,
-         updated_at = CURRENT_TIMESTAMP
-       RETURNING *`,
-      [studentId, pro_plan_start_month, promotion_reviewed, pro_plan_status, notes]
-    );
-
-    res.json({
-      success: true,
-      data: result.rows[0],
-    });
-  } catch (error) {
-    console.error('Error saving pro plan data:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-/**
  * POST /api/pro-plan/bulk
  * 複数の生徒のProプラン管理データを一括取得
  */
@@ -716,6 +626,82 @@ router.get('/debug-months', async (req, res) => {
   } catch (err) {
     console.error('❌ /api/pro-plan/debug-months error:', err);
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// ⚠️ 動的ルート（/:studentId）は必ず末尾に置く
+//    先に定義すると /advanced-hearing 等の静的パスを横取りしてしまう
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/pro-plan/:studentId
+ * 特定の生徒のProプラン管理データを取得
+ */
+router.get('/:studentId', async (req, res) => {
+  const { studentId } = req.params;
+
+  try {
+    await ensureProPlanTableExists();
+    
+    const result = await pool.query(
+      'SELECT * FROM pro_plan_data WHERE student_id = $1',
+      [studentId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({ success: true, data: null });
+    }
+
+    const row = result.rows[0];
+    res.json({
+      success: true,
+      data: {
+        student_id: row.student_id,
+        pro_plan_start_month: row.pro_plan_start_month,
+        pro_plan_enabled: row.pro_plan_enabled,
+        notes: row.notes,
+        updated_at: row.updated_at,
+        created_at: row.created_at,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching pro plan data:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/pro-plan/:studentId
+ * 生徒のProプラン管理データを作成または更新
+ */
+router.post('/:studentId', async (req, res) => {
+  const { studentId } = req.params;
+  const { pro_plan_start_month, promotion_reviewed, pro_plan_status, notes } = req.body;
+
+  console.log('📝 POST /api/pro-plan/:studentId', studentId);
+
+  try {
+    await ensureProPlanTableExists();
+
+    const result = await pool.query(
+      `INSERT INTO pro_plan_data (student_id, pro_plan_start_month, promotion_reviewed, pro_plan_status, notes)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (student_id)
+       DO UPDATE SET
+         pro_plan_start_month = EXCLUDED.pro_plan_start_month,
+         promotion_reviewed = EXCLUDED.promotion_reviewed,
+         pro_plan_status = EXCLUDED.pro_plan_status,
+         notes = EXCLUDED.notes,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [studentId, pro_plan_start_month, promotion_reviewed, pro_plan_status, notes]
+    );
+
+    res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('Error saving pro plan data:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
