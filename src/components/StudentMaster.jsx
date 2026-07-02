@@ -272,6 +272,12 @@ function StudentMaster() {
                   経過月数
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
+                  PRO開始月
+                </th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
+                  PRO継続月数
+                </th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
                   ステータス
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
@@ -282,7 +288,7 @@ function StudentMaster() {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan="10" className="px-6 py-8 text-center text-gray-500">
                     該当する生徒が見つかりません
                   </td>
                 </tr>
@@ -318,6 +324,15 @@ function StudentMaster() {
                     </td>
                     <td className="px-3 py-4 text-sm text-gray-900 font-semibold">
                       {student.monthsElapsed}ヶ月目
+                    </td>
+                    <td className="px-3 py-4 text-sm text-gray-500">
+                      {student.proStartDate || <span className="text-gray-300">-</span>}
+                    </td>
+                    <td className="px-3 py-4 text-sm">
+                      {student.proPlanMonths != null
+                        ? <span className="font-semibold text-purple-700">{student.proPlanMonths}ヶ月目</span>
+                        : <span className="text-gray-300">-</span>
+                      }
                     </td>
                     <td className="px-3 py-4">
                       <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${

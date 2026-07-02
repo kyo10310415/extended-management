@@ -5,6 +5,7 @@ import { enrichStudentsWithMonths, filterStudentsByMonth } from '../utils/dateUt
 import cacheService from '../services/cacheService.js';
 import databaseCacheService from '../services/databaseCacheService.js';
 import { manualUpdate } from '../services/backgroundService.js';
+import { fetchProStartDates, calculateProPlanMonths } from '../services/proPlanExternalService.js';
 
 const router = express.Router();
 
@@ -35,6 +36,10 @@ router.get('/students', async (req, res) => {
       };
     }
     
+    // 外部DB（wannav-student-management）から pro_plan_start_date を一括取得
+    const allStudentIds = students.map(s => s.studentId);
+    const proStartMap = await fetchProStartDates(allStudentIds);
+
     // 経過月数を追加し、フォーム更新日と休会情報を紐付け
     const enrichedStudents = enrichStudentsWithMonths(students).map(student => {
       const suspension = suspensionData[student.studentId];
@@ -42,13 +47,20 @@ router.get('/students', async (req, res) => {
         ? Math.max(0, student.monthsElapsed - suspension.suspensionMonths)
         : student.monthsElapsed;
       
+      const { proStartDate } = proStartMap[student.studentId] || {};
+      const proPlanMonths = calculateProPlanMonths(proStartDate, 0);
+
       return {
         ...student,
         formLastUpdate: formUpdates[student.studentId] || null,
         suspensionMonths: suspension?.suspensionMonths || 0,
-        suspensionStartDate: suspension?.suspensionStartDate || null, // 休会開始日を追加
+        suspensionStartDate: suspension?.suspensionStartDate || null,
         hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
         adjustedMonths,
+        proStartDate: proStartDate
+          ? (() => { const d = new Date(proStartDate); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })()
+          : null,
+        proPlanMonths: proPlanMonths,
       };
     });
 
@@ -56,7 +68,7 @@ router.get('/students', async (req, res) => {
       success: true,
       data: enrichedStudents,
       count: enrichedStudents.length,
-      cacheInfo: cacheInfo, // キャッシュ情報を追加
+      cacheInfo: cacheInfo,
     });
   } catch (error) {
     console.error('Error in /api/notion/students:', error);
