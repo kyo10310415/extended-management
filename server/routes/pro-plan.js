@@ -664,4 +664,59 @@ router.get('/external-db/test', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/pro-plan/debug-months
+ * pro_plan_start_date が設定されている全生徒の継続月数分布を返す
+ * → 4回目以降に誰も表示されない原因調査用
+ */
+router.get('/debug-months', async (req, res) => {
+  try {
+    const allStudents = await fetchStudents();
+    const allIds = allStudents.map(s => s.studentId);
+    const proStartMap = await fetchProStartDates(allIds);
+
+    const now = new Date();
+    const distribution = {}; // { 月数: 件数 }
+    const details = [];      // pro_plan_start_date がある生徒の詳細
+
+    for (const student of allStudents) {
+      const { proStartDate } = proStartMap[student.studentId] || {};
+      if (!proStartDate) continue;
+
+      const months = calculateProPlanMonths(proStartDate, 0);
+      distribution[months] = (distribution[months] || 0) + 1;
+      details.push({
+        studentId: student.studentId,
+        name: student.name,
+        proStartDate: proStartDate instanceof Date
+          ? proStartDate.toISOString().slice(0, 10)
+          : String(proStartDate).slice(0, 10),
+        proPlanMonths: months,
+        isHearing4: months === hearingMonth(4),
+        isExam4:    months === examMonth(4),
+      });
+    }
+
+    // 4回目以降の対象月数一覧
+    const targetMonths = {};
+    for (let r = 4; r <= 10; r++) {
+      targetMonths[`hearing_${r}`] = hearingMonth(r);
+      targetMonths[`exam_${r}`]    = examMonth(r);
+    }
+
+    res.json({
+      success: true,
+      serverTime: now.toISOString(),
+      totalStudentsFromNotion: allStudents.length,
+      studentsWithProStart: details.length,
+      distribution,        // { '1': 3, '2': 5, ... } 月数ごとの人数
+      targetMonths,        // 4回目以降の対象月数一覧
+      details,             // 個別詳細（最大50件）
+    });
+  } catch (err) {
+    console.error('❌ /api/pro-plan/debug-months error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
