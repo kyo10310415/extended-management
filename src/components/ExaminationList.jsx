@@ -6,7 +6,7 @@ function ExaminationList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [refreshing, setRefreshing] = useState(false) // 手動更新中フラグ
-  const [monthOffset, setMonthOffset] = useState(0) // -1: 前月, 0: 今月, 1: 翌月
+  const [monthOffset, setMonthOffset] = useState(0) // -6〜0: 過去月, 1: 翌月
   
   // 検索フィルター
   const [searchFilters, setSearchFilters] = useState({
@@ -234,9 +234,11 @@ function ExaminationList() {
   }, [students, searchFilters]);
 
   const getMonthLabel = () => {
-    if (monthOffset === -1) return '前月';
+    if (monthOffset === 0) return '今月';
     if (monthOffset === 1) return '翌月';
-    return '今月';
+    const d = new Date();
+    d.setMonth(d.getMonth() + monthOffset);
+    return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}`;
   };
 
   if (loading && !refreshing) {
@@ -294,38 +296,30 @@ function ExaminationList() {
             🔄 最新データに更新
           </button>
           {/* 月切り替えボタン */}
-          <div className="flex items-center gap-2 bg-white rounded-lg shadow px-3 py-2">
+          <div className="flex items-center gap-2 bg-white rounded-lg shadow px-3 py-2 flex-wrap">
             <span className="text-xs text-gray-600">対象月:</span>
-            <button
-              onClick={() => setMonthOffset(-1)}
-              className={`px-3 py-1 text-xs rounded transition ${
-                monthOffset === -1
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              前月
-            </button>
-            <button
-              onClick={() => setMonthOffset(0)}
-              className={`px-3 py-1 text-xs rounded transition ${
-                monthOffset === 0
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              今月
-            </button>
-            <button
-              onClick={() => setMonthOffset(1)}
-              className={`px-3 py-1 text-xs rounded transition ${
-                monthOffset === 1
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              翌月
-            </button>
+            {[-6, -5, -4, -3, -2, -1, 0, 1].map(offset => {
+              const label = (() => {
+                if (offset === 0) return '今月';
+                if (offset === 1) return '翌月';
+                const d = new Date();
+                d.setMonth(d.getMonth() + offset);
+                return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}`;
+              })();
+              return (
+                <button
+                  key={offset}
+                  onClick={() => setMonthOffset(offset)}
+                  className={`px-2 py-1 text-xs rounded transition ${
+                    monthOffset === offset
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
           <button
             onClick={fetchExaminationStudents}
@@ -397,6 +391,8 @@ function ExaminationList() {
               <option value="在籍">在籍</option>
               <option value="退会">退会</option>
               <option value="永久会員">永久会員</option>
+              <option value="未払い">未払い</option>
+              <option value="音信不通">音信不通</option>
               <option value="空白">空白（未入力）</option>
             </select>
           </div>

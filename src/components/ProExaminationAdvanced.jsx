@@ -190,21 +190,30 @@ function ProExaminationAdvanced() {
           </div>
 
           {/* 月切り替えボタン */}
-          <div className="flex items-center gap-2 bg-white rounded-lg shadow px-3 py-2">
+          <div className="flex items-center gap-2 bg-white rounded-lg shadow px-3 py-2 flex-wrap">
             <span className="text-xs text-gray-600">対象月:</span>
-            {[-1, 0, 1].map((offset, idx) => (
-              <button
-                key={offset}
-                onClick={() => setMonthOffset(offset)}
-                className={`px-3 py-1 text-xs rounded transition ${
-                  monthOffset === offset
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {['前月', '今月', '翌月'][idx]}
-              </button>
-            ))}
+            {[-6, -5, -4, -3, -2, -1, 0, 1].map(offset => {
+              const label = (() => {
+                if (offset === 0) return '今月';
+                if (offset === 1) return '翌月';
+                const d = new Date();
+                d.setMonth(d.getMonth() + offset);
+                return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}`;
+              })();
+              return (
+                <button
+                  key={offset}
+                  onClick={() => setMonthOffset(offset)}
+                  className={`px-2 py-1 text-xs rounded transition ${
+                    monthOffset === offset
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -265,10 +274,12 @@ function ProExaminationAdvanced() {
               className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-primary focus:border-primary"
             >
               <option value="">すべて</option>
-              <option value="合格">合格</option>
-              <option value="条件付き合格">条件付き合格</option>
-              <option value="不合格">不合格</option>
-              <option value="保留">保留</option>
+              <option value="延長">延長</option>
+              <option value="在籍">在籍</option>
+              <option value="退会">退会</option>
+              <option value="永久会員">永久会員</option>
+              <option value="未払い">未払い</option>
+              <option value="音信不通">音信不通</option>
             </select>
           </div>
         </div>

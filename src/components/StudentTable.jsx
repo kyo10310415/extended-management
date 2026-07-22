@@ -227,6 +227,8 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                           <option value="在籍">在籍</option>
                           <option value="退会">退会</option>
                           <option value="永久会員">永久会員</option>
+                          <option value="未払い">未払い</option>
+                          <option value="音信不通">音信不通</option>
                         </select>
                       ) : (
                         <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${
@@ -238,6 +240,10 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                             ? 'bg-red-100 text-red-800'
                             : student.extensionData?.examination_result === '永久会員'
                             ? 'bg-purple-100 text-purple-800'
+                            : student.extensionData?.examination_result === '未払い'
+                            ? 'bg-orange-100 text-orange-800'
+                            : student.extensionData?.examination_result === '音信不通'
+                            ? 'bg-gray-200 text-gray-700'
                             : 'bg-gray-100 text-gray-800'
                         }`}>
                           {student.extensionData?.examination_result || '-'}

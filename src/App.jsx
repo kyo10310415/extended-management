@@ -4,7 +4,6 @@ import HearingList from './components/HearingList'
 import ExaminationList from './components/ExaminationList'
 import ProHearingList from './components/ProHearingList'
 import ProExaminationList from './components/ProExaminationList'
-import ProHearingAdvanced from './components/ProHearingAdvanced'
 import ProExaminationAdvanced from './components/ProExaminationAdvanced'
 import StudentMaster from './components/StudentMaster'
 import SuspensionList from './components/SuspensionList'
@@ -30,7 +29,6 @@ function App() {
     { id: 'examination', name: '延長審査一覧', icon: '📋' },
     { id: 'pro-hearing', name: 'Proヒアリング', icon: '🎯' },
     { id: 'pro-examination', name: 'Pro延長審査', icon: '📝' },
-    { id: 'pro-hearing-advanced', name: 'Proヒアリング(4回目〜)', icon: '🔁' },
     { id: 'pro-examination-advanced', name: 'Pro審査(4回目〜)', icon: '🔄' },
     { id: 'suspension', name: '休会歴一覧', icon: '⏸️' },
     { id: 'lifetime-members', name: '永久会員', icon: '👑' },
@@ -48,7 +46,6 @@ function App() {
     { id: 'examination',      component: <ExaminationList /> },
     { id: 'pro-hearing',              component: <ProHearingList /> },
     { id: 'pro-examination',          component: <ProExaminationList /> },
-    { id: 'pro-hearing-advanced',     component: <ProHearingAdvanced /> },
     { id: 'pro-examination-advanced', component: <ProExaminationAdvanced /> },
     { id: 'suspension',       component: <SuspensionList /> },
     { id: 'lifetime-members', component: <ProPlanList /> },
