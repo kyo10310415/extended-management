@@ -6,7 +6,7 @@ function ProHearingList() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [refreshing, setRefreshing] = useState(false) // 手動更新中フラグ
-  const [monthOffset, setMonthOffset] = useState(0) // -1: 前月, 0: 今月, 1: 翌月
+  const [monthOffset, setMonthOffset] = useState(0) // -6〜0: 過去月, 1: 翌月
   
   // 検索フィルター
   const [searchFilters, setSearchFilters] = useState({
@@ -222,38 +222,30 @@ function ProHearingList() {
             🔄 最新データに更新
           </button>
           {/* 月切り替えボタン */}
-          <div className="flex items-center gap-2 bg-white rounded-lg shadow px-3 py-2">
+          <div className="flex items-center gap-2 bg-white rounded-lg shadow px-3 py-2 flex-wrap">
             <span className="text-xs text-gray-600">対象月:</span>
-            <button
-              onClick={() => setMonthOffset(-1)}
-              className={`px-3 py-1 text-xs rounded transition ${
-                monthOffset === -1
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              前月
-            </button>
-            <button
-              onClick={() => setMonthOffset(0)}
-              className={`px-3 py-1 text-xs rounded transition ${
-                monthOffset === 0
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              今月
-            </button>
-            <button
-              onClick={() => setMonthOffset(1)}
-              className={`px-3 py-1 text-xs rounded transition ${
-                monthOffset === 1
-                  ? 'bg-primary text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              翌月
-            </button>
+            {[-6, -5, -4, -3, -2, -1, 0, 1].map(offset => {
+              const label = (() => {
+                if (offset === 0) return '今月';
+                if (offset === 1) return '翌月';
+                const d = new Date();
+                d.setMonth(d.getMonth() + offset);
+                return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}`;
+              })();
+              return (
+                <button
+                  key={offset}
+                  onClick={() => setMonthOffset(offset)}
+                  className={`px-2 py-1 text-xs rounded transition ${
+                    monthOffset === offset
+                      ? 'bg-primary text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
