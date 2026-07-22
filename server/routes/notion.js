@@ -93,10 +93,12 @@ router.get('/hearing', async (req, res) => {
     const formUpdates = await fetchFormUpdates();
     const suspensionData = await fetchSuspensionData();
     
-    // 過去月の場合はアクティブフィルターを外す
-    // （退会・永久会員になった生徒も当時の記録として表示するため）
+    // 今月・翌月はアクティブのみ。過去月は正規退会・強制退会も含める
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
-      .filter(s => monthOffset < 0 ? true : s.status === 'アクティブ')
+      .filter(s =>
+        s.status === 'アクティブ' ||
+        (monthOffset < 0 && (s.status === '正規退会' || s.status === '強制退会'))
+      )
       .map(student => {
         const suspension = suspensionData[student.studentId];
         const suspensionMonths = suspension?.suspensionMonths || 0;
@@ -150,10 +152,12 @@ router.get('/examination', async (req, res) => {
     const formUpdates = await fetchFormUpdates();
     const suspensionData = await fetchSuspensionData();
     
-    // 過去月の場合はアクティブフィルターを外す
-    // （退会・永久会員になった生徒も当時の記録として表示するため）
+    // 今月・翌月はアクティブのみ。過去月は正規退会・強制退会も含める
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
-      .filter(s => monthOffset < 0 ? true : s.status === 'アクティブ')
+      .filter(s =>
+        s.status === 'アクティブ' ||
+        (monthOffset < 0 && (s.status === '正規退会' || s.status === '強制退会'))
+      )
       .map(student => {
         const suspension = suspensionData[student.studentId];
         const suspensionMonths = suspension?.suspensionMonths || 0;
@@ -207,10 +211,12 @@ router.get('/pro-hearing', async (req, res) => {
     const formUpdates = await fetchFormUpdates();
     const suspensionData = await fetchSuspensionData();
     
-    // 過去月の場合はアクティブフィルターを外す
-    // （退会・永久会員になった生徒も当時の記録として表示するため）
+    // 今月・翌月はアクティブのみ。過去月は正規退会・強制退会も含める
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
-      .filter(s => monthOffset < 0 ? true : s.status === 'アクティブ')
+      .filter(s =>
+        s.status === 'アクティブ' ||
+        (monthOffset < 0 && (s.status === '正規退会' || s.status === '強制退会'))
+      )
       .map(student => {
         const suspension = suspensionData[student.studentId];
         const suspensionMonths = suspension?.suspensionMonths || 0;
@@ -259,10 +265,12 @@ router.get('/pro-examination', async (req, res) => {
     const formUpdates = await fetchFormUpdates();
     const suspensionData = await fetchSuspensionData();
     
-    // 過去月の場合はアクティブフィルターを外す
-    // （退会・永久会員になった生徒も当時の記録として表示するため）
+    // 今月・翌月はアクティブのみ。過去月は正規退会・強制退会も含める
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
-      .filter(s => monthOffset < 0 ? true : s.status === 'アクティブ')
+      .filter(s =>
+        s.status === 'アクティブ' ||
+        (monthOffset < 0 && (s.status === '正規退会' || s.status === '強制退会'))
+      )
       .map(student => {
         const suspension = suspensionData[student.studentId];
         const suspensionMonths = suspension?.suspensionMonths || 0;
