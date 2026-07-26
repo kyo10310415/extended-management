@@ -198,8 +198,9 @@ function Dashboard() {
           extensionData: extensionData || null,
         };
       }).filter(s => 
-        // 延長確度が「対象外」の生徒を除外
-        s.extensionData?.extension_certainty !== '対象外'
+        // 延長確度が「対象外」の生徒を除外 & KPIはアクティブのみ
+        s.extensionData?.extension_certainty !== '対象外' &&
+        s.status === 'アクティブ'
       );
 
       // 3回目（17ヶ月目）の審査生徒マージ
