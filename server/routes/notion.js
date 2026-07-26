@@ -152,11 +152,14 @@ router.get('/examination', async (req, res) => {
     const formUpdates = await fetchFormUpdates();
     const suspensionData = await fetchSuspensionData();
     
-    // 今月・翌月はアクティブのみ。過去月は正規退会・強制退会も含める
+    // アクティブ + 正規退会 + 無断キャンセルは常に表示
+    // 過去月はさらに強制退会も含める
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
       .filter(s =>
         s.status === 'アクティブ' ||
-        (monthOffset < 0 && (s.status === '正規退会' || s.status === '強制退会'))
+        s.status === '正規退会' ||
+        s.status === '無断キャンセル' ||
+        (monthOffset < 0 && s.status === '強制退会')
       )
       .map(student => {
         const suspension = suspensionData[student.studentId];

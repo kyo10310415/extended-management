@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react'
 
-function StudentTable({ students, onUpdate, showHearingColumn, showExaminationColumn }) {
+function StudentTable({ students, onUpdate, showHearingColumn, showExaminationColumn, showStatusColumn }) {
   const [editingStudent, setEditingStudent] = useState(null)
   const [formData, setFormData] = useState({})
   const [sortField, setSortField] = useState('tutor') // デフォルトで担任Tutorでソート
@@ -81,6 +81,11 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                   )}
                 </div>
               </th>
+              {showStatusColumn && (
+                <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
+                  ステータス
+                </th>
+              )}
               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
                 プラン
               </th>
@@ -143,6 +148,23 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                   <td className="px-2 py-1 whitespace-nowrap text-xs text-gray-500">
                     {student.tutor || '-'}
                   </td>
+                  {showStatusColumn && (
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      <span className={`px-2 py-0.5 text-xs rounded-full whitespace-nowrap ${
+                        student.status === 'アクティブ'
+                          ? 'bg-green-100 text-green-800'
+                          : student.status === '正規退会'
+                          ? 'bg-red-100 text-red-800'
+                          : student.status === '強制退会'
+                          ? 'bg-red-200 text-red-900'
+                          : student.status === '無断キャンセル'
+                          ? 'bg-orange-100 text-orange-800'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {student.status || '-'}
+                      </span>
+                    </td>
+                  )}
                   <td className="px-2 py-1 whitespace-nowrap text-xs text-gray-500">
                     {student.plan || '-'}
                   </td>

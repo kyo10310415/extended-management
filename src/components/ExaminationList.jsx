@@ -429,6 +429,7 @@ function ExaminationList() {
           students={filteredStudents}
           onUpdate={handleUpdate}
           showExaminationColumn={true}
+          showStatusColumn={true}
         />
       )}
     </div>
