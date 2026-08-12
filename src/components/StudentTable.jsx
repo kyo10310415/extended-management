@@ -120,10 +120,48 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
             {sortedStudents.map((student) => {
               const isEditing = editingStudent === student.studentId
               
-              // 休会歴があるかチェック
-              const suspensionWarning = student.hasSuspensionHistory 
-                ? '⚠️ 休会歴あり。要チェック' 
-                : ''
+              // 休会歴があるかチェック（未来の休会予定は別テキスト）
+              const suspensionWarning = (() => {
+                if (!student.hasSuspensionHistory) return '';
+
+                const today = new Date();
+                // 今月初日（年/月 比較用）
+                const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+                // suspensionRecords（配列）があれば未来開始レコードを探す
+                const records = student.suspensionRecords || [];
+                const futureRecord = records.find(r => {
+                  if (!r.suspensionStartDate) return false;
+                  try {
+                    const d = new Date(r.suspensionStartDate.replace(/\//g, '-'));
+                    const recordMonthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+                    return recordMonthStart > thisMonthStart;
+                  } catch { return false; }
+                });
+
+                if (futureRecord) {
+                  // 未来開始の休会 → 「〇年〇月から休会予定」
+                  try {
+                    const d = new Date(futureRecord.suspensionStartDate.replace(/\//g, '-'));
+                    return `${d.getFullYear()}年${d.getMonth() + 1}月から休会予定`;
+                  } catch {
+                    return '休会予定あり';
+                  }
+                }
+
+                // suspensionRecords がない場合は suspensionStartDate で判定
+                if (records.length === 0 && student.suspensionStartDate) {
+                  try {
+                    const d = new Date(student.suspensionStartDate.replace(/\//g, '-'));
+                    const recordMonthStart = new Date(d.getFullYear(), d.getMonth(), 1);
+                    if (recordMonthStart > thisMonthStart) {
+                      return `${d.getFullYear()}年${d.getMonth() + 1}月から休会予定`;
+                    }
+                  } catch { /* fall through */ }
+                }
+
+                return '⚠️ 休会歴あり。要チェック';
+              })();
 
               return (
                 <tr key={student.id} className="hover:bg-gray-50">

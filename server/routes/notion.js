@@ -109,6 +109,8 @@ router.get('/hearing', async (req, res) => {
           adjustedMonths,
           suspensionMonths,
           hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
+          suspensionStartDate: suspension?.suspensionStartDate || null,
+          suspensionRecords: suspension?.records || [],
           formLastUpdate: formUpdates[student.studentId] || null,
         };
       });
@@ -171,6 +173,8 @@ router.get('/examination', async (req, res) => {
           adjustedMonths,
           suspensionMonths,
           hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
+          suspensionStartDate: suspension?.suspensionStartDate || null,
+          suspensionRecords: suspension?.records || [],
           formLastUpdate: formUpdates[student.studentId] || null,
         };
       });
@@ -230,6 +234,8 @@ router.get('/pro-hearing', async (req, res) => {
           adjustedMonths,
           suspensionMonths,
           hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
+          suspensionStartDate: suspension?.suspensionStartDate || null,
+          suspensionRecords: suspension?.records || [],
           formLastUpdate: formUpdates[student.studentId] || null,
         };
       });
@@ -284,6 +290,8 @@ router.get('/pro-examination', async (req, res) => {
           adjustedMonths,
           suspensionMonths,
           hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
+          suspensionStartDate: suspension?.suspensionStartDate || null,
+          suspensionRecords: suspension?.records || [],
           formLastUpdate: formUpdates[student.studentId] || null,
         };
       });
