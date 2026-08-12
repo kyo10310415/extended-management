@@ -43,7 +43,8 @@ export function calculateEffectiveSuspensionMonths(suspension, monthOffset = 0) 
   return suspension.suspensionMonths || 0;
 }
 
-
+/**
+ * レッスン開始月から基準日までの経過月数を計算
  * レッスン開始月を1ヶ月目としてカウント
  * 【例】レッスン開始月：2025/9/1、現在：2026/1/1 → 5ヶ月目
  * @param {string} lessonStartDate - レッスン開始月 (例: "2024/04/01")
