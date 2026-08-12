@@ -2,7 +2,7 @@ import express from 'express';
 import { pool } from '../index.js';
 import { fetchStudents } from '../services/notionService.js';
 import { fetchSuspensionData } from '../services/sheetsService.js';
-import { calculateMonthsElapsed } from '../utils/dateUtils.js';
+import { calculateMonthsElapsed, calculateEffectiveSuspensionMonths } from '../utils/dateUtils.js';
 import {
   fetchAdvancedHearingStudents,
   fetchAdvancedExaminationStudents,
@@ -140,9 +140,9 @@ router.get('/students', async (req, res) => {
         // 継続月数を計算
         const monthsElapsed = calculateMonthsElapsed(s.lessonStartDate, 0);
         
-        // 休会期間を取得
+        // 休会期間を取得（未来開始の休会は除外）
         const suspension = suspensionData[s.studentId];
-        const suspensionMonths = suspension?.suspensionMonths || 0;
+        const suspensionMonths = calculateEffectiveSuspensionMonths(suspension, 0);
         
         // 調整後月数を計算
         const adjustedMonths = Math.max(0, monthsElapsed - suspensionMonths);
@@ -200,9 +200,9 @@ router.get('/students', async (req, res) => {
       // 継続月数を計算
       const monthsElapsed = calculateMonthsElapsed(student.lessonStartDate, 0);
       
-      // 休会期間を取得
+      // 休会期間を取得（未来開始の休会は除外）
       const suspension = suspensionData[student.studentId];
-      const suspensionMonths = suspension?.suspensionMonths || 0;
+      const suspensionMonths = calculateEffectiveSuspensionMonths(suspension, 0);
       const hasSuspensionHistory = suspension?.hasSuspensionHistory || false;
       const suspensionStartDate = suspension?.suspensionStartDate || null;
       
