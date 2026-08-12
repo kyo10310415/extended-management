@@ -1,7 +1,7 @@
 import express from 'express';
 import { fetchStudents } from '../services/notionService.js';
 import { fetchFormUpdates, fetchSuspensionData } from '../services/sheetsService.js';
-import { enrichStudentsWithMonths, filterStudentsByMonth } from '../utils/dateUtils.js';
+import { enrichStudentsWithMonths, filterStudentsByMonth, calculateEffectiveSuspensionMonths } from '../utils/dateUtils.js';
 import cacheService from '../services/cacheService.js';
 import databaseCacheService from '../services/databaseCacheService.js';
 import { manualUpdate } from '../services/backgroundService.js';
@@ -44,7 +44,7 @@ router.get('/students', async (req, res) => {
     const enrichedStudents = enrichStudentsWithMonths(students).map(student => {
       const suspension = suspensionData[student.studentId];
       const adjustedMonths = suspension 
-        ? Math.max(0, student.monthsElapsed - suspension.suspensionMonths)
+        ? Math.max(0, student.monthsElapsed - calculateEffectiveSuspensionMonths(suspension, 0))
         : student.monthsElapsed;
       
       const { proStartDate } = proStartMap[student.studentId] || {};
@@ -53,7 +53,7 @@ router.get('/students', async (req, res) => {
       return {
         ...student,
         formLastUpdate: formUpdates[student.studentId] || null,
-        suspensionMonths: suspension?.suspensionMonths || 0,
+        suspensionMonths: calculateEffectiveSuspensionMonths(suspension, 0),
         suspensionStartDate: suspension?.suspensionStartDate || null,
         hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
         adjustedMonths,
@@ -101,7 +101,7 @@ router.get('/hearing', async (req, res) => {
       )
       .map(student => {
         const suspension = suspensionData[student.studentId];
-        const suspensionMonths = suspension?.suspensionMonths || 0;
+        const suspensionMonths = calculateEffectiveSuspensionMonths(suspension, monthOffset);
         const adjustedMonths = Math.max(0, student.monthsElapsed - suspensionMonths);
         
         return {
@@ -163,7 +163,7 @@ router.get('/examination', async (req, res) => {
       )
       .map(student => {
         const suspension = suspensionData[student.studentId];
-        const suspensionMonths = suspension?.suspensionMonths || 0;
+        const suspensionMonths = calculateEffectiveSuspensionMonths(suspension, monthOffset);
         const adjustedMonths = Math.max(0, student.monthsElapsed - suspensionMonths);
         
         return {
@@ -222,7 +222,7 @@ router.get('/pro-hearing', async (req, res) => {
       )
       .map(student => {
         const suspension = suspensionData[student.studentId];
-        const suspensionMonths = suspension?.suspensionMonths || 0;
+        const suspensionMonths = calculateEffectiveSuspensionMonths(suspension, monthOffset);
         const adjustedMonths = Math.max(0, student.monthsElapsed - suspensionMonths);
         
         return {
@@ -276,7 +276,7 @@ router.get('/pro-examination', async (req, res) => {
       )
       .map(student => {
         const suspension = suspensionData[student.studentId];
-        const suspensionMonths = suspension?.suspensionMonths || 0;
+        const suspensionMonths = calculateEffectiveSuspensionMonths(suspension, monthOffset);
         const adjustedMonths = Math.max(0, student.monthsElapsed - suspensionMonths);
         
         return {
