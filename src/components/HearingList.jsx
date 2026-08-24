@@ -374,6 +374,7 @@ function HearingList() {
           students={filteredStudents}
           onUpdate={handleUpdate}
           showHearingColumn={true}
+          showLessonDatesColumn={true}
         />
       )}
     </div>

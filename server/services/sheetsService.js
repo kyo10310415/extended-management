@@ -8,6 +8,12 @@ dotenv.config();
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
 const SUSPENSION_SPREADSHEET_ID = '17ys2PZpDpffG3j4EQrXiLlwGbFxiNosBqMivL2quVEA';
 const EXAMINATION_FORM_SPREADSHEET_ID = '1m7P2nsX-M9BGP2RHIj3CjAZiDPs2K9gu1Y_md7xiazQ';
+const LESSON_RESERVATION_SPREADSHEET_ID = process.env.LESSON_RESERVATION_SPREADSHEET_ID
+  || '1DvjTbwz2qhqwSnNqROTDAvd1hl-Lz9o05LE6rzEQEGo';
+const LESSON_RESERVATION_SHEET_NAME = process.env.LESSON_RESERVATION_SHEET_NAME
+  || 'レッスン予約データ';
+const LESSON_DATES_CACHE_TTL_MS = 5 * 60 * 1000;
+let lessonRowsFetchPromise = null;
 
 /**
  * ERR_STREAM_PREMATURE_CLOSE 根本解消
@@ -51,6 +57,162 @@ function getAuth() {
   
   console.warn('⚠️  No Google Sheets authentication configured');
   return null;
+}
+
+/**
+ * 学籍番号をスプレッドシート照合用に正規化する。
+ * 過去データに混在する OLST は、システム側の OLTS と同一として扱う。
+ */
+export function normalizeLessonStudentId(value) {
+  return String(value ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/^OLST/, 'OLTS');
+}
+
+/**
+ * Google Sheets の表示値から年月・表示用日時・ソートキーを生成する。
+ * 対応形式: YYYY/MM/DD, YYYY-MM-DD、および任意の HH:mm[:ss]
+ */
+export function parseLessonDate(value) {
+  const rawValue = String(value ?? '').trim();
+  const match = rawValue.match(
+    /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/
+  );
+
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = match[4] === undefined ? null : Number(match[4]);
+  const minute = match[5] === undefined ? null : Number(match[5]);
+  const second = match[6] === undefined ? 0 : Number(match[6]);
+
+  const isValidDate = month >= 1 && month <= 12
+    && day >= 1 && day <= new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const isValidTime = hour === null
+    || (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59);
+
+  if (!isValidDate || !isValidTime) return null;
+
+  const paddedMonth = String(month).padStart(2, '0');
+  const paddedDay = String(day).padStart(2, '0');
+  const datePart = `${year}/${paddedMonth}/${paddedDay}`;
+  const timePart = hour === null
+    ? ''
+    : ` ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+  return {
+    yearMonth: `${year}-${paddedMonth}`,
+    displayValue: `${datePart}${timePart}`,
+    sortKey: `${year}-${paddedMonth}-${paddedDay}T${String(hour ?? 0).padStart(2, '0')}:${String(minute ?? 0).padStart(2, '0')}:${String(second).padStart(2, '0')}`,
+  };
+}
+
+/**
+ * 日本時間の現在月を基準に、月オフセット先の YYYY-MM を返す。
+ */
+export function getLessonTargetYearMonth(monthOffset = 0, now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(now);
+
+  const year = Number(parts.find(part => part.type === 'year')?.value);
+  const month = Number(parts.find(part => part.type === 'month')?.value);
+  const normalizedOffset = Number.isFinite(Number(monthOffset)) ? Number(monthOffset) : 0;
+  const target = new Date(Date.UTC(year, month - 1 + normalizedOffset, 1));
+
+  return `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * B:E の行データを、対象年月・学籍番号別のレッスン日時配列に変換する。
+ * 同一日時を含む複数行も、それぞれ1レッスンとして保持する。
+ */
+export function buildLessonDatesByStudent(rows, targetYearMonth) {
+  const datedLessonsByStudent = {};
+
+  rows.forEach(row => {
+    const studentId = normalizeLessonStudentId(row?.[0]); // B列
+    const lessonDate = parseLessonDate(row?.[3]); // E列（B:E 内の index 3）
+
+    if (!studentId || !lessonDate || lessonDate.yearMonth !== targetYearMonth) return;
+
+    if (!datedLessonsByStudent[studentId]) {
+      datedLessonsByStudent[studentId] = [];
+    }
+    datedLessonsByStudent[studentId].push(lessonDate);
+  });
+
+  return Object.fromEntries(
+    Object.entries(datedLessonsByStudent).map(([studentId, lessonDates]) => [
+      studentId,
+      lessonDates
+        .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+        .map(lessonDate => lessonDate.displayValue),
+    ])
+  );
+}
+
+async function fetchLessonReservationRows() {
+  const cacheKey = `lesson_reservation_rows_${LESSON_RESERVATION_SPREADSHEET_ID}_${LESSON_RESERVATION_SHEET_NAME}`;
+  const cachedRows = cacheService.get(cacheKey);
+  if (cachedRows) return cachedRows;
+
+  if (lessonRowsFetchPromise) return lessonRowsFetchPromise;
+
+  lessonRowsFetchPromise = (async () => {
+    const auth = getAuth();
+    if (!auth) {
+      console.warn('⚠️ Google Sheets authentication not configured for lesson dates');
+      return [];
+    }
+
+    const sheets = google.sheets({ version: 'v4', auth });
+    const escapedSheetName = LESSON_RESERVATION_SHEET_NAME.replace(/'/g, "''");
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: LESSON_RESERVATION_SPREADSHEET_ID,
+      range: `'${escapedSheetName}'!B:E`,
+      valueRenderOption: 'FORMATTED_VALUE',
+    });
+
+    const rows = response.data.values || [];
+    cacheService.set(cacheKey, rows, LESSON_DATES_CACHE_TTL_MS);
+    console.log(`✅ Fetched ${rows.length} lesson reservation rows from "${LESSON_RESERVATION_SHEET_NAME}"`);
+    return rows;
+  })();
+
+  try {
+    return await lessonRowsFetchPromise;
+  } finally {
+    lessonRowsFetchPromise = null;
+  }
+}
+
+/**
+ * レッスン予約データから、表示月の全レッスン日を学籍番号別に取得する。
+ * シート構造: B列=学籍番号、E列=レッスン日（1行目からデータ）
+ */
+export async function fetchLessonDatesForMonth(monthOffset = 0) {
+  const targetYearMonth = getLessonTargetYearMonth(monthOffset);
+
+  try {
+    const rows = await fetchLessonReservationRows();
+    const lessonDatesByStudent = buildLessonDatesByStudent(rows, targetYearMonth);
+    console.log(`📅 Lesson dates for ${targetYearMonth}: ${Object.keys(lessonDatesByStudent).length} students`);
+
+    return { targetYearMonth, lessonDatesByStudent };
+  } catch (error) {
+    console.error('❌ Error fetching lesson dates from Google Sheets:', error.message);
+    return { targetYearMonth, lessonDatesByStudent: {} };
+  }
+}
+
+export function getLessonDatesForStudent(lessonDatesByStudent, studentId) {
+  return lessonDatesByStudent[normalizeLessonStudentId(studentId)] || [];
 }
 
 /**

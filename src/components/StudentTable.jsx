@@ -1,6 +1,13 @@
 import { useState, useMemo, useCallback } from 'react'
 
-function StudentTable({ students, onUpdate, showHearingColumn, showExaminationColumn, showStatusColumn }) {
+function StudentTable({
+  students,
+  onUpdate,
+  showHearingColumn,
+  showExaminationColumn,
+  showStatusColumn,
+  showLessonDatesColumn = false,
+}) {
   const [editingStudent, setEditingStudent] = useState(null)
   const [formData, setFormData] = useState({})
   const [sortField, setSortField] = useState('tutor') // デフォルトで担任Tutorでソート
@@ -92,6 +99,11 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
                 開始月
               </th>
+              {showLessonDatesColumn && (
+                <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase min-w-[120px]">
+                  レッスン日
+                </th>
+              )}
               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
                 継続
               </th>
@@ -209,6 +221,24 @@ function StudentTable({ students, onUpdate, showHearingColumn, showExaminationCo
                   <td className="px-2 py-1 whitespace-nowrap text-xs text-gray-500">
                     {student.lessonStartDate}
                   </td>
+                  {showLessonDatesColumn && (
+                    <td className="px-2 py-1 text-xs text-gray-700 align-top">
+                      {student.lessonDates?.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {student.lessonDates.map((lessonDate, index) => (
+                            <span
+                              key={`${lessonDate}-${index}`}
+                              className="inline-flex whitespace-nowrap rounded bg-sky-50 px-2 py-0.5 text-sky-800"
+                            >
+                              {lessonDate}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                  )}
                   <td className="px-2 py-1 whitespace-nowrap">
                     {student.suspensionMonths > 0 ? (
                       <div className="flex flex-col gap-0.5">

@@ -1,7 +1,11 @@
 import express from 'express';
 import { pool } from '../index.js';
 import { fetchStudents } from '../services/notionService.js';
-import { fetchSuspensionData } from '../services/sheetsService.js';
+import {
+  fetchSuspensionData,
+  fetchLessonDatesForMonth,
+  getLessonDatesForStudent,
+} from '../services/sheetsService.js';
 import { calculateMonthsElapsed, calculateEffectiveSuspensionMonths } from '../utils/dateUtils.js';
 import {
   fetchAdvancedHearingStudents,
@@ -392,7 +396,10 @@ router.get('/advanced-examination', async (req, res) => {
   console.log(`📡 GET /api/pro-plan/advanced-examination round=${round} monthOffset=${monthOffset}`);
 
   try {
-    const allStudents = await fetchStudents();
+    const [allStudents, lessonSchedule] = await Promise.all([
+      fetchStudents(),
+      fetchLessonDatesForMonth(monthOffset),
+    ]);
     const targetStudents = await fetchAdvancedExaminationStudents(allStudents, round, monthOffset);
 
     const studentIds = targetStudents.map(s => s.studentId);
@@ -420,6 +427,7 @@ router.get('/advanced-examination', async (req, res) => {
     const enriched = targetStudents.map(s => ({
       ...s,
       extensionData: extensionsMap[s.studentId] ?? null,
+      lessonDates: getLessonDatesForStudent(lessonSchedule.lessonDatesByStudent, s.studentId),
     }));
 
     res.json({
