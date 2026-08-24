@@ -60,7 +60,7 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <h1 className="text-2xl font-bold text-gray-900">
               🎓 WannaV 延長管理システム
@@ -78,7 +78,7 @@ function App() {
 
       {/* Navigation Tabs */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
           <nav className="flex space-x-8" aria-label="Tabs">
             {tabs.map((tab) => (
               <button
@@ -104,7 +104,7 @@ function App() {
       {/* Main Content
           一度開いたタブは display:none で隠すだけ（unmountしない）
           → useEffect の再実行・APIの再fetchが発生しない */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {tabContents.map(({ id, component }) =>
           visitedTabs.has(id) ? (
             <div key={id} style={{ display: activeTab === id ? 'block' : 'none' }}>
@@ -116,7 +116,7 @@ function App() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <p className="text-center text-sm text-gray-500">
             © 2025 WannaV 延長管理システム
           </p>
