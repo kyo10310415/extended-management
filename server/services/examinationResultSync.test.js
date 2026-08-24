@@ -10,6 +10,7 @@ import {
   isValidExtensionCycle,
 } from './examinationResultSyncService.js';
 import { buildExaminationResultDiscordMessage } from './discordService.js';
+import { isExaminationOverdue } from '../../src/utils/examinationStatus.js';
 
 function lessonStartDateForMonth(monthsElapsed) {
   const now = new Date();
@@ -143,4 +144,29 @@ test('Discord通知はeveryoneメンションと指定項目を含みPROプラ�
   assert.match(message.content, /NotionURL：https:\/\/www\.notion\.so\/example/);
   assert.match(message.content, /審査結果：PROプラン/);
   assert.deepEqual(message.allowed_mentions, { parse: ['everyone'] });
+});
+
+test('最初のレッスン日の翌日以降で審査結果が空欄なら未実施と判定する', () => {
+  const now = new Date('2026-08-24T03:00:00.000Z'); // JST 2026/08/24 12:00
+
+  assert.equal(isExaminationOverdue({
+    lessonDates: ['2026/08/28 10:00', '2026/08/23 18:00', '2026/08/25 12:00'],
+    examinationResult: '',
+    now,
+  }), true);
+  assert.equal(isExaminationOverdue({
+    lessonDates: ['2026/08/24 09:00', '2026/08/25 12:00'],
+    examinationResult: '',
+    now,
+  }), false);
+  assert.equal(isExaminationOverdue({
+    lessonDates: ['2026/08/23 18:00'],
+    examinationResult: '延長',
+    now,
+  }), false);
+  assert.equal(isExaminationOverdue({
+    lessonDates: [],
+    examinationResult: '',
+    now,
+  }), false);
 });
