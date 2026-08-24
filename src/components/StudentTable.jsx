@@ -112,8 +112,24 @@ function StudentTable({
   return (
     <>
       <div className="bg-white rounded-lg shadow overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200 text-sm">
+      <div className="w-full overflow-hidden">
+        <table className="w-full table-fixed divide-y divide-gray-200 text-[11px] leading-tight [&_th]:px-1 [&_th]:py-1 [&_th]:text-[10px] [&_td]:px-1 [&_td]:py-1 [&_td]:text-[10px] [&_td]:whitespace-normal [&_td]:break-words [&_td]:overflow-hidden [&_select]:px-1 [&_select]:py-0.5 [&_select]:text-[10px] [&_textarea]:px-1 [&_textarea]:py-0.5 [&_textarea]:text-[10px]">
+          <colgroup>
+            <col className="w-[9%]" />
+            <col className="w-[7%]" />
+            <col className="w-[6%]" />
+            {showStatusColumn && <col className="w-[7%]" />}
+            <col className="w-[6%]" />
+            <col className="w-[7%]" />
+            {showLessonDatesColumn && <col className="w-[10%]" />}
+            <col className="w-[6%]" />
+            <col className="w-[5%]" />
+            {showHearingColumn && <col className="w-[4%]" />}
+            {showExaminationColumn && <col className="w-[10%]" />}
+            <col className={showExaminationColumn ? 'w-[14%]' : 'w-[22%]'} />
+            <col className="w-[5%]" />
+            {showExaminationColumn && <col className="w-[8%]" />}
+          </colgroup>
           <thead className="bg-gray-50">
             <tr>
               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
@@ -147,7 +163,7 @@ function StudentTable({
                 開始月
               </th>
               {showLessonDatesColumn && (
-                <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase min-w-[120px]">
+                <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
                   レッスン日
                 </th>
               )}
@@ -167,15 +183,15 @@ function StudentTable({
                   審査
                 </th>
               )}
-              <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase" style={{minWidth: '200px'}}>
+              <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
                 備考
               </th>
-              <th className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase" style={{width: '60px'}}>
+              <th className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase">
                 操作
               </th>
               {showExaminationColumn && (
-                <th className="px-2 py-1 text-center text-xs font-medium text-gray-500 whitespace-nowrap">
-                  Discord送信済み
+                <th className="px-2 py-1 text-center text-xs font-medium text-gray-500 leading-tight">
+                  Discord<br />送信済み
                 </th>
               )}
             </tr>
@@ -233,7 +249,7 @@ function StudentTable({
 
               return (
                 <tr key={student.id} className="hover:bg-gray-50">
-                  <td className="px-2 py-1 whitespace-nowrap text-xs font-medium text-gray-900">
+                  <td className="px-2 py-1 text-xs font-medium text-gray-900 break-all">
                     {student.notionUrl ? (
                       <a
                         href={student.notionUrl}
@@ -256,7 +272,7 @@ function StudentTable({
                   </td>
                   {showStatusColumn && (
                     <td className="px-2 py-1 whitespace-nowrap">
-                      <span className={`px-2 py-0.5 text-xs rounded-full whitespace-nowrap ${
+                      <span className={`px-1 py-0.5 text-[10px] leading-tight rounded-full ${
                         student.status === 'アクティブ'
                           ? 'bg-green-100 text-green-800'
                           : student.status === '正規退会'
@@ -284,7 +300,7 @@ function StudentTable({
                           {student.lessonDates.map((lessonDate, index) => (
                             <span
                               key={`${lessonDate}-${index}`}
-                              className="inline-flex whitespace-nowrap rounded bg-sky-50 px-2 py-0.5 text-sky-800"
+                              className="block rounded bg-sky-50 px-1 py-0.5 text-[10px] leading-tight text-sky-800 break-words"
                             >
                               {lessonDate}
                             </span>
@@ -298,15 +314,15 @@ function StudentTable({
                   <td className="px-2 py-1 whitespace-nowrap">
                     {student.suspensionMonths > 0 ? (
                       <div className="flex flex-col gap-0.5">
-                        <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                        <span className="px-1 py-0.5 text-[10px] font-semibold rounded-full bg-green-100 text-green-800">
                           {student.adjustedMonths}ヶ月
                         </span>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-[9px] leading-tight text-gray-400">
                           (実{student.monthsElapsed}ヶ月-休{student.suspensionMonths}ヶ月)
                         </span>
                       </div>
                     ) : (
-                      <span className="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                      <span className="px-1 py-0.5 text-[10px] font-semibold rounded-full bg-blue-100 text-blue-800">
                         {student.adjustedMonths || student.monthsElapsed}ヶ月
                       </span>
                     )}
@@ -327,7 +343,7 @@ function StudentTable({
                         <option value="対象外">対象外</option>
                       </select>
                     ) : (
-                      <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${
+                      <span className={`px-1 py-0.5 text-[10px] leading-tight rounded-full ${
                         student.extensionData?.extension_certainty === '高'
                           ? 'bg-green-100 text-green-800'
                           : student.extensionData?.extension_certainty === '中'
@@ -378,7 +394,7 @@ function StudentTable({
                         </select>
                       ) : (
                         <div className="flex flex-col items-start gap-1">
-                          <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${
+                          <span className={`px-1 py-0.5 text-[10px] leading-tight rounded-full ${
                             student.extensionData?.examination_result === '延長'
                               ? 'bg-green-100 text-green-800'
                               : student.extensionData?.examination_result === '在籍'
@@ -396,12 +412,12 @@ function StudentTable({
                             {student.extensionData?.examination_result || '-'}
                           </span>
                           {student.extensionData?.examination_result_manual_override && (
-                            <span className="text-[10px] font-medium text-amber-700 whitespace-nowrap">
+                            <span className="text-[9px] font-medium text-amber-700 leading-tight">
                               🔒 手動固定
                             </span>
                           )}
                           {examinationOverdue && (
-                            <span className="text-[11px] font-semibold text-red-600 whitespace-nowrap">
+                            <span className="text-[10px] font-semibold leading-tight text-red-600">
                               ⚠️ 延長審査未実施
                             </span>
                           )}
@@ -411,7 +427,7 @@ function StudentTable({
                   )}
 
                   {/* 備考 */}
-                  <td className="px-2 py-1 text-xs text-gray-500" style={{minWidth: '200px'}}>
+                  <td className="px-2 py-1 text-xs text-gray-500">
                     {isEditing ? (
                       <textarea
                         value={formData.notes}
@@ -435,7 +451,7 @@ function StudentTable({
                   </td>
 
                   {/* 操作 */}
-                  <td className="px-1 py-1 whitespace-nowrap text-center" style={{width: '60px'}}>
+                  <td className="px-1 py-1 text-center">
                     {isEditing ? (
                       <div className="flex flex-col gap-1">
                         <button
