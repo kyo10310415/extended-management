@@ -430,6 +430,7 @@ function ExaminationList() {
           onUpdate={handleUpdate}
           showExaminationColumn={true}
           showStatusColumn={true}
+          showLessonDatesColumn={true}
         />
       )}
     </div>

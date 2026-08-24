@@ -412,6 +412,7 @@ function ProExaminationList() {
           onUpdate={handleUpdate}
           showExaminationColumn={true}
           showStatusColumn={true}
+          showLessonDatesColumn={true}
         />
       )}
     </div>

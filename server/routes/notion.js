@@ -1,6 +1,11 @@
 import express from 'express';
 import { fetchStudents } from '../services/notionService.js';
-import { fetchFormUpdates, fetchSuspensionData } from '../services/sheetsService.js';
+import {
+  fetchFormUpdates,
+  fetchSuspensionData,
+  fetchLessonDatesForMonth,
+  getLessonDatesForStudent,
+} from '../services/sheetsService.js';
 import { enrichStudentsWithMonths, filterStudentsByMonth, calculateEffectiveSuspensionMonths } from '../utils/dateUtils.js';
 import cacheService from '../services/cacheService.js';
 import databaseCacheService from '../services/databaseCacheService.js';
@@ -89,9 +94,12 @@ router.get('/students', async (req, res) => {
 router.get('/hearing', async (req, res) => {
   try {
     const monthOffset = parseInt(req.query.monthOffset) || 0;
-    const students = await fetchStudents();
-    const formUpdates = await fetchFormUpdates();
-    const suspensionData = await fetchSuspensionData();
+    const [students, formUpdates, suspensionData, lessonSchedule] = await Promise.all([
+      fetchStudents(),
+      fetchFormUpdates(),
+      fetchSuspensionData(),
+      fetchLessonDatesForMonth(monthOffset),
+    ]);
     
     // 今月・翌月はアクティブのみ。過去月は正規退会・強制退会も含める
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
@@ -112,6 +120,7 @@ router.get('/hearing', async (req, res) => {
           suspensionStartDate: suspension?.suspensionStartDate || null,
           suspensionRecords: suspension?.records || [],
           formLastUpdate: formUpdates[student.studentId] || null,
+          lessonDates: getLessonDatesForStudent(lessonSchedule.lessonDatesByStudent, student.studentId),
         };
       });
     
@@ -150,9 +159,12 @@ router.get('/hearing', async (req, res) => {
 router.get('/examination', async (req, res) => {
   try {
     const monthOffset = parseInt(req.query.monthOffset) || 0;
-    const students = await fetchStudents();
-    const formUpdates = await fetchFormUpdates();
-    const suspensionData = await fetchSuspensionData();
+    const [students, formUpdates, suspensionData, lessonSchedule] = await Promise.all([
+      fetchStudents(),
+      fetchFormUpdates(),
+      fetchSuspensionData(),
+      fetchLessonDatesForMonth(monthOffset),
+    ]);
     
     // アクティブ + 正規退会 + 無断キャンセルは常に表示
     // 過去月はさらに強制退会も含める
@@ -176,6 +188,7 @@ router.get('/examination', async (req, res) => {
           suspensionStartDate: suspension?.suspensionStartDate || null,
           suspensionRecords: suspension?.records || [],
           formLastUpdate: formUpdates[student.studentId] || null,
+          lessonDates: getLessonDatesForStudent(lessonSchedule.lessonDatesByStudent, student.studentId),
         };
       });
     
@@ -214,9 +227,12 @@ router.get('/examination', async (req, res) => {
 router.get('/pro-hearing', async (req, res) => {
   try {
     const monthOffset = parseInt(req.query.monthOffset) || 0;
-    const students = await fetchStudents();
-    const formUpdates = await fetchFormUpdates();
-    const suspensionData = await fetchSuspensionData();
+    const [students, formUpdates, suspensionData, lessonSchedule] = await Promise.all([
+      fetchStudents(),
+      fetchFormUpdates(),
+      fetchSuspensionData(),
+      fetchLessonDatesForMonth(monthOffset),
+    ]);
     
     // 今月・翌月はアクティブのみ。過去月は正規退会・強制退会も含める
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
@@ -237,6 +253,7 @@ router.get('/pro-hearing', async (req, res) => {
           suspensionStartDate: suspension?.suspensionStartDate || null,
           suspensionRecords: suspension?.records || [],
           formLastUpdate: formUpdates[student.studentId] || null,
+          lessonDates: getLessonDatesForStudent(lessonSchedule.lessonDatesByStudent, student.studentId),
         };
       });
     
@@ -270,9 +287,12 @@ router.get('/pro-hearing', async (req, res) => {
 router.get('/pro-examination', async (req, res) => {
   try {
     const monthOffset = parseInt(req.query.monthOffset) || 0;
-    const students = await fetchStudents();
-    const formUpdates = await fetchFormUpdates();
-    const suspensionData = await fetchSuspensionData();
+    const [students, formUpdates, suspensionData, lessonSchedule] = await Promise.all([
+      fetchStudents(),
+      fetchFormUpdates(),
+      fetchSuspensionData(),
+      fetchLessonDatesForMonth(monthOffset),
+    ]);
     
     // 今月・翌月はアクティブのみ。過去月は正規退会・強制退会も含める
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
@@ -293,6 +313,7 @@ router.get('/pro-examination', async (req, res) => {
           suspensionStartDate: suspension?.suspensionStartDate || null,
           suspensionRecords: suspension?.records || [],
           formLastUpdate: formUpdates[student.studentId] || null,
+          lessonDates: getLessonDatesForStudent(lessonSchedule.lessonDatesByStudent, student.studentId),
         };
       });
     

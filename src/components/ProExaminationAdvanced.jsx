@@ -336,6 +336,7 @@ function ProExaminationAdvanced() {
             showHearingColumn={false}
             showExaminationColumn={true}
             showStatusColumn={true}
+            showLessonDatesColumn={true}
           />
         </>
       )}
