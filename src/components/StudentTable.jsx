@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import { isExaminationOverdue } from '../utils/examinationStatus'
 
 function StudentTable({
   students,
@@ -182,6 +183,10 @@ function StudentTable({
           <tbody className="bg-white divide-y divide-gray-200">
             {sortedStudents.map((student) => {
               const isEditing = editingStudent === student.studentId
+              const examinationOverdue = showExaminationColumn && isExaminationOverdue({
+                lessonDates: student.lessonDates,
+                examinationResult: student.extensionData?.examination_result,
+              })
               
               // 休会歴があるかチェック（未来の休会予定は別テキスト）
               const suspensionWarning = (() => {
@@ -393,6 +398,11 @@ function StudentTable({
                           {student.extensionData?.examination_result_manual_override && (
                             <span className="text-[10px] font-medium text-amber-700 whitespace-nowrap">
                               🔒 手動固定
+                            </span>
+                          )}
+                          {examinationOverdue && (
+                            <span className="text-[11px] font-semibold text-red-600 whitespace-nowrap">
+                              ⚠️ 延長審査未実施
                             </span>
                           )}
                         </div>
