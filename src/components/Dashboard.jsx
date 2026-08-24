@@ -138,7 +138,10 @@ function Dashboard() {
         const res1 = await fetch('/api/students/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentIds: exam1Ids, cycle: 1 }),
+          body: JSON.stringify({
+            studentIds: exam1Ids,
+            cycle: 1,
+          }),
         });
         const data1 = await res1.json();
         exam1Data = data1.data || {};
@@ -152,7 +155,10 @@ function Dashboard() {
         const res2 = await fetch('/api/students/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentIds: exam2Ids, cycle: 2 }),
+          body: JSON.stringify({
+            studentIds: exam2Ids,
+            cycle: 2,
+          }),
         });
         const data2 = await res2.json();
         exam2Data = data2.data || {};
@@ -168,7 +174,10 @@ function Dashboard() {
         const res3 = await fetch('/api/students/bulk', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentIds: exam3Ids, cycle: 3 }),
+          body: JSON.stringify({
+            studentIds: exam3Ids,
+            cycle: 3,
+          }),
         });
         const data3 = await res3.json();
         exam3Data = data3.data || {};

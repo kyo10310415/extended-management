@@ -66,6 +66,10 @@ function ProExaminationAdvanced() {
   const handleRefresh = async () => {
     try {
       setRefreshing(true)
+      await fetch('/api/notion/cache/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
       await fetchStudents()
       alert('✅ 最新データに更新しました！')
     } catch (err) {
@@ -86,11 +90,27 @@ function ProExaminationAdvanced() {
       const data = await res.json()
       if (data.success) {
         setStudents(prev =>
-          prev.map(s => s.studentId === studentId ? { ...s, extensionData: data.data } : s)
+          prev.map(s => s.studentId === studentId
+            ? {
+                ...s,
+                extensionData: {
+                  ...s.extensionData,
+                  [`extension_certainty_${round}`]: data.data.extension_certainty,
+                  [`hearing_status_${round}`]: data.data.hearing_status,
+                  [`examination_result_${round}`]: data.data.examination_result,
+                  [`examination_result_manual_override_${round}`]: data.data.examination_result_manual_override,
+                  [`discord_notification_sent_${round}`]: data.data.discord_notification_sent,
+                  [`discord_notification_sent_at_${round}`]: data.data.discord_notification_sent_at,
+                  [`notes_${round}`]: data.data.notes,
+                },
+              }
+            : s)
         )
       }
+      return data
     } catch (err) {
       console.error('handleUpdate error:', err)
+      return { success: false, error: err.message }
     }
   }
 
@@ -326,6 +346,9 @@ function ProExaminationAdvanced() {
                     extension_certainty: s.extensionData[`extension_certainty_${round}`],
                     hearing_status:      s.extensionData[`hearing_status_${round}`],
                     examination_result:  s.extensionData[`examination_result_${round}`],
+                    examination_result_manual_override: s.extensionData[`examination_result_manual_override_${round}`],
+                    discord_notification_sent: s.extensionData[`discord_notification_sent_${round}`],
+                    discord_notification_sent_at: s.extensionData[`discord_notification_sent_at_${round}`],
                     notes:               s.extensionData[`notes_${round}`],
                   }
                 : null,

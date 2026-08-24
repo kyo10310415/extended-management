@@ -7,13 +7,18 @@ dotenv.config();
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
 const SUSPENSION_SPREADSHEET_ID = '17ys2PZpDpffG3j4EQrXiLlwGbFxiNosBqMivL2quVEA';
-const EXAMINATION_FORM_SPREADSHEET_ID = '1m7P2nsX-M9BGP2RHIj3CjAZiDPs2K9gu1Y_md7xiazQ';
+const EXAMINATION_FORM_SPREADSHEET_ID = process.env.EXAMINATION_FORM_SPREADSHEET_ID
+  || '1m7P2nsX-M9BGP2RHIj3CjAZiDPs2K9gu1Y_md7xiazQ';
+const EXAMINATION_FORM_SHEET_NAME = process.env.EXAMINATION_FORM_SHEET_NAME
+  || 'フォームの回答 1';
 const LESSON_RESERVATION_SPREADSHEET_ID = process.env.LESSON_RESERVATION_SPREADSHEET_ID
   || '1DvjTbwz2qhqwSnNqROTDAvd1hl-Lz9o05LE6rzEQEGo';
 const LESSON_RESERVATION_SHEET_NAME = process.env.LESSON_RESERVATION_SHEET_NAME
   || 'レッスン予約データ';
 const LESSON_DATES_CACHE_TTL_MS = 5 * 60 * 1000;
 let lessonRowsFetchPromise = null;
+const EXAMINATION_RESULTS_CACHE_TTL_MS = 30 * 60 * 1000;
+let examinationFormRowsFetchPromise = null;
 
 /**
  * ERR_STREAM_PREMATURE_CLOSE 根本解消
@@ -213,6 +218,127 @@ export async function fetchLessonDatesForMonth(monthOffset = 0) {
 
 export function getLessonDatesForStudent(lessonDatesByStudent, studentId) {
   return lessonDatesByStudent[normalizeLessonStudentId(studentId)] || [];
+}
+
+/**
+ * フォームのI列の値を、システム上の審査結果へ変換する。
+ * 指定外の値は自動入力しない。
+ */
+export function mapExaminationFormResult(value) {
+  const normalizedValue = String(value ?? '').trim().replace(/＋/g, '+');
+
+  if (normalizedValue === '延長' || normalizedValue === '永久会員+PROプラン') {
+    return '延長';
+  }
+  if (normalizedValue === '正規退会' || normalizedValue === '無断キャンセル') {
+    return '退会';
+  }
+  if (normalizedValue === '永久会員') {
+    return '永久会員';
+  }
+
+  return null;
+}
+
+/**
+ * B:I のフォーム回答から、対象年月の最新回答を学籍番号別に抽出する。
+ * 同じ年月・学籍番号に複数回答がある場合は、B列の入力日時が最新の行を採用する。
+ */
+export function buildAutomaticExaminationResultsByStudent(rows, targetYearMonth) {
+  const latestResponseByStudent = {};
+
+  rows.forEach((row, rowIndex) => {
+    const inputDate = parseLessonDate(row?.[0]); // B列
+    const studentId = normalizeLessonStudentId(row?.[3]); // E列（B:I 内の index 3）
+
+    if (!inputDate || inputDate.yearMonth !== targetYearMonth || !studentId) return;
+
+    const sourceValue = String(row?.[7] ?? '').trim(); // I列（B:I 内の index 7）
+    const candidate = {
+      result: mapExaminationFormResult(sourceValue),
+      sourceValue,
+      sourceTimestamp: inputDate.displayValue,
+      sortKey: `${inputDate.sortKey}-${String(rowIndex).padStart(8, '0')}`,
+    };
+    const current = latestResponseByStudent[studentId];
+
+    if (!current || candidate.sortKey >= current.sortKey) {
+      latestResponseByStudent[studentId] = candidate;
+    }
+  });
+
+  return Object.fromEntries(
+    Object.entries(latestResponseByStudent)
+      .filter(([, response]) => response.result)
+      .map(([studentId, response]) => [studentId, {
+        result: response.result,
+        sourceValue: response.sourceValue,
+        sourceTimestamp: response.sourceTimestamp,
+      }])
+  );
+}
+
+async function fetchExaminationFormRows(forceRefresh = false) {
+  const cacheKey = `examination_form_rows_${EXAMINATION_FORM_SPREADSHEET_ID}_${EXAMINATION_FORM_SHEET_NAME}`;
+  if (forceRefresh) {
+    cacheService.delete(cacheKey);
+  }
+
+  const cachedRows = cacheService.get(cacheKey);
+  if (cachedRows) return { available: true, rows: cachedRows };
+
+  if (examinationFormRowsFetchPromise) return examinationFormRowsFetchPromise;
+
+  examinationFormRowsFetchPromise = (async () => {
+    const auth = getAuth();
+    if (!auth) {
+      console.warn('⚠️ Google Sheets authentication not configured for examination results');
+      return { available: false, rows: [] };
+    }
+
+    const sheets = google.sheets({ version: 'v4', auth });
+    const escapedSheetName = EXAMINATION_FORM_SHEET_NAME.replace(/'/g, "''");
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: EXAMINATION_FORM_SPREADSHEET_ID,
+      range: `'${escapedSheetName}'!B:I`,
+      valueRenderOption: 'FORMATTED_VALUE',
+    });
+
+    const rows = (response.data.values || []).slice(1); // 1行目はヘッダー
+    cacheService.set(cacheKey, rows, EXAMINATION_RESULTS_CACHE_TTL_MS);
+    console.log(`✅ Fetched ${rows.length} examination form rows from "${EXAMINATION_FORM_SHEET_NAME}"`);
+    return { available: true, rows };
+  })();
+
+  try {
+    return await examinationFormRowsFetchPromise;
+  } finally {
+    examinationFormRowsFetchPromise = null;
+  }
+}
+
+/**
+ * 表示月のフォーム回答を、自動入力用の審査結果マップとして返す。
+ */
+export async function fetchAutomaticExaminationResultsForMonth(
+  monthOffset = 0,
+  { forceRefresh = false } = {}
+) {
+  const targetYearMonth = getLessonTargetYearMonth(monthOffset);
+
+  try {
+    const { available, rows } = await fetchExaminationFormRows(forceRefresh);
+    if (!available) {
+      return { available: false, targetYearMonth, resultsByStudent: {} };
+    }
+
+    const resultsByStudent = buildAutomaticExaminationResultsByStudent(rows, targetYearMonth);
+    console.log(`📋 Automatic examination results for ${targetYearMonth}: ${Object.keys(resultsByStudent).length} students`);
+    return { available: true, targetYearMonth, resultsByStudent };
+  } catch (error) {
+    console.error('❌ Error fetching automatic examination results:', error.message);
+    return { available: false, targetYearMonth, resultsByStudent: {} };
+  }
 }
 
 /**

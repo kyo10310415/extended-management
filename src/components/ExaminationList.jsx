@@ -43,7 +43,10 @@ function ExaminationList() {
           const res1 = await fetch('/api/students/bulk', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ studentIds: cycle1Ids, cycle: 1 }),
+            body: JSON.stringify({
+              studentIds: cycle1Ids,
+              cycle: 1,
+            }),
           });
           const data1 = await res1.json();
           cycle1Data = data1.data || {};
@@ -55,7 +58,10 @@ function ExaminationList() {
           const res2 = await fetch('/api/students/bulk', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ studentIds: cycle2Ids, cycle: 2 }),
+            body: JSON.stringify({
+              studentIds: cycle2Ids,
+              cycle: 2,
+            }),
           });
           const data2 = await res2.json();
           cycle2Data = data2.data || {};
@@ -174,8 +180,10 @@ function ExaminationList() {
       } else {
         console.error('  ❌ 更新失敗:', data.error);
       }
+      return data
     } catch (err) {
       console.error('  ❌ エラー:', err)
+      return { success: false, error: err.message }
     }
   }
 

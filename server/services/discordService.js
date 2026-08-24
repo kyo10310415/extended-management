@@ -1,6 +1,69 @@
 import axios from 'axios';
 import { getTutorWebhooks, normalizeTutorName } from './tutorWebhookService.js';
 
+export function buildExaminationResultDiscordMessage({
+  name,
+  studentId,
+  notionUrl,
+  resultLabel,
+}) {
+  return {
+    content: [
+      '@everyone',
+      '延長審査報告',
+      `生徒名：${name || '-'}`,
+      `学籍番号：${studentId || '-'}`,
+      `NotionURL：${notionUrl || '-'}`,
+      `審査結果：${resultLabel === 'PROプラン' ? 'PROプラン' : '延長'}`,
+    ].join('\n'),
+    allowed_mentions: { parse: ['everyone'] },
+  };
+}
+
+/**
+ * 審査結果が「延長」へ更新されたことを専用Webhookへ通知する。
+ * @param {{name: string, studentId: string, notionUrl: string, resultLabel: string}} student
+ */
+export async function sendExaminationResultNotification({
+  name,
+  studentId,
+  notionUrl,
+  resultLabel,
+}) {
+  const webhookUrl = process.env.EXAMINATION_DISCORD_WEBHOOK_URL;
+  if (!webhookUrl) {
+    return {
+      success: false,
+      error: 'EXAMINATION_DISCORD_WEBHOOK_URL is not configured',
+    };
+  }
+
+  const message = buildExaminationResultDiscordMessage({
+    name,
+    studentId,
+    notionUrl,
+    resultLabel,
+  });
+
+  try {
+    await axios.post(
+      webhookUrl,
+      {
+        ...message,
+      },
+      { timeout: 10000 }
+    );
+    console.log(`✅ Sent examination result notification for ${studentId}`);
+    return { success: true };
+  } catch (error) {
+    console.error(
+      `❌ Failed to send examination result notification for ${studentId}:`,
+      error.message
+    );
+    return { success: false, error: error.message };
+  }
+}
+
 /**
  * 担当Tutorごとにヒアリング対象と延長審査対象の生徒リストをDiscordに送信
  */
@@ -218,6 +281,7 @@ function formatStudentSection(title, students, emoji) {
 }
 
 export default {
+  sendExaminationResultNotification,
   sendMonthlyStudentListToTutors,
   sendIncompleteStudentListToTutors,
 };

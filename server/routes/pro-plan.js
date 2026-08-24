@@ -16,6 +16,7 @@ import {
   examMonth,
   enrichStudentsWithProPlanMonths,
 } from '../services/proPlanExternalService.js';
+import { isValidExtensionCycle } from '../services/examinationResultSyncService.js';
 
 const router = express.Router();
 
@@ -393,6 +394,10 @@ router.get('/advanced-examination', async (req, res) => {
   const round = parseInt(req.query.round ?? '4', 10);
   const monthOffset = parseInt(req.query.monthOffset ?? '0', 10);
 
+  if (!isValidExtensionCycle(round) || round < 4) {
+    return res.status(400).json({ success: false, error: 'round must be between 4 and 10' });
+  }
+
   console.log(`📡 GET /api/pro-plan/advanced-examination round=${round} monthOffset=${monthOffset}`);
 
   try {
@@ -409,9 +414,13 @@ router.get('/advanced-examination', async (req, res) => {
         const placeholders = studentIds.map((_, i) => `$${i + 1}`).join(',');
         const extResult = await pool.query(
           `SELECT student_id,
-                  extension_certainty_4, examination_result_4,
-                  extension_certainty_5, examination_result_5,
-                  extension_certainty_6, examination_result_6
+                  extension_certainty_${round},
+                  hearing_status_${round},
+                  examination_result_${round},
+                  examination_result_manual_override_${round},
+                  discord_notification_sent_${round},
+                  discord_notification_sent_at_${round},
+                  notes_${round}
              FROM student_extensions
             WHERE student_id IN (${placeholders})`,
           studentIds
