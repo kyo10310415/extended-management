@@ -10,11 +10,18 @@ function StudentTable({
 }) {
   const [editingStudent, setEditingStudent] = useState(null)
   const [formData, setFormData] = useState({})
+  const [originalExaminationResult, setOriginalExaminationResult] = useState('')
+  const [originalDiscordNotificationSent, setOriginalDiscordNotificationSent] = useState(false)
+  const [discordPromptStudentId, setDiscordPromptStudentId] = useState(null)
   const [sortField, setSortField] = useState('tutor') // デフォルトで担任Tutorでソート
   const [sortDirection, setSortDirection] = useState('asc')
 
   const handleEdit = useCallback((student) => {
     setEditingStudent(student.studentId)
+    setOriginalExaminationResult(student.extensionData?.examination_result || '')
+    setOriginalDiscordNotificationSent(
+      student.extensionData?.discord_notification_sent === true
+    )
     setFormData({
       extension_certainty: student.extensionData?.extension_certainty || '',
       hearing_status: student.extensionData?.hearing_status || false,
@@ -23,14 +30,52 @@ function StudentTable({
     })
   }, [])
 
-  const handleSave = useCallback(async (studentId) => {
-    await onUpdate(studentId, formData)
+  const performSave = useCallback(async (studentId, sendDiscordNotification) => {
+    const response = await onUpdate(studentId, {
+      ...formData,
+      examination_result_manually_changed:
+        formData.examination_result !== originalExaminationResult,
+      send_discord_notification: sendDiscordNotification,
+    })
+
+    if (response?.success === false) {
+      alert(`❌ 保存に失敗しました: ${response.error || '不明なエラー'}`)
+      return
+    }
+
+    if (sendDiscordNotification) {
+      if (response?.notification?.success) {
+        alert('✅ Discordへ送信しました')
+      } else if (response?.notification?.queued) {
+        alert('⚠️ Discord送信に失敗したため、次回の自動同期で再試行します')
+      } else {
+        alert('❌ Discordへの送信に失敗しました')
+      }
+    }
+
     setEditingStudent(null)
-  }, [formData, onUpdate])
+    setOriginalExaminationResult('')
+    setOriginalDiscordNotificationSent(false)
+  }, [formData, onUpdate, originalExaminationResult])
+
+  const handleSave = useCallback(async (studentId) => {
+    const changedToExtension = formData.examination_result === '延長'
+      && originalExaminationResult !== '延長'
+
+    if (changedToExtension && !originalDiscordNotificationSent) {
+      setDiscordPromptStudentId(studentId)
+      return
+    }
+
+    await performSave(studentId, false)
+  }, [formData.examination_result, originalExaminationResult, originalDiscordNotificationSent, performSave])
 
   const handleCancel = useCallback(() => {
     setEditingStudent(null)
     setFormData({})
+    setOriginalExaminationResult('')
+    setOriginalDiscordNotificationSent(false)
+    setDiscordPromptStudentId(null)
   }, [])
 
   // ソート機能
@@ -64,7 +109,8 @@ function StudentTable({
   }, [students, sortField, sortDirection])
 
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
+    <>
+      <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 text-sm">
           <thead className="bg-gray-50">
@@ -126,6 +172,11 @@ function StudentTable({
               <th className="px-2 py-1 text-center text-xs font-medium text-gray-500 uppercase" style={{width: '60px'}}>
                 操作
               </th>
+              {showExaminationColumn && (
+                <th className="px-2 py-1 text-center text-xs font-medium text-gray-500 whitespace-nowrap">
+                  Discord送信済み
+                </th>
+              )}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -321,23 +372,30 @@ function StudentTable({
                           <option value="音信不通">音信不通</option>
                         </select>
                       ) : (
-                        <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${
-                          student.extensionData?.examination_result === '延長'
-                            ? 'bg-green-100 text-green-800'
-                            : student.extensionData?.examination_result === '在籍'
-                            ? 'bg-blue-100 text-blue-800'
-                            : student.extensionData?.examination_result === '退会'
-                            ? 'bg-red-100 text-red-800'
-                            : student.extensionData?.examination_result === '永久会員'
-                            ? 'bg-purple-100 text-purple-800'
-                            : student.extensionData?.examination_result === '未払い'
-                            ? 'bg-orange-100 text-orange-800'
-                            : student.extensionData?.examination_result === '音信不通'
-                            ? 'bg-gray-200 text-gray-700'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {student.extensionData?.examination_result || '-'}
-                        </span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${
+                            student.extensionData?.examination_result === '延長'
+                              ? 'bg-green-100 text-green-800'
+                              : student.extensionData?.examination_result === '在籍'
+                              ? 'bg-blue-100 text-blue-800'
+                              : student.extensionData?.examination_result === '退会'
+                              ? 'bg-red-100 text-red-800'
+                              : student.extensionData?.examination_result === '永久会員'
+                              ? 'bg-purple-100 text-purple-800'
+                              : student.extensionData?.examination_result === '未払い'
+                              ? 'bg-orange-100 text-orange-800'
+                              : student.extensionData?.examination_result === '音信不通'
+                              ? 'bg-gray-200 text-gray-700'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {student.extensionData?.examination_result || '-'}
+                          </span>
+                          {student.extensionData?.examination_result_manual_override && (
+                            <span className="text-[10px] font-medium text-amber-700 whitespace-nowrap">
+                              🔒 手動固定
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                   )}
@@ -392,13 +450,77 @@ function StudentTable({
                       </button>
                     )}
                   </td>
+
+                  {/* Discord送信済み */}
+                  {showExaminationColumn && (
+                    <td className="px-2 py-1 whitespace-nowrap text-center">
+                      <input
+                        type="checkbox"
+                        checked={student.extensionData?.discord_notification_sent === true}
+                        readOnly
+                        disabled
+                        aria-label="Discord送信済み"
+                        className="h-4 w-4 accent-green-600"
+                      />
+                    </td>
+                  )}
                 </tr>
               )
             })}
           </tbody>
         </table>
       </div>
-    </div>
+      </div>
+
+      {discordPromptStudentId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="discord-confirm-title"
+            className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl"
+          >
+            <h3 id="discord-confirm-title" className="text-lg font-semibold text-gray-900">
+              Discordに送信しますか？
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              審査結果「延長」を @everyone へ通知します。
+            </p>
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDiscordPromptStudentId(null)}
+                className="rounded bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200"
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const studentId = discordPromptStudentId
+                  setDiscordPromptStudentId(null)
+                  await performSave(studentId, false)
+                }}
+                className="rounded bg-gray-500 px-3 py-2 text-sm text-white hover:bg-gray-600"
+              >
+                送信しない
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const studentId = discordPromptStudentId
+                  setDiscordPromptStudentId(null)
+                  await performSave(studentId, true)
+                }}
+                className="rounded bg-primary px-3 py-2 text-sm text-white hover:bg-primary/90"
+              >
+                送信
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

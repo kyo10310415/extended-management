@@ -22,7 +22,9 @@ import kpiSnapshotsRoutes from './routes/kpi-snapshots.js';
 // Background services
 import { 
   initializeDataPreload, 
+  initializeAutomaticExaminationResultSync,
   scheduleDailyUpdate,
+  scheduleAutomaticExaminationResultSync,
   scheduleSuspensionEndNotifications,
   scheduleMonthlyStudentListNotifications,
   scheduleIncompleteListNotifications,
@@ -98,12 +100,22 @@ async function initDatabase() {
       extension_certainty_1 VARCHAR(20),
       hearing_status_1 BOOLEAN DEFAULT false,
       examination_result_1 VARCHAR(50),
+      examination_result_manual_override_1 BOOLEAN NOT NULL DEFAULT false,
+      discord_notification_sent_1 BOOLEAN NOT NULL DEFAULT false,
+      discord_notification_pending_1 BOOLEAN NOT NULL DEFAULT false,
+      discord_notification_result_label_1 VARCHAR(20),
+      discord_notification_sent_at_1 TIMESTAMP,
       notes_1 TEXT,
       
       -- 2回目（10ヶ月目・11ヶ月目用）
       extension_certainty_2 VARCHAR(20),
       hearing_status_2 BOOLEAN DEFAULT false,
       examination_result_2 VARCHAR(50),
+      examination_result_manual_override_2 BOOLEAN NOT NULL DEFAULT false,
+      discord_notification_sent_2 BOOLEAN NOT NULL DEFAULT false,
+      discord_notification_pending_2 BOOLEAN NOT NULL DEFAULT false,
+      discord_notification_result_label_2 VARCHAR(20),
+      discord_notification_sent_at_2 TIMESTAMP,
       notes_2 TEXT,
       
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -116,7 +128,9 @@ async function initDatabase() {
   // 既存テーブルに新しいカラムを追加するマイグレーション
   const migrationQuery = `
     -- 1回目のカラム追加（存在しない場合のみ）
-    DO $$ 
+    DO $$
+    DECLARE
+      cycle_number INTEGER;
     BEGIN
       -- 既存のカラムを_1にリネーム
       IF EXISTS (SELECT 1 FROM information_schema.columns 
@@ -187,6 +201,51 @@ async function initDatabase() {
           ADD COLUMN examination_result_6 VARCHAR(50),
           ADD COLUMN notes_6 TEXT;
       END IF;
+
+      -- 7〜10回目（画面上で選択可能な将来サイクル）のカラム追加
+      FOR cycle_number IN 7..10 LOOP
+        EXECUTE format(
+          'ALTER TABLE student_extensions
+             ADD COLUMN IF NOT EXISTS extension_certainty_%1$s VARCHAR(20),
+             ADD COLUMN IF NOT EXISTS hearing_status_%1$s BOOLEAN DEFAULT false,
+             ADD COLUMN IF NOT EXISTS examination_result_%1$s VARCHAR(50),
+             ADD COLUMN IF NOT EXISTS notes_%1$s TEXT',
+          cycle_number
+        );
+      END LOOP;
+
+      -- 手動編集ロックを全サイクルに追加。
+      -- 初回追加時のみ、既存の審査結果は手入力済みとして保護する。
+      FOR cycle_number IN 1..10 LOOP
+        IF NOT EXISTS (
+          SELECT 1
+            FROM information_schema.columns
+           WHERE table_name = 'student_extensions'
+             AND column_name = 'examination_result_manual_override_' || cycle_number
+        ) THEN
+          EXECUTE format(
+            'ALTER TABLE student_extensions
+               ADD COLUMN examination_result_manual_override_%1$s BOOLEAN NOT NULL DEFAULT false',
+            cycle_number
+          );
+          EXECUTE format(
+            'UPDATE student_extensions
+                SET examination_result_manual_override_%1$s = true
+              WHERE NULLIF(BTRIM(examination_result_%1$s), '''') IS NOT NULL',
+            cycle_number
+          );
+        END IF;
+
+        -- Discord通知状態。既存レコードは送信待ちにせず、導入後の「延長」遷移だけを通知する。
+        EXECUTE format(
+          'ALTER TABLE student_extensions
+             ADD COLUMN IF NOT EXISTS discord_notification_sent_%1$s BOOLEAN NOT NULL DEFAULT false,
+             ADD COLUMN IF NOT EXISTS discord_notification_pending_%1$s BOOLEAN NOT NULL DEFAULT false,
+             ADD COLUMN IF NOT EXISTS discord_notification_result_label_%1$s VARCHAR(20),
+             ADD COLUMN IF NOT EXISTS discord_notification_sent_at_%1$s TIMESTAMP',
+          cycle_number
+        );
+      END LOOP;
     END $$;
   `;
 
@@ -225,9 +284,13 @@ app.listen(PORT, async () => {
   // バックグラウンドでデータをプリロード（起動時に即座に取得）
   console.log('📊 Starting data preload...');
   await initializeDataPreload();
+
+  // 審査結果は起動時に一度同期し、以降はページ表示と切り離して30分ごとに更新
+  await initializeAutomaticExaminationResultSync();
   
   // 定期更新スケジュールを設定
   scheduleDailyUpdate(); // 毎日 AM 2:00 JST
+  scheduleAutomaticExaminationResultSync(); // 毎時00分・30分
   scheduleSuspensionEndNotifications(); // 毎月15日 AM 9:00 JST
   scheduleMonthlyStudentListNotifications(); // 毎月1日 AM 9:00 JST
   scheduleIncompleteListNotifications(); // 毎月20日 AM 9:00 JST

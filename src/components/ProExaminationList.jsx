@@ -40,7 +40,10 @@ function ProExaminationList() {
           const res3 = await fetch('/api/students/bulk', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ studentIds: cycle3Ids, cycle: 3 }),
+            body: JSON.stringify({
+              studentIds: cycle3Ids,
+              cycle: 3,
+            }),
           });
           const data3 = await res3.json();
           cycle3Data = data3.data || {};
@@ -157,8 +160,10 @@ function ProExaminationList() {
       } else {
         console.error('  ❌ 更新失敗:', data.error);
       }
+      return data
     } catch (err) {
       console.error('  ❌ エラー:', err)
+      return { success: false, error: err.message }
     }
   }
 

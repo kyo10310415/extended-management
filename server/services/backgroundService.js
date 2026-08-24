@@ -11,6 +11,7 @@ import { calculateKPIData } from '../routes/kpi-export.js';
 import { pool } from '../index.js';
 import { fetchStudents } from './notionService.js';
 import { calculateMonthsElapsed } from '../utils/dateUtils.js';
+import { syncAllAutomaticExaminationResults } from './examinationResultSyncService.js';
 
 /**
  * バックグラウンドでデータを取得してキャッシュに保存
@@ -129,6 +130,34 @@ export function scheduleDailyUpdate() {
 
   console.log('✅ Daily update scheduler started');
 
+  return task;
+}
+
+/**
+ * サーバー起動時に審査結果をGoogleフォームからDBへ同期する。
+ */
+export async function initializeAutomaticExaminationResultSync() {
+  console.log('🚀 Running initial examination result sync...');
+  return await syncAllAutomaticExaminationResults({ pool });
+}
+
+/**
+ * 毎時00分・30分に審査結果をGoogleフォームからDBへ同期する。
+ * 各ページはこの処理を呼ばず、DBに保存済みの結果だけを読む。
+ */
+export function scheduleAutomaticExaminationResultSync() {
+  const cronExpression = '*/30 * * * *';
+  console.log('⏰ Scheduling examination result sync every 30 minutes');
+
+  const task = cron.schedule(cronExpression, async () => {
+    console.log('⏰ Scheduled examination result sync triggered');
+    await syncAllAutomaticExaminationResults({ pool });
+  }, {
+    timezone: 'UTC',
+  });
+
+  task.start();
+  console.log('✅ 30-minute examination result sync scheduler started');
   return task;
 }
 
@@ -729,7 +758,9 @@ async function getExtensionResultsForExport(studentIds, cycle) {
 
 export default {
   initializeDataPreload,
+  initializeAutomaticExaminationResultSync,
   scheduleDailyUpdate,
+  scheduleAutomaticExaminationResultSync,
   scheduleSuspensionEndNotifications,
   scheduleMonthlyStudentListNotifications,
   scheduleIncompleteListNotifications,
