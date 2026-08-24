@@ -120,12 +120,12 @@ function StudentTable({
             <col className="w-[6%]" />
             {showStatusColumn && <col className="w-[7%]" />}
             <col className="w-[6%]" />
-            <col className="w-[7%]" />
-            {showLessonDatesColumn && <col className="w-[10%]" />}
-            <col className="w-[6%]" />
             <col className="w-[5%]" />
+            {showLessonDatesColumn && <col className="w-[7%]" />}
+            <col className="w-[7%]" />
+            <col className="w-[7%]" />
             {showHearingColumn && <col className="w-[4%]" />}
-            {showExaminationColumn && <col className="w-[10%]" />}
+            {showExaminationColumn && <col className="w-[12%]" />}
             <col className={showExaminationColumn ? 'w-[14%]' : 'w-[22%]'} />
             <col className="w-[5%]" />
             {showExaminationColumn && <col className="w-[8%]" />}
@@ -314,7 +314,7 @@ function StudentTable({
                   <td className="px-2 py-1 whitespace-nowrap">
                     {student.suspensionMonths > 0 ? (
                       <div className="flex flex-col gap-0.5">
-                        <span className="px-1 py-0.5 text-[10px] font-semibold rounded-full bg-green-100 text-green-800">
+                        <span className="px-1 py-0.5 text-[11px] font-semibold rounded-full bg-green-100 text-green-800">
                           {student.adjustedMonths}ヶ月
                         </span>
                         <span className="text-[9px] leading-tight text-gray-400">
@@ -322,7 +322,7 @@ function StudentTable({
                         </span>
                       </div>
                     ) : (
-                      <span className="px-1 py-0.5 text-[10px] font-semibold rounded-full bg-blue-100 text-blue-800">
+                      <span className="px-1 py-0.5 text-[11px] font-semibold rounded-full bg-blue-100 text-blue-800">
                         {student.adjustedMonths || student.monthsElapsed}ヶ月
                       </span>
                     )}
@@ -343,7 +343,7 @@ function StudentTable({
                         <option value="対象外">対象外</option>
                       </select>
                     ) : (
-                      <span className={`px-1 py-0.5 text-[10px] leading-tight rounded-full ${
+                      <span className={`px-1 py-0.5 text-[11px] leading-tight rounded-full ${
                         student.extensionData?.extension_certainty === '高'
                           ? 'bg-green-100 text-green-800'
                           : student.extensionData?.extension_certainty === '中'
@@ -394,7 +394,7 @@ function StudentTable({
                         </select>
                       ) : (
                         <div className="flex flex-col items-start gap-1">
-                          <span className={`px-1 py-0.5 text-[10px] leading-tight rounded-full ${
+                          <span className={`px-1 py-0.5 text-[11px] leading-tight rounded-full ${
                             student.extensionData?.examination_result === '延長'
                               ? 'bg-green-100 text-green-800'
                               : student.extensionData?.examination_result === '在籍'
