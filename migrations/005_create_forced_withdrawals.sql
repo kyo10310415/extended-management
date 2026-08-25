@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS forced_withdrawals (
   months_elapsed INTEGER NOT NULL CHECK (months_elapsed >= 1),
   discord_notification_sent BOOLEAN NOT NULL DEFAULT false,
   discord_notification_sent_at TIMESTAMP,
+  student_discord_notification_sent BOOLEAN NOT NULL DEFAULT false,
+  student_discord_notification_sent_at TIMESTAMP,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

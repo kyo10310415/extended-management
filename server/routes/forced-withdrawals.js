@@ -1,6 +1,10 @@
 import express from 'express';
 import { pool } from '../index.js';
-import { sendForcedWithdrawalNotification } from '../services/discordService.js';
+import {
+  sendForcedWithdrawalNotification,
+  sendForcedWithdrawalStudentNotification,
+} from '../services/discordService.js';
+import { getForcedWithdrawalStudentDiscordDestination } from '../services/sheetsService.js';
 import {
   FORCED_WITHDRAWAL_REASONS,
   calculateForcedWithdrawalMonth,
@@ -71,6 +75,7 @@ router.get('/', async (req, res) => {
         withdrawal_reason AS "withdrawalReason",
         months_elapsed AS "monthsElapsed",
         discord_notification_sent AS "discordNotificationSent",
+        student_discord_notification_sent AS "studentDiscordNotificationSent",
         created_at AS "createdAt"
       FROM forced_withdrawals
       ORDER BY forced_withdrawal_date DESC, created_at DESC
@@ -137,6 +142,10 @@ router.post('/', async (req, res) => {
       });
     }
 
+    const studentDiscordDestination = await getForcedWithdrawalStudentDiscordDestination(
+      student.studentId
+    );
+
     const insertResult = await client.query(
       `INSERT INTO forced_withdrawals (
          student_id,
@@ -157,23 +166,44 @@ router.post('/', async (req, res) => {
       ]
     );
 
-    const notification = await sendForcedWithdrawalNotification({
+    const operationNotification = await sendForcedWithdrawalNotification({
       name: student.name,
       studentId: student.studentId,
       forcedWithdrawalDate,
       withdrawalReason,
     });
 
-    if (!notification.success) {
-      const notificationError = new Error(`Discord notification failed: ${notification.error}`);
+    if (!operationNotification.success) {
+      const notificationError = new Error(
+        `Operation Discord notification failed: ${operationNotification.error}`
+      );
       notificationError.isDiscordNotificationError = true;
+      notificationError.notificationTarget = 'operation';
+      throw notificationError;
+    }
+
+    // 再試行時に生徒様へ重複通知するリスクを抑えるため、
+    // 通知先が固定の運営向け通知を先に送信する。
+    const studentNotification = await sendForcedWithdrawalStudentNotification({
+      ...studentDiscordDestination,
+      studentId: student.studentId,
+    });
+
+    if (!studentNotification.success) {
+      const notificationError = new Error(
+        `Student Discord notification failed: ${studentNotification.error}`
+      );
+      notificationError.isDiscordNotificationError = true;
+      notificationError.notificationTarget = 'student';
       throw notificationError;
     }
 
     await client.query(
       `UPDATE forced_withdrawals
           SET discord_notification_sent = true,
-              discord_notification_sent_at = CURRENT_TIMESTAMP
+              discord_notification_sent_at = CURRENT_TIMESTAMP,
+              student_discord_notification_sent = true,
+              student_discord_notification_sent_at = CURRENT_TIMESTAMP
         WHERE id = $1`,
       [insertResult.rows[0].id]
     );
@@ -189,6 +219,7 @@ router.post('/', async (req, res) => {
         withdrawalReason,
         monthsElapsed,
         discordNotificationSent: true,
+        studentDiscordNotificationSent: true,
         createdAt: insertResult.rows[0].createdAt,
       },
     });
@@ -208,12 +239,22 @@ router.post('/', async (req, res) => {
       });
     }
 
+    if (error.isStudentDiscordDestinationError === true) {
+      return res.status(422).json({
+        success: false,
+        error: error.message,
+      });
+    }
+
     console.error('強制退会申請エラー:', error.message);
     const notificationFailed = error.isDiscordNotificationError === true;
+    const notificationTargetLabel = error.notificationTarget === 'student'
+      ? '生徒様へのDiscord通知'
+      : '運営へのDiscord通知';
     return res.status(notificationFailed ? 502 : 500).json({
       success: false,
       error: notificationFailed
-        ? 'Discord通知を送信できなかったため、申請は保存されませんでした。時間をおいて再度お試しください。'
+        ? `${notificationTargetLabel}を送信できなかったため、申請は保存されませんでした。時間をおいて再度お試しください。`
         : '強制退会申請の保存に失敗しました。',
     });
   } finally {

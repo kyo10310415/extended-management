@@ -280,11 +280,16 @@ async function initDatabase() {
         months_elapsed INTEGER NOT NULL CHECK (months_elapsed >= 1),
         discord_notification_sent BOOLEAN NOT NULL DEFAULT false,
         discord_notification_sent_at TIMESTAMP,
+        student_discord_notification_sent BOOLEAN NOT NULL DEFAULT false,
+        student_discord_notification_sent_at TIMESTAMP,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
       CREATE INDEX IF NOT EXISTS idx_forced_withdrawals_date
         ON forced_withdrawals(forced_withdrawal_date DESC);
+      ALTER TABLE forced_withdrawals
+        ADD COLUMN IF NOT EXISTS student_discord_notification_sent BOOLEAN NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS student_discord_notification_sent_at TIMESTAMP;
     `);
 
     console.log('✅ Database tables initialized and migrated');

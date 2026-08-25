@@ -310,7 +310,7 @@ function ForcedWithdrawalList() {
               )}
 
               <p className="text-xs text-gray-500">
-                申請完了時に指定ユーザーへDiscord通知が送信されます。
+                申請完了時に運営と生徒様へDiscord通知が送信されます。
               </p>
 
               <div className="flex justify-end gap-2 pt-2">
