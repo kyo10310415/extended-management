@@ -64,6 +64,64 @@ export async function sendExaminationResultNotification({
   }
 }
 
+const FORCED_WITHDRAWAL_MENTION_USER_IDS = Object.freeze([
+  '766666980086120470',
+  '703557224814870568',
+  '1423132417744441445',
+]);
+
+export function buildForcedWithdrawalDiscordMessage({
+  name,
+  studentId,
+  forcedWithdrawalDate,
+  withdrawalReason,
+}) {
+  const mentions = FORCED_WITHDRAWAL_MENTION_USER_IDS
+    .map((userId) => `<@${userId}>`)
+    .join(' ');
+
+  return {
+    content: [
+      mentions,
+      '強制退会申請',
+      `生徒名：${name || '-'}`,
+      `学籍番号：${studentId || '-'}`,
+      `強制退会日：${forcedWithdrawalDate || '-'}`,
+      `退会理由：${withdrawalReason || '-'}`,
+    ].join('\n'),
+    allowed_mentions: {
+      parse: [],
+      users: [...FORCED_WITHDRAWAL_MENTION_USER_IDS],
+    },
+  };
+}
+
+export async function sendForcedWithdrawalNotification(data) {
+  const webhookUrl = process.env.FORCED_WITHDRAWAL_DISCORD_WEBHOOK_URL;
+  if (!webhookUrl) {
+    return {
+      success: false,
+      error: 'FORCED_WITHDRAWAL_DISCORD_WEBHOOK_URL is not configured',
+    };
+  }
+
+  try {
+    await axios.post(
+      webhookUrl,
+      buildForcedWithdrawalDiscordMessage(data),
+      { timeout: 10000 }
+    );
+    console.log(`✅ Sent forced withdrawal notification for ${data.studentId}`);
+    return { success: true };
+  } catch (error) {
+    console.error(
+      `❌ Failed to send forced withdrawal notification for ${data.studentId}:`,
+      error.message
+    );
+    return { success: false, error: error.message };
+  }
+}
+
 /**
  * 担当Tutorごとにヒアリング対象と延長審査対象の生徒リストをDiscordに送信
  */
@@ -282,6 +340,7 @@ function formatStudentSection(title, students, emoji) {
 
 export default {
   sendExaminationResultNotification,
+  sendForcedWithdrawalNotification,
   sendMonthlyStudentListToTutors,
   sendIncompleteStudentListToTutors,
 };
