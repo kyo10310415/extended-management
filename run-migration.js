@@ -26,6 +26,7 @@ async function runMigration() {
       '004_create_notion_students_cache.sql',
       '005_create_forced_withdrawals.sql',
       '006_add_forced_withdrawal_student_notification.sql',
+      '007_add_examination_automation_columns.sql',
     ];
 
     for (const migrationFile of migrationFiles) {

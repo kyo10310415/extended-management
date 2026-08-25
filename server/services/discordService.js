@@ -204,6 +204,95 @@ export async function sendForcedWithdrawalStudentNotification({
   }
 }
 
+export function parseDiscordChannelUrl(value) {
+  try {
+    const url = new URL(String(value ?? '').trim());
+    const allowedHosts = new Set([
+      'discord.com',
+      'ptb.discord.com',
+      'canary.discord.com',
+      'discordapp.com',
+    ]);
+    const parts = url.pathname.split('/').filter(Boolean);
+
+    if (
+      url.protocol !== 'https:'
+      || !allowedHosts.has(url.hostname)
+      || parts.length !== 3
+      || parts[0] !== 'channels'
+      || !/^\d{17,20}$/.test(parts[1])
+      || !/^\d{17,20}$/.test(parts[2])
+    ) {
+      return null;
+    }
+
+    return { guildId: parts[1], channelId: parts[2] };
+  } catch {
+    return null;
+  }
+}
+
+export function formatJapaneseYearMonthEnd(yearMonth) {
+  const match = String(yearMonth ?? '').match(/^(\d{4})-(\d{2})$/);
+  if (!match) return null;
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  return `${match[1]}年${month}月末`;
+}
+
+export function buildExtensionAgreementDiscordMessage(endYearMonth) {
+  const formattedEndMonth = formatJapaneseYearMonthEnd(endYearMonth);
+  if (!formattedEndMonth) {
+    throw new Error('Extension end month is invalid');
+  }
+
+  return {
+    content: `# 契約延長の妥結について
+
+以下の内容の通り、契約延長したことをお知らせいたします。
+
+【VTUBER事業開始契約書の備考】 VTUBER事業開始契約書の"第４条【本契約の期間等】"に記載のある本契約の有効期間及び本件業務遂行期間は、契約書の内容に関わらず、${formattedEndMonth}（レッスンの最終月）までとする。
+
+------------------`,
+    allowed_mentions: { parse: [] },
+  };
+}
+
+export async function sendExtensionAgreementNotification({
+  chatUrl,
+  endYearMonth,
+  studentId,
+}) {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken) {
+    return { success: false, error: 'DISCORD_BOT_TOKEN is not configured' };
+  }
+
+  const channel = parseDiscordChannelUrl(chatUrl);
+  if (!channel) {
+    return { success: false, error: 'Discord chat URL is invalid' };
+  }
+
+  try {
+    await axios.post(
+      `https://discord.com/api/v10/channels/${channel.channelId}/messages`,
+      buildExtensionAgreementDiscordMessage(endYearMonth),
+      {
+        headers: { Authorization: `Bot ${botToken}` },
+        timeout: 10000,
+      }
+    );
+    console.log(`✅ Sent extension agreement notification for ${studentId}`);
+    return { success: true };
+  } catch (error) {
+    console.error(
+      `❌ Failed to send extension agreement notification for ${studentId}:`,
+      error.message
+    );
+    return { success: false, error: error.message };
+  }
+}
+
 /**
  * 担当Tutorごとにヒアリング対象と延長審査対象の生徒リストをDiscordに送信
  */
@@ -424,6 +513,7 @@ export default {
   sendExaminationResultNotification,
   sendForcedWithdrawalNotification,
   sendForcedWithdrawalStudentNotification,
+  sendExtensionAgreementNotification,
   sendMonthlyStudentListToTutors,
   sendIncompleteStudentListToTutors,
 };

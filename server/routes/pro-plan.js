@@ -420,6 +420,13 @@ router.get('/advanced-examination', async (req, res) => {
                   examination_result_manual_override_${round},
                   discord_notification_sent_${round},
                   discord_notification_sent_at_${round},
+                  executive_check_${round},
+                  revenue_extension_pending_${round},
+                  revenue_extension_completed_${round},
+                  revenue_extension_end_month_${round},
+                  student_extension_notification_pending_${round},
+                  student_extension_notification_sent_${round},
+                  student_extension_notification_sent_at_${round},
                   notes_${round}
              FROM student_extensions
             WHERE student_id IN (${placeholders})`,

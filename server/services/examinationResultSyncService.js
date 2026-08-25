@@ -14,6 +14,7 @@ import {
   fetchProStartDates,
 } from './proPlanExternalService.js';
 import { sendExaminationResultNotification } from './discordService.js';
+import { processPendingExaminationAutomations } from './examinationAutomationService.js';
 
 export const MIN_EXTENSION_CYCLE = 1;
 export const MAX_EXTENSION_CYCLE = 10;
@@ -154,6 +155,8 @@ export async function applyAutomaticExaminationResults({
   const discordSentColumn = `discord_notification_sent_${cycle}`;
   const discordPendingColumn = `discord_notification_pending_${cycle}`;
   const discordResultLabelColumn = `discord_notification_result_label_${cycle}`;
+  const revenuePendingColumn = `revenue_extension_pending_${cycle}`;
+  const revenueCompletedColumn = `revenue_extension_completed_${cycle}`;
 
   await pool.query(
     `INSERT INTO student_extensions (
@@ -162,13 +165,15 @@ export async function applyAutomaticExaminationResults({
        ${manualOverrideColumn},
        ${discordPendingColumn},
        ${discordResultLabelColumn},
+       ${revenuePendingColumn},
        updated_at
      )
      SELECT source.student_id,
             source.examination_result,
             FALSE,
-            source.examination_result = '延長',
+            COALESCE(source.examination_result = '延長', FALSE),
             source.discord_result_label,
+            COALESCE(source.examination_result = '延長', FALSE),
             CURRENT_TIMESTAMP
        FROM unnest($1::text[], $2::text[], $3::text[])
          AS source(student_id, examination_result, discord_result_label)
@@ -199,6 +204,17 @@ export async function applyAutomaticExaminationResults({
           )
            THEN EXCLUDED.${discordResultLabelColumn}
          ELSE student_extensions.${discordResultLabelColumn}
+       END,
+       ${revenuePendingColumn} = CASE
+         WHEN COALESCE(student_extensions.${manualOverrideColumn}, FALSE)
+           THEN student_extensions.${revenuePendingColumn}
+         WHEN EXCLUDED.${examinationResultColumn} = '延長'
+          AND student_extensions.${examinationResultColumn} IS DISTINCT FROM '延長'
+          AND NOT COALESCE(student_extensions.${revenueCompletedColumn}, FALSE)
+           THEN TRUE
+         WHEN EXCLUDED.${examinationResultColumn} IS DISTINCT FROM '延長'
+           THEN FALSE
+         ELSE student_extensions.${revenuePendingColumn}
        END,
        updated_at = CASE
          WHEN NOT COALESCE(student_extensions.${manualOverrideColumn}, FALSE)
@@ -372,10 +388,16 @@ async function performFullAutomaticExaminationResultSync({
         + `(monthOffset=${unavailableOffset})`
     );
     let discordNotifications = null;
+    let examinationAutomations = null;
     try {
       discordNotifications = await processPendingExaminationDiscordNotifications({ pool });
     } catch (error) {
       console.error('❌ Failed to retry pending Discord notifications:', error.message);
+    }
+    try {
+      examinationAutomations = await processPendingExaminationAutomations({ pool });
+    } catch (error) {
+      console.error('❌ Failed to retry pending examination automations:', error.message);
     }
 
     return {
@@ -385,6 +407,7 @@ async function performFullAutomaticExaminationResultSync({
       syncedCount: 0,
       mappedCount: 0,
       discordNotifications,
+      examinationAutomations,
     };
   }
 
@@ -418,6 +441,7 @@ async function performFullAutomaticExaminationResultSync({
   }
 
   const discordNotifications = await processPendingExaminationDiscordNotifications({ pool });
+  const examinationAutomations = await processPendingExaminationAutomations({ pool });
 
   const durationSeconds = ((Date.now() - startedAt) / 1000).toFixed(2);
   console.log(
@@ -431,6 +455,7 @@ async function performFullAutomaticExaminationResultSync({
     syncedCount,
     mappedCount,
     discordNotifications,
+    examinationAutomations,
     durationSeconds: Number(durationSeconds),
   };
 }
