@@ -15,6 +15,10 @@ const LESSON_RESERVATION_SPREADSHEET_ID = process.env.LESSON_RESERVATION_SPREADS
   || '1DvjTbwz2qhqwSnNqROTDAvd1hl-Lz9o05LE6rzEQEGo';
 const LESSON_RESERVATION_SHEET_NAME = process.env.LESSON_RESERVATION_SHEET_NAME
   || 'レッスン予約データ';
+const FORCED_WITHDRAWAL_STUDENT_SPREADSHEET_ID = process.env.FORCED_WITHDRAWAL_STUDENT_SPREADSHEET_ID
+  || '1iqrAhNjW8jTvobkur5N_9r9uUWFHCKqrhxM72X5z-iM';
+const FORCED_WITHDRAWAL_STUDENT_SHEET_NAME = process.env.FORCED_WITHDRAWAL_STUDENT_SHEET_NAME
+  || '❶RAW_生徒様情報';
 const LESSON_DATES_CACHE_TTL_MS = 5 * 60 * 1000;
 let lessonRowsFetchPromise = null;
 const EXAMINATION_RESULTS_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -73,6 +77,75 @@ export function normalizeLessonStudentId(value) {
     .trim()
     .toUpperCase()
     .replace(/^OLST/, 'OLTS');
+}
+
+/**
+ * B2:B の検索結果から、学籍番号が一致する実際のシート行番号を返す。
+ */
+export function findForcedWithdrawalStudentInfoRow(studentIdRows, studentId) {
+  const normalizedStudentId = normalizeLessonStudentId(studentId);
+  if (!normalizedStudentId || !Array.isArray(studentIdRows)) return null;
+
+  const rowIndex = studentIdRows.findIndex(
+    row => normalizeLessonStudentId(row?.[0]) === normalizedStudentId
+  );
+
+  return rowIndex >= 0 ? rowIndex + 2 : null;
+}
+
+function createStudentDiscordDestinationError(message) {
+  const error = new Error(message);
+  error.isStudentDiscordDestinationError = true;
+  return error;
+}
+
+/**
+ * 強制退会申請時に使う生徒様向けDiscord通知先を取得する。
+ * B列だけを検索し、一致行のG列とL列のみを追加取得する。
+ */
+export async function getForcedWithdrawalStudentDiscordDestination(studentId) {
+  const auth = getAuth();
+  if (!auth) {
+    throw new Error('Google Sheets authentication is not configured');
+  }
+
+  const sheets = google.sheets({ version: 'v4', auth });
+  const escapedSheetName = FORCED_WITHDRAWAL_STUDENT_SHEET_NAME.replace(/'/g, "''");
+  const studentIdResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId: FORCED_WITHDRAWAL_STUDENT_SPREADSHEET_ID,
+    range: `'${escapedSheetName}'!B2:B`,
+  });
+  const rowNumber = findForcedWithdrawalStudentInfoRow(
+    studentIdResponse.data.values || [],
+    studentId
+  );
+
+  if (!rowNumber) {
+    throw createStudentDiscordDestinationError(
+      '生徒情報シートに該当する学籍番号が見つかりません。'
+    );
+  }
+
+  const destinationResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId: FORCED_WITHDRAWAL_STUDENT_SPREADSHEET_ID,
+    range: `'${escapedSheetName}'!G${rowNumber}:L${rowNumber}`,
+  });
+  const destinationRow = destinationResponse.data.values?.[0] || [];
+  const discordUserId = String(destinationRow[0] ?? '').trim(); // G列
+  const webhookUrl = String(destinationRow[5] ?? '').trim(); // L列
+
+  if (!discordUserId) {
+    throw createStudentDiscordDestinationError(
+      '生徒情報シートのDiscord IDが未設定です。'
+    );
+  }
+  if (!webhookUrl) {
+    throw createStudentDiscordDestinationError(
+      '生徒情報シートのお支払い_WHが未設定です。'
+    );
+  }
+
+  return { discordUserId, webhookUrl };
 }
 
 /**

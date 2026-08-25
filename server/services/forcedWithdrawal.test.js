@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildForcedWithdrawalDiscordMessage } from './discordService.js';
+import {
+  buildForcedWithdrawalDiscordMessage,
+  buildForcedWithdrawalStudentDiscordMessage,
+  isAllowedDiscordWebhookUrl,
+} from './discordService.js';
+import { findForcedWithdrawalStudentInfoRow } from './sheetsService.js';
 import {
   FORCED_WITHDRAWAL_REASONS,
   calculateForcedWithdrawalMonth,
@@ -52,4 +57,54 @@ test('Discord通知は指定3ユーザーへのメンションと申請内容を
     parse: [],
     users: ['766666980086120470', '703557224814870568', '1423132417744441445'],
   });
+});
+
+test('生徒情報はB2:Bの学籍番号を正規化して実行番号を特定する', () => {
+  const studentIdRows = [
+    ['OLPR230001-KP'],
+    [],
+    ['olst240001-aa'],
+  ];
+
+  assert.equal(
+    findForcedWithdrawalStudentInfoRow(studentIdRows, ' OLTS240001-AA '),
+    4
+  );
+  assert.equal(findForcedWithdrawalStudentInfoRow(studentIdRows, 'OLTS-NOT-FOUND'), null);
+});
+
+test('生徒様向けDiscord通知は指定文面と対象者だけのメンションを含む', () => {
+  const discordUserId = '1016689494780563456';
+  const message = buildForcedWithdrawalStudentDiscordMessage(discordUserId);
+
+  assert.match(message.content, new RegExp(`^<@${discordUserId}>\\n\\n# 【退会についてのご連絡】`));
+  assert.match(message.content, /## ・キャラクターの利用について/);
+  assert.match(message.content, /株式会社ONE LOOP/);
+  assert.match(message.content, /第3条（知的財産権の帰属）第1項・第2項/);
+  assert.match(message.content, /## お支払いについて/);
+  assert.match(
+    message.content,
+    /https:\/\/docs\.google\.com\/forms\/d\/e\/1FAIpQLSeTAfgFm65uyQeroLPXQvwVX7ww-1U6Mfr54ogdK9p26dg9FQ\/viewform/
+  );
+  assert.ok(message.content.length <= 2000);
+  assert.deepEqual(message.allowed_mentions, {
+    parse: [],
+    users: [discordUserId],
+  });
+});
+
+test('生徒様通知はDiscord公式のWebhook URLだけを許可する', () => {
+  assert.equal(
+    isAllowedDiscordWebhookUrl('https://discord.com/api/webhooks/123456789/token_value'),
+    true
+  );
+  assert.equal(
+    isAllowedDiscordWebhookUrl('http://discord.com/api/webhooks/123456789/token_value'),
+    false
+  );
+  assert.equal(
+    isAllowedDiscordWebhookUrl('https://discord.com.example.com/api/webhooks/123456789/token_value'),
+    false
+  );
+  assert.equal(isAllowedDiscordWebhookUrl('https://example.com/webhook'), false);
 });

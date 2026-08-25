@@ -122,6 +122,88 @@ export async function sendForcedWithdrawalNotification(data) {
   }
 }
 
+const FORCED_WITHDRAWAL_STUDENT_MESSAGE = `# 【退会についてのご連絡】
+
+## ・キャラクターの利用について
+
+ご契約期間の途中で退会された場合、ご提供したキャラクター（立ち絵、Live2Dモデル、お名前）は一切ご使用いただけなくなります。
+そのため、ご自身のアカウントであっても、キャラクターが使用されている過去の動画やアイコン、ポストなどはすべて削除していただく必要がございます。
+理由は、キャラクターを構成するイラストやモデルなどの「すべてのデジタル素材」の著作権や知的財産権が、弊社（株式会社ONE LOOP）に帰属しているためです。
+会社として、大切なIP（知的財産）をトラブルから守るための厳格なルールとなっております。
+こちらの内容は、ご契約時に同意いただいた『コンサルティング業務委託契約書』の「第3条（知的財産権の帰属）第1項・第2項」および「（別紙）利用条件」に記載されておりますので、併せてご確認ください。
+
+## お支払いについて
+
+メールでの諾成契約時、説明会動画、契約書による契約の締結時と3度にわたって説明させていただいた通り、退会処理後も残りの契約期間分のレッスン料は発生いたしますのでご注意ください。
+
+残債の確認やお支払いについての問い合わせは下記のフォームよりお願い致します。
+
+https://docs.google.com/forms/d/e/1FAIpQLSeTAfgFm65uyQeroLPXQvwVX7ww-1U6Mfr54ogdK9p26dg9FQ/viewform`;
+
+export function isAllowedDiscordWebhookUrl(value) {
+  try {
+    const url = new URL(String(value ?? '').trim());
+    const allowedHosts = new Set([
+      'discord.com',
+      'ptb.discord.com',
+      'canary.discord.com',
+      'discordapp.com',
+    ]);
+    const pathParts = url.pathname.split('/').filter(Boolean);
+
+    return url.protocol === 'https:'
+      && allowedHosts.has(url.hostname)
+      && pathParts.length === 4
+      && pathParts[0] === 'api'
+      && pathParts[1] === 'webhooks'
+      && /^\d+$/.test(pathParts[2])
+      && pathParts[3].length > 0;
+  } catch {
+    return false;
+  }
+}
+
+export function buildForcedWithdrawalStudentDiscordMessage(discordUserId) {
+  const normalizedUserId = String(discordUserId ?? '').trim();
+  return {
+    content: `<@${normalizedUserId}>\n\n${FORCED_WITHDRAWAL_STUDENT_MESSAGE}`,
+    allowed_mentions: {
+      parse: [],
+      users: [normalizedUserId],
+    },
+  };
+}
+
+export async function sendForcedWithdrawalStudentNotification({
+  webhookUrl,
+  discordUserId,
+  studentId,
+}) {
+  const normalizedUserId = String(discordUserId ?? '').trim();
+  if (!/^\d{17,20}$/.test(normalizedUserId)) {
+    return { success: false, error: 'Discord user ID is invalid' };
+  }
+  if (!isAllowedDiscordWebhookUrl(webhookUrl)) {
+    return { success: false, error: 'Discord webhook URL is invalid' };
+  }
+
+  try {
+    await axios.post(
+      webhookUrl,
+      buildForcedWithdrawalStudentDiscordMessage(normalizedUserId),
+      { timeout: 10000 }
+    );
+    console.log(`✅ Sent forced withdrawal student notification for ${studentId}`);
+    return { success: true };
+  } catch (error) {
+    console.error(
+      `❌ Failed to send forced withdrawal student notification for ${studentId}:`,
+      error.message
+    );
+    return { success: false, error: error.message };
+  }
+}
+
 /**
  * 担当Tutorごとにヒアリング対象と延長審査対象の生徒リストをDiscordに送信
  */
@@ -341,6 +423,7 @@ function formatStudentSection(title, students, emoji) {
 export default {
   sendExaminationResultNotification,
   sendForcedWithdrawalNotification,
+  sendForcedWithdrawalStudentNotification,
   sendMonthlyStudentListToTutors,
   sendIncompleteStudentListToTutors,
 };
