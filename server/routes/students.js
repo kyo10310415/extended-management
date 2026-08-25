@@ -4,6 +4,10 @@ import {
   isValidExtensionCycle,
   processPendingExaminationDiscordNotifications,
 } from '../services/examinationResultSyncService.js';
+import {
+  isValidExecutiveCheck,
+  processPendingExaminationAutomations,
+} from '../services/examinationAutomationService.js';
 
 const router = express.Router();
 
@@ -79,6 +83,13 @@ router.post('/bulk', async (req, res) => {
         examination_result_manual_override: row[`examination_result_manual_override_${cycleNumber}`] || false,
         discord_notification_sent: row[`discord_notification_sent_${cycleNumber}`] || false,
         discord_notification_sent_at: row[`discord_notification_sent_at_${cycleNumber}`] || null,
+        executive_check: row[`executive_check_${cycleNumber}`] || '',
+        revenue_extension_pending: row[`revenue_extension_pending_${cycleNumber}`] || false,
+        revenue_extension_completed: row[`revenue_extension_completed_${cycleNumber}`] || false,
+        revenue_extension_end_month: row[`revenue_extension_end_month_${cycleNumber}`] || null,
+        student_extension_notification_pending: row[`student_extension_notification_pending_${cycleNumber}`] || false,
+        student_extension_notification_sent: row[`student_extension_notification_sent_${cycleNumber}`] || false,
+        student_extension_notification_sent_at: row[`student_extension_notification_sent_at_${cycleNumber}`] || null,
         notes: row[`notes_${cycleNumber}`],
         updated_at: row.updated_at,
         created_at: row.created_at,
@@ -137,6 +148,13 @@ router.get('/:studentId', async (req, res) => {
       examination_result_manual_override: row[`examination_result_manual_override_${cycle}`] || false,
       discord_notification_sent: row[`discord_notification_sent_${cycle}`] || false,
       discord_notification_sent_at: row[`discord_notification_sent_at_${cycle}`] || null,
+      executive_check: row[`executive_check_${cycle}`] || '',
+      revenue_extension_pending: row[`revenue_extension_pending_${cycle}`] || false,
+      revenue_extension_completed: row[`revenue_extension_completed_${cycle}`] || false,
+      revenue_extension_end_month: row[`revenue_extension_end_month_${cycle}`] || null,
+      student_extension_notification_pending: row[`student_extension_notification_pending_${cycle}`] || false,
+      student_extension_notification_sent: row[`student_extension_notification_sent_${cycle}`] || false,
+      student_extension_notification_sent_at: row[`student_extension_notification_sent_at_${cycle}`] || null,
       notes: row[`notes_${cycle}`],
       updated_at: row.updated_at,
       created_at: row.created_at,
@@ -168,15 +186,26 @@ router.post('/:studentId', async (req, res) => {
     examination_result,
     examination_result_manually_changed,
     send_discord_notification,
+    executive_check,
     notes,
     cycle,
   } = req.body;
   const cycleNumber = parseCycle(cycle ?? 1);
   const examinationResultWasManuallyChanged = examination_result_manually_changed === true;
   const discordNotificationWasRequested = send_discord_notification === true;
+  const executiveCheckWasProvided = Object.prototype.hasOwnProperty.call(
+    req.body,
+    'executive_check'
+  );
 
   if (!cycleNumber) {
     return res.status(400).json({ success: false, error: 'cycle must be between 1 and 10' });
+  }
+  if (executiveCheckWasProvided && !isValidExecutiveCheck(executive_check)) {
+    return res.status(400).json({
+      success: false,
+      error: 'executive_check must be blank, 未確認, or 確認済',
+    });
   }
 
   // デバッグログ
@@ -195,7 +224,33 @@ router.post('/:studentId', async (req, res) => {
     const discordPendingCol = `discord_notification_pending_${cycleNumber}`;
     const discordResultLabelCol = `discord_notification_result_label_${cycleNumber}`;
     const discordSentAtCol = `discord_notification_sent_at_${cycleNumber}`;
+    const executiveCheckCol = `executive_check_${cycleNumber}`;
+    const revenuePendingCol = `revenue_extension_pending_${cycleNumber}`;
+    const revenueCompletedCol = `revenue_extension_completed_${cycleNumber}`;
+    const revenueEndMonthCol = `revenue_extension_end_month_${cycleNumber}`;
+    const studentNotificationPendingCol = `student_extension_notification_pending_${cycleNumber}`;
+    const studentNotificationSentCol = `student_extension_notification_sent_${cycleNumber}`;
+    const studentNotificationSentAtCol = `student_extension_notification_sent_at_${cycleNumber}`;
     const notesCol = `notes_${cycleNumber}`;
+
+    if (executiveCheckWasProvided && executive_check === '確認済') {
+      const revenueStatus = await pool.query(
+        `SELECT COALESCE(${revenueCompletedCol}, FALSE) AS completed,
+                ${revenueEndMonthCol} AS end_month
+           FROM student_extensions
+          WHERE student_id = $1`,
+        [studentId]
+      );
+      if (
+        revenueStatus.rows[0]?.completed !== true
+        || !revenueStatus.rows[0]?.end_month
+      ) {
+        return res.status(409).json({
+          success: false,
+          error: '売上予測シートの延長処理が完了するまで「確認済」にはできません。',
+        });
+      }
+    }
 
     console.log('  カラム名:', {
       certaintyCol,
@@ -216,6 +271,9 @@ router.post('/:studentId', async (req, res) => {
          ${examManualOverrideCol},
          ${discordPendingCol},
          ${discordResultLabelCol},
+         ${executiveCheckCol},
+         ${revenuePendingCol},
+         ${studentNotificationPendingCol},
          ${notesCol},
          updated_at)
        VALUES (
@@ -226,6 +284,9 @@ router.post('/:studentId', async (req, res) => {
          $6,
          CASE WHEN $6 AND $7 AND NULLIF($4, '') = '延長' THEN TRUE ELSE FALSE END,
          CASE WHEN $6 AND $7 AND NULLIF($4, '') = '延長' THEN '延長' ELSE NULL END,
+         CASE WHEN $8 THEN NULLIF($9, '') ELSE NULL END,
+         CASE WHEN $6 AND NULLIF($4, '') = '延長' THEN TRUE ELSE FALSE END,
+         CASE WHEN $8 AND NULLIF($9, '') = '確認済' THEN TRUE ELSE FALSE END,
          $5,
          CURRENT_TIMESTAMP
        )
@@ -260,6 +321,29 @@ router.post('/:studentId', async (req, res) => {
              THEN '延長'
            ELSE student_extensions.${discordResultLabelCol}
          END,
+         ${executiveCheckCol} = CASE
+           WHEN $8 THEN NULLIF($9, '')
+           ELSE student_extensions.${executiveCheckCol}
+         END,
+         ${revenuePendingCol} = CASE
+           WHEN $6
+            AND EXCLUDED.${examCol} = '延長'
+            AND student_extensions.${examCol} IS DISTINCT FROM '延長'
+            AND NOT COALESCE(student_extensions.${revenueCompletedCol}, FALSE)
+             THEN TRUE
+           WHEN $6 AND EXCLUDED.${examCol} IS DISTINCT FROM '延長'
+             THEN FALSE
+           ELSE COALESCE(student_extensions.${revenuePendingCol}, FALSE)
+         END,
+         ${studentNotificationPendingCol} = CASE
+           WHEN $8
+            AND NULLIF($9, '') = '確認済'
+            AND NOT COALESCE(student_extensions.${studentNotificationSentCol}, FALSE)
+             THEN TRUE
+           WHEN $8 AND NULLIF($9, '') IS DISTINCT FROM '確認済'
+             THEN FALSE
+           ELSE COALESCE(student_extensions.${studentNotificationPendingCol}, FALSE)
+         END,
          ${notesCol} = EXCLUDED.${notesCol},
          updated_at = CURRENT_TIMESTAMP
        RETURNING *`,
@@ -271,11 +355,14 @@ router.post('/:studentId', async (req, res) => {
         notes,
         examinationResultWasManuallyChanged,
         discordNotificationWasRequested,
+        executiveCheckWasProvided,
+        executive_check,
       ]
     );
 
     let row = result.rows[0];
     let notification = null;
+    let automation = null;
 
     if (
       examinationResultWasManuallyChanged
@@ -311,6 +398,39 @@ router.post('/:studentId', async (req, res) => {
         };
       }
     }
+
+    if (
+      row[revenuePendingCol] === true
+      || row[studentNotificationPendingCol] === true
+    ) {
+      try {
+        const processed = await processPendingExaminationAutomations({
+          pool,
+          cycle: cycleNumber,
+          studentId,
+        });
+        const refreshed = await pool.query(
+          `SELECT * FROM student_extensions WHERE student_id = $1`,
+          [studentId]
+        );
+        row = refreshed.rows[0] || row;
+        automation = {
+          success: processed.success,
+          skipped: processed.skipped,
+          queued: row[revenuePendingCol] === true
+            || row[studentNotificationPendingCol] === true,
+          revenue: processed.revenue,
+          studentNotification: processed.studentNotifications,
+        };
+      } catch (automationError) {
+        console.error('  ❌ 延長後自動化処理エラー:', automationError.message);
+        automation = {
+          success: false,
+          queued: true,
+          error: automationError.message,
+        };
+      }
+    }
     
     // サイクルに応じたフィールドを返す
     const data = {
@@ -321,6 +441,13 @@ router.post('/:studentId', async (req, res) => {
       examination_result_manual_override: row[examManualOverrideCol] || false,
       discord_notification_sent: row[discordSentCol] || false,
       discord_notification_sent_at: row[discordSentAtCol] || null,
+      executive_check: row[executiveCheckCol] || '',
+      revenue_extension_pending: row[revenuePendingCol] || false,
+      revenue_extension_completed: row[revenueCompletedCol] || false,
+      revenue_extension_end_month: row[revenueEndMonthCol] || null,
+      student_extension_notification_pending: row[studentNotificationPendingCol] || false,
+      student_extension_notification_sent: row[studentNotificationSentCol] || false,
+      student_extension_notification_sent_at: row[studentNotificationSentAtCol] || null,
       notes: row[notesCol],
       updated_at: row.updated_at,
       created_at: row.created_at,
@@ -332,6 +459,7 @@ router.post('/:studentId', async (req, res) => {
       success: true,
       data,
       notification,
+      automation,
     });
   } catch (error) {
     console.error('  ❌ 保存エラー:', error);

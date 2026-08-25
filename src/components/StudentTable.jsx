@@ -27,9 +27,12 @@ function StudentTable({
       extension_certainty: student.extensionData?.extension_certainty || '',
       hearing_status: student.extensionData?.hearing_status || false,
       examination_result: student.extensionData?.examination_result || '',
+      ...(showExaminationColumn
+        ? { executive_check: student.extensionData?.executive_check || '' }
+        : {}),
       notes: student.extensionData?.notes || '',
     })
-  }, [])
+  }, [showExaminationColumn])
 
   const performSave = useCallback(async (studentId, sendDiscordNotification) => {
     const response = await onUpdate(studentId, {
@@ -52,6 +55,16 @@ function StudentTable({
       } else {
         alert('❌ Discordへの送信に失敗しました')
       }
+    }
+
+    if (response?.automation?.revenue?.completedCount > 0) {
+      alert('✅ 売上予測シートに6か月分を追記し、統括チェックを「未確認」にしました')
+    }
+    if (response?.automation?.studentNotification?.sentCount > 0) {
+      alert('✅ 生徒様へ契約延長のDiscordメッセージを送信しました')
+    }
+    if (response?.automation?.queued) {
+      alert('⚠️ 自動化処理は送信待ちです。30分ごとの自動同期で再試行します')
     }
 
     setEditingStudent(null)
@@ -115,18 +128,19 @@ function StudentTable({
       <div className="w-full overflow-hidden">
         <table className="w-full table-fixed divide-y divide-gray-200 text-[11px] leading-tight [&_th]:px-1 [&_th]:py-1 [&_th]:text-[10px] [&_td]:px-1 [&_td]:py-1 [&_td]:text-[10px] [&_td]:whitespace-normal [&_td]:break-words [&_td]:overflow-hidden [&_select]:px-1 [&_select]:py-0.5 [&_select]:text-[10px] [&_textarea]:px-1 [&_textarea]:py-0.5 [&_textarea]:text-[10px]">
           <colgroup>
-            <col className="w-[9%]" />
-            <col className="w-[7%]" />
-            <col className="w-[6%]" />
-            {showStatusColumn && <col className="w-[7%]" />}
-            <col className="w-[6%]" />
-            <col className="w-[5%]" />
-            {showLessonDatesColumn && <col className="w-[7%]" />}
-            <col className="w-[7%]" />
-            <col className="w-[7%]" />
+            <col className={showExaminationColumn ? 'w-[8%]' : 'w-[9%]'} />
+            <col className={showExaminationColumn ? 'w-[6%]' : 'w-[7%]'} />
+            <col className={showExaminationColumn ? 'w-[5%]' : 'w-[6%]'} />
+            {showStatusColumn && <col className={showExaminationColumn ? 'w-[6%]' : 'w-[7%]'} />}
+            <col className={showExaminationColumn ? 'w-[5%]' : 'w-[6%]'} />
+            <col className={showExaminationColumn ? 'w-[4%]' : 'w-[5%]'} />
+            {showLessonDatesColumn && <col className={showExaminationColumn ? 'w-[6%]' : 'w-[7%]'} />}
+            <col className={showExaminationColumn ? 'w-[6%]' : 'w-[7%]'} />
+            <col className={showExaminationColumn ? 'w-[6%]' : 'w-[7%]'} />
             {showHearingColumn && <col className="w-[4%]" />}
-            {showExaminationColumn && <col className="w-[12%]" />}
-            <col className={showExaminationColumn ? 'w-[14%]' : 'w-[22%]'} />
+            {showExaminationColumn && <col className="w-[10%]" />}
+            {showExaminationColumn && <col className="w-[8%]" />}
+            <col className={showExaminationColumn ? 'w-[12%]' : 'w-[22%]'} />
             <col className="w-[5%]" />
             {showExaminationColumn && <col className="w-[8%]" />}
           </colgroup>
@@ -181,6 +195,11 @@ function StudentTable({
               {showExaminationColumn && (
                 <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
                   審査
+                </th>
+              )}
+              {showExaminationColumn && (
+                <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 leading-tight">
+                  統括<br />チェック
                 </th>
               )}
               <th className="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase">
@@ -420,6 +439,49 @@ function StudentTable({
                             <span className="text-[10px] font-semibold leading-tight text-red-600">
                               ⚠️ 延長審査未実施
                             </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  )}
+
+                  {/* 統括チェック */}
+                  {showExaminationColumn && (
+                    <td className="px-2 py-1 whitespace-nowrap">
+                      {isEditing ? (
+                        <select
+                          value={formData.executive_check || ''}
+                          onChange={(e) => setFormData({ ...formData, executive_check: e.target.value })}
+                          className="px-1 py-1 border border-gray-300 rounded text-[10px] w-full"
+                        >
+                          <option value="">空白</option>
+                          <option value="未確認">未確認</option>
+                          <option
+                            value="確認済"
+                            disabled={student.extensionData?.revenue_extension_completed !== true}
+                          >
+                            確認済
+                          </option>
+                        </select>
+                      ) : (
+                        <div className="flex flex-col items-start gap-0.5">
+                          <span className={`px-1 py-0.5 rounded-full text-[10px] font-medium ${
+                            student.extensionData?.executive_check === '確認済'
+                              ? 'bg-green-100 text-green-800'
+                              : student.extensionData?.executive_check === '未確認'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {student.extensionData?.executive_check || '-'}
+                          </span>
+                          {student.extensionData?.revenue_extension_pending && (
+                            <span className="text-[9px] text-blue-700">売上追記待ち</span>
+                          )}
+                          {student.extensionData?.student_extension_notification_pending && (
+                            <span className="text-[9px] text-orange-700">生徒通知待ち</span>
+                          )}
+                          {student.extensionData?.student_extension_notification_sent && (
+                            <span className="text-[9px] text-green-700">生徒通知済み</span>
                           )}
                         </div>
                       )}

@@ -121,6 +121,9 @@ test('DB同期SQLは手動固定済みの審査結果を上書きしない', asy
 
   assert.match(capturedQuery, /examination_result_manual_override_7/);
   assert.match(capturedQuery, /discord_notification_pending_7/);
+  assert.match(capturedQuery, /revenue_extension_pending_7/);
+  assert.match(capturedQuery, /revenue_extension_completed_7/);
+  assert.match(capturedQuery, /COALESCE\(source\.examination_result = '延長', FALSE\)/);
   assert.match(capturedQuery, /WHEN COALESCE\(student_extensions\.examination_result_manual_override_7, FALSE\)/);
   assert.deepEqual(capturedParams, [
     ['OLTS-A', 'OLTS-B'],

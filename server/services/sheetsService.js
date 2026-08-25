@@ -19,6 +19,12 @@ const FORCED_WITHDRAWAL_STUDENT_SPREADSHEET_ID = process.env.FORCED_WITHDRAWAL_S
   || '1iqrAhNjW8jTvobkur5N_9r9uUWFHCKqrhxM72X5z-iM';
 const FORCED_WITHDRAWAL_STUDENT_SHEET_NAME = process.env.FORCED_WITHDRAWAL_STUDENT_SHEET_NAME
   || '❶RAW_生徒様情報';
+const EXAMINATION_AUTOMATION_SPREADSHEET_ID = process.env.EXAMINATION_AUTOMATION_SPREADSHEET_ID
+  || '1iqrAhNjW8jTvobkur5N_9r9uUWFHCKqrhxM72X5z-iM';
+const SALES_FORECAST_SHEET_NAME = process.env.SALES_FORECAST_SHEET_NAME
+  || '❷売上予測シート';
+const SALES_FORECAST_END_COLUMN = process.env.SALES_FORECAST_END_COLUMN || 'BM';
+const STUDENT_INFO_SHEET_NAME = process.env.STUDENT_INFO_SHEET_NAME || '❶RAW_生徒様情報';
 const LESSON_DATES_CACHE_TTL_MS = 5 * 60 * 1000;
 let lessonRowsFetchPromise = null;
 const EXAMINATION_RESULTS_CACHE_TTL_MS = 30 * 60 * 1000;
@@ -47,7 +53,7 @@ function getAuth() {
       const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
       return new google.auth.GoogleAuth({
         credentials,
-        scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
         // globalThis.fetch ベースのカスタムトランスポーターを
         // clientOptions 経由で JWT クライアントに渡す
         // → OAuth2 トークン取得・Sheets API リクエスト両方に適用される
@@ -91,6 +97,273 @@ export function findForcedWithdrawalStudentInfoRow(studentIdRows, studentId) {
   );
 
   return rowIndex >= 0 ? rowIndex + 2 : null;
+}
+
+export function findStudentRowNumber(studentIdRows, studentId, firstRowNumber) {
+  const normalizedStudentId = normalizeLessonStudentId(studentId);
+  if (!normalizedStudentId || !Array.isArray(studentIdRows)) return null;
+
+  const rowIndex = studentIdRows.findIndex(
+    row => normalizeLessonStudentId(row?.[0]) === normalizedStudentId
+  );
+
+  return rowIndex >= 0 ? rowIndex + firstRowNumber : null;
+}
+
+export function parseSalesForecastMonthHeader(value) {
+  const match = String(value ?? '').trim().match(/^(\d{4})[/-](\d{1,2})$/);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+export function addMonthsToYearMonth(yearMonth, amount) {
+  if (!/^\d{4}-\d{2}$/.test(String(yearMonth ?? ''))) return null;
+  const [year, month] = yearMonth.split('-').map(Number);
+  if (month < 1 || month > 12) return null;
+
+  const target = new Date(Date.UTC(year, month - 1 + amount, 1));
+  return `${target.getUTCFullYear()}-${String(target.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+export function columnNumberToLetter(columnNumber) {
+  let value = Number(columnNumber);
+  if (!Number.isInteger(value) || value < 1) return null;
+
+  let letters = '';
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    letters = String.fromCharCode(65 + remainder) + letters;
+    value = Math.floor((value - 1) / 26);
+  }
+  return letters;
+}
+
+function isNonEmptySheetValue(value) {
+  return value !== null
+    && value !== undefined
+    && String(value).trim() !== '';
+}
+
+/**
+ * 月次ヘッダーと生徒行から、最後の有効値の次の6か月を計画する。
+ * headerValues/studentRowValues はK列を0番目とする同じ幅の配列。
+ */
+export function buildSalesForecastExtensionPlan({
+  headerValues,
+  studentRowValues,
+  firstColumnNumber = 11,
+}) {
+  const monthlyColumns = headerValues
+    .map((header, index) => ({
+      offset: index,
+      columnNumber: firstColumnNumber + index,
+      yearMonth: parseSalesForecastMonthHeader(header),
+    }))
+    .filter(column => column.yearMonth);
+
+  const lastValidColumn = [...monthlyColumns]
+    .reverse()
+    .find(column => isNonEmptySheetValue(studentRowValues[column.offset]));
+
+  if (!lastValidColumn) {
+    throw new Error('対象生徒の月次売上に有効な値がありません。');
+  }
+
+  const targetColumns = monthlyColumns
+    .filter(column => column.columnNumber > lastValidColumn.columnNumber)
+    .slice(0, 6);
+
+  if (targetColumns.length !== 6) {
+    throw new Error('売上予測シートに追記先の6か月分の年月列がありません。');
+  }
+
+  targetColumns.forEach((column, index) => {
+    const expectedColumnNumber = lastValidColumn.columnNumber + index + 1;
+    const expectedYearMonth = addMonthsToYearMonth(lastValidColumn.yearMonth, index + 1);
+    if (
+      column.columnNumber !== expectedColumnNumber
+      || column.yearMonth !== expectedYearMonth
+    ) {
+      throw new Error('売上予測シートの年月列が連続していません。');
+    }
+  });
+
+  return {
+    startYearMonth: targetColumns[0].yearMonth,
+    endYearMonth: targetColumns[5].yearMonth,
+    startColumn: columnNumberToLetter(targetColumns[0].columnNumber),
+    endColumn: columnNumberToLetter(targetColumns[5].columnNumber),
+  };
+}
+
+function normalizeExtensionPrice(value) {
+  return String(value ?? '').replace(/[\s,¥￥]/g, '');
+}
+
+function isExtensionPrice(value) {
+  return normalizeExtensionPrice(value) === '22000';
+}
+
+async function getAutomationSheetsClient() {
+  const auth = getAuth();
+  if (!auth || 'key' in auth) {
+    throw new Error('Google Sheets service account authentication is not configured');
+  }
+  return google.sheets({ version: 'v4', auth });
+}
+
+async function findStudentRowInSheet({
+  sheets,
+  sheetName,
+  studentIdColumn,
+  firstRowNumber,
+  studentId,
+}) {
+  const escapedSheetName = sheetName.replace(/'/g, "''");
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: EXAMINATION_AUTOMATION_SPREADSHEET_ID,
+    range: `'${escapedSheetName}'!${studentIdColumn}${firstRowNumber}:${studentIdColumn}`,
+  });
+  const rowNumber = findStudentRowNumber(
+    response.data.values || [],
+    studentId,
+    firstRowNumber
+  );
+
+  if (!rowNumber) {
+    throw new Error(`${sheetName}に学籍番号 ${studentId} が見つかりません。`);
+  }
+  return rowNumber;
+}
+
+async function getSalesForecastHeaders(sheets) {
+  const escapedSheetName = SALES_FORECAST_SHEET_NAME.replace(/'/g, "''");
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: EXAMINATION_AUTOMATION_SPREADSHEET_ID,
+    range: `'${escapedSheetName}'!K1:${SALES_FORECAST_END_COLUMN}1`,
+    valueRenderOption: 'FORMATTED_VALUE',
+  });
+  return response.data.values?.[0] || [];
+}
+
+export async function planSalesForecastExtension(studentId) {
+  const sheets = await getAutomationSheetsClient();
+  const escapedSheetName = SALES_FORECAST_SHEET_NAME.replace(/'/g, "''");
+  const [rowNumber, headerValues] = await Promise.all([
+    findStudentRowInSheet({
+      sheets,
+      sheetName: SALES_FORECAST_SHEET_NAME,
+      studentIdColumn: 'A',
+      firstRowNumber: 9,
+      studentId,
+    }),
+    getSalesForecastHeaders(sheets),
+  ]);
+  const rowResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId: EXAMINATION_AUTOMATION_SPREADSHEET_ID,
+    range: `'${escapedSheetName}'!K${rowNumber}:${SALES_FORECAST_END_COLUMN}${rowNumber}`,
+    valueRenderOption: 'FORMATTED_VALUE',
+  });
+
+  return buildSalesForecastExtensionPlan({
+    headerValues,
+    studentRowValues: rowResponse.data.values?.[0] || [],
+  });
+}
+
+export async function applySalesForecastExtensionPlan({
+  studentId,
+  startYearMonth,
+  endYearMonth,
+}) {
+  const sheets = await getAutomationSheetsClient();
+  const escapedSheetName = SALES_FORECAST_SHEET_NAME.replace(/'/g, "''");
+  const [rowNumber, headerValues] = await Promise.all([
+    findStudentRowInSheet({
+      sheets,
+      sheetName: SALES_FORECAST_SHEET_NAME,
+      studentIdColumn: 'A',
+      firstRowNumber: 9,
+      studentId,
+    }),
+    getSalesForecastHeaders(sheets),
+  ]);
+  const parsedHeaders = headerValues.map(parseSalesForecastMonthHeader);
+  const startOffset = parsedHeaders.indexOf(startYearMonth);
+  const endOffset = parsedHeaders.indexOf(endYearMonth);
+
+  if (startOffset < 0 || endOffset !== startOffset + 5) {
+    throw new Error('保存済みの追記対象月が売上予測シートで確認できません。');
+  }
+  for (let index = 0; index < 6; index += 1) {
+    if (parsedHeaders[startOffset + index] !== addMonthsToYearMonth(startYearMonth, index)) {
+      throw new Error('保存済みの追記対象月が連続していません。');
+    }
+  }
+
+  const startColumn = columnNumberToLetter(11 + startOffset);
+  const endColumn = columnNumberToLetter(11 + endOffset);
+  const targetRange = `'${escapedSheetName}'!${startColumn}${rowNumber}:${endColumn}${rowNumber}`;
+  const currentResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId: EXAMINATION_AUTOMATION_SPREADSHEET_ID,
+    range: targetRange,
+    valueRenderOption: 'FORMATTED_VALUE',
+  });
+  const currentValues = currentResponse.data.values?.[0] || [];
+  const hasConflict = Array.from({ length: 6 }, (_, index) => currentValues[index])
+    .some(value => isNonEmptySheetValue(value) && !isExtensionPrice(value));
+
+  if (hasConflict) {
+    throw new Error('売上予測シートの追記予定範囲に別の値が入っています。');
+  }
+
+  if (!Array.from({ length: 6 }, (_, index) => currentValues[index]).every(isExtensionPrice)) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: EXAMINATION_AUTOMATION_SPREADSHEET_ID,
+      range: targetRange,
+      valueInputOption: 'RAW',
+      requestBody: { values: [Array(6).fill('22,000')] },
+    });
+  }
+
+  const verifyResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId: EXAMINATION_AUTOMATION_SPREADSHEET_ID,
+    range: targetRange,
+    valueRenderOption: 'FORMATTED_VALUE',
+  });
+  const verifiedValues = verifyResponse.data.values?.[0] || [];
+  if (!Array.from({ length: 6 }, (_, index) => verifiedValues[index]).every(isExtensionPrice)) {
+    throw new Error('売上予測シートへの追記結果を確認できませんでした。');
+  }
+
+  return { startYearMonth, endYearMonth, range: targetRange };
+}
+
+export async function getExtensionAgreementStudentChatDestination(studentId) {
+  const sheets = await getAutomationSheetsClient();
+  const escapedSheetName = STUDENT_INFO_SHEET_NAME.replace(/'/g, "''");
+  const rowNumber = await findStudentRowInSheet({
+    sheets,
+    sheetName: STUDENT_INFO_SHEET_NAME,
+    studentIdColumn: 'B',
+    firstRowNumber: 2,
+    studentId,
+  });
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: EXAMINATION_AUTOMATION_SPREADSHEET_ID,
+    range: `'${escapedSheetName}'!M${rowNumber}`,
+  });
+  const chatUrl = String(response.data.values?.[0]?.[0] ?? '').trim();
+
+  if (!chatUrl) {
+    throw new Error('生徒情報シートのチャットURLが未設定です。');
+  }
+  return { chatUrl };
 }
 
 function createStudentDiscordDestinationError(message) {
