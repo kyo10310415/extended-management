@@ -18,6 +18,7 @@ import notificationsRoutes from './routes/notifications.js';
 import proPlanRoutes from './routes/pro-plan.js';
 import kpiExportRoutes from './routes/kpi-export.js';
 import kpiSnapshotsRoutes from './routes/kpi-snapshots.js';
+import forcedWithdrawalsRoutes from './routes/forced-withdrawals.js';
 
 // Background services
 import { 
@@ -74,6 +75,7 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/pro-plan', proPlanRoutes);
 app.use('/api/kpi-export', kpiExportRoutes);
 app.use('/api/kpi-snapshots', kpiSnapshotsRoutes);
+app.use('/api/forced-withdrawals', forcedWithdrawalsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -265,6 +267,24 @@ async function initDatabase() {
         UNIQUE(year_month)
       );
       CREATE INDEX IF NOT EXISTS idx_kpi_snapshots_year_month ON kpi_monthly_snapshots(year_month);
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS forced_withdrawals (
+        id SERIAL PRIMARY KEY,
+        student_id VARCHAR(50) UNIQUE NOT NULL,
+        student_name VARCHAR(100) NOT NULL,
+        lesson_start_date DATE NOT NULL,
+        forced_withdrawal_date DATE NOT NULL,
+        withdrawal_reason VARCHAR(50) NOT NULL,
+        months_elapsed INTEGER NOT NULL CHECK (months_elapsed >= 1),
+        discord_notification_sent BOOLEAN NOT NULL DEFAULT false,
+        discord_notification_sent_at TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_forced_withdrawals_date
+        ON forced_withdrawals(forced_withdrawal_date DESC);
     `);
 
     console.log('✅ Database tables initialized and migrated');

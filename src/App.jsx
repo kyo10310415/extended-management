@@ -12,6 +12,7 @@ import ActiveProPlanList from './components/ActiveProPlanList'
 import KpiHistory from './components/KpiHistory'
 import KpiChart from './components/KpiChart'
 import KpiByTutor from './components/KpiByTutor'
+import ForcedWithdrawalList from './components/ForcedWithdrawalList'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
@@ -31,6 +32,7 @@ function App() {
     { id: 'pro-examination', name: 'Pro延長審査', icon: '📝' },
     { id: 'pro-examination-advanced', name: 'Pro審査(4回目〜)', icon: '🔄' },
     { id: 'suspension', name: '休会歴一覧', icon: '⏸️' },
+    { id: 'forced-withdrawals', name: '強制退会一覧', icon: '🚪' },
     { id: 'lifetime-members', name: '永久会員', icon: '👑' },
     { id: 'active-pro-plan', name: 'Proプラン受講中', icon: '⭐' },
     { id: 'master', name: '生徒情報マスタ', icon: '👥' },
@@ -48,6 +50,7 @@ function App() {
     { id: 'pro-examination',          component: <ProExaminationList /> },
     { id: 'pro-examination-advanced', component: <ProExaminationAdvanced /> },
     { id: 'suspension',       component: <SuspensionList /> },
+    { id: 'forced-withdrawals', component: <ForcedWithdrawalList /> },
     { id: 'lifetime-members', component: <ProPlanList /> },
     { id: 'active-pro-plan',  component: <ActiveProPlanList /> },
     { id: 'master',           component: <StudentMaster /> },
@@ -79,7 +82,7 @@ function App() {
       {/* Navigation Tabs */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex space-x-8" aria-label="Tabs">
+          <nav className="flex flex-wrap gap-x-6" aria-label="Tabs">
             {tabs.map((tab) => (
               <button
                 key={tab.id}

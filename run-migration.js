@@ -22,14 +22,19 @@ async function runMigration() {
   });
 
   try {
-    console.log('🔄 Running migration 004_create_notion_students_cache.sql...');
-    
-    const sql = readFileSync(
-      path.join(__dirname, 'migrations', '004_create_notion_students_cache.sql'),
-      'utf8'
-    );
-    
-    await pool.query(sql);
+    const migrationFiles = [
+      '004_create_notion_students_cache.sql',
+      '005_create_forced_withdrawals.sql',
+    ];
+
+    for (const migrationFile of migrationFiles) {
+      console.log(`🔄 Running migration ${migrationFile}...`);
+      const sql = readFileSync(
+        path.join(__dirname, 'migrations', migrationFile),
+        'utf8'
+      );
+      await pool.query(sql);
+    }
     
     console.log('✅ Migration completed successfully');
     await pool.end();
