@@ -28,6 +28,7 @@ async function runMigration() {
       '006_add_forced_withdrawal_student_notification.sql',
       '007_add_examination_automation_columns.sql',
       '008_create_suspension_payment_sync.sql',
+      '009_add_suspension_discord_notification.sql',
     ];
 
     for (const migrationFile of migrationFiles) {

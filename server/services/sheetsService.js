@@ -194,6 +194,7 @@ export function parseSuspensionApplicationRows(rows, firstRowNumber = 2) {
     .map((row, index) => {
       const rowNumber = firstRowNumber + index;
       const submittedAt = String(row?.[0] ?? '').trim(); // A列
+      const studentName = String(row?.[6] ?? '').trim(); // G列
       const studentId = normalizeLessonStudentId(row?.[7]); // H列
       const suspensionStartDate = String(row?.[11] ?? '').trim(); // L列
       const suspensionEndDate = String(row?.[12] ?? '').trim(); // M列
@@ -214,6 +215,7 @@ export function parseSuspensionApplicationRows(rows, firstRowNumber = 2) {
         sourceKey: buildSuspensionApplicationKey({ submittedAt, studentId, rowNumber }),
         sourceRowNumber: rowNumber,
         submittedAt,
+        studentName,
         studentId,
         suspensionStartDate,
         suspensionEndDate,

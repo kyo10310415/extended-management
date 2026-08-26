@@ -2,6 +2,7 @@ import {
   applySuspensionPaymentStatus,
   fetchSuspensionApplications,
 } from './sheetsService.js';
+import { sendSuspensionDiscordForumNotification } from './discordService.js';
 
 const LOCK_NAME = 'suspension_payment_status_sync';
 
@@ -17,6 +18,7 @@ function applicationParams(application, status, errorMessage = null) {
     application.endYearMonth,
     status,
     errorMessage,
+    application.studentName || null,
   ];
 }
 
@@ -32,11 +34,16 @@ async function insertApplication(client, application, status, errorMessage = nul
        start_year_month,
        end_year_month,
        sync_status,
-       last_error
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       last_error,
+       student_name,
+       discord_notification_status
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      ON CONFLICT (source_key) DO NOTHING
      RETURNING source_key`,
-    applicationParams(application, status, errorMessage)
+    [
+      ...applicationParams(application, status, errorMessage),
+      status === 'baseline' ? 'skipped' : 'pending',
+    ]
   );
 }
 
@@ -81,6 +88,7 @@ async function registerNewApplications(client, applications) {
                 end_year_month = $8,
                 sync_status = $9,
                 last_error = $10,
+                student_name = $11,
                 updated_at = CURRENT_TIMESTAMP
           WHERE source_key = $1
             AND sync_status = 'invalid'
@@ -113,18 +121,67 @@ async function registerNewApplications(client, applications) {
   return { discoveredCount, invalidCount };
 }
 
+function studentIdCandidates(studentId) {
+  const normalized = String(studentId ?? '').trim().toUpperCase().replace(/^OLST/, 'OLTS');
+  if (!normalized) return [];
+  return [...new Set([normalized, normalized.replace(/^OLTS/, 'OLST')])];
+}
+
+async function getSuspensionNotificationStudent(client, record) {
+  let name = String(record.student_name ?? '').trim();
+  let notionUrl = String(record.notion_url ?? '').trim();
+
+  if (!name || !notionUrl) {
+    const candidates = studentIdCandidates(record.student_id);
+    const result = await client.query(
+      `SELECT name, notion_url
+         FROM notion_students_cache
+        WHERE UPPER(student_id) = ANY($1::text[])
+        ORDER BY CASE WHEN UPPER(student_id) = $2 THEN 0 ELSE 1 END
+        LIMIT 1`,
+      [candidates, candidates[0]]
+    );
+    name = name || String(result.rows[0]?.name ?? '').trim();
+    notionUrl = notionUrl || String(result.rows[0]?.notion_url ?? '').trim();
+  }
+
+  if (!name) {
+    throw new Error('休会申請の生徒名を取得できませんでした。');
+  }
+  if (!notionUrl) {
+    throw new Error('Notionキャッシュに対象生徒のNotionリンクがありません。');
+  }
+
+  await client.query(
+    `UPDATE suspension_payment_syncs
+        SET student_name = $2,
+            notion_url = $3,
+            updated_at = CURRENT_TIMESTAMP
+      WHERE source_key = $1`,
+    [record.source_key, name, notionUrl]
+  );
+  return { name, notionUrl };
+}
+
 async function processPendingApplications(client) {
   const pending = await client.query(
     `SELECT source_key,
             student_id,
+            student_name,
+            notion_url,
+            suspension_start_date,
+            suspension_end_date,
             start_year_month,
-            end_year_month
+            end_year_month,
+            payment_status_completed_at,
+            discord_notification_status
        FROM suspension_payment_syncs
       WHERE sync_status IN ('pending', 'failed')
       ORDER BY source_row_number, created_at`
   );
   let completedCount = 0;
   let failedCount = 0;
+  let notifiedCount = 0;
   const results = [];
 
   for (const record of pending.rows) {
@@ -139,24 +196,71 @@ async function processPendingApplications(client) {
     );
 
     try {
-      const applied = await applySuspensionPaymentStatus({
-        studentId: record.student_id,
-        startYearMonth: record.start_year_month,
-        endYearMonth: record.end_year_month,
-      });
+      let applied = null;
+      if (!record.payment_status_completed_at) {
+        applied = await applySuspensionPaymentStatus({
+          studentId: record.student_id,
+          startYearMonth: record.start_year_month,
+          endYearMonth: record.end_year_month,
+        });
+        await client.query(
+          `UPDATE suspension_payment_syncs
+              SET target_row_number = $2,
+                  target_range = $3,
+                  payment_status_completed_at = CURRENT_TIMESTAMP,
+                  last_error = NULL,
+                  updated_at = CURRENT_TIMESTAMP
+            WHERE source_key = $1`,
+          [record.source_key, applied.rowNumber, applied.range]
+        );
+      }
+
+      let notification = null;
+      if (record.discord_notification_status === 'pending') {
+        const student = await getSuspensionNotificationStudent(client, record);
+        notification = await sendSuspensionDiscordForumNotification({
+          ...student,
+          studentId: record.student_id,
+          suspensionStartDate: record.suspension_start_date,
+          suspensionEndDate: record.suspension_end_date,
+        });
+        if (!notification.success) {
+          throw new Error(notification.error || 'Discord forum notification failed');
+        }
+        notifiedCount += 1;
+      }
+
       await client.query(
         `UPDATE suspension_payment_syncs
             SET sync_status = 'completed',
-                target_row_number = $2,
-                target_range = $3,
+                discord_notification_status = CASE
+                  WHEN discord_notification_status = 'pending' THEN 'sent'
+                  ELSE discord_notification_status
+                END,
+                discord_notification_sent_at = CASE
+                  WHEN discord_notification_status = 'pending' THEN CURRENT_TIMESTAMP
+                  ELSE discord_notification_sent_at
+                END,
+                discord_thread_id = COALESCE($2, discord_thread_id),
+                discord_message_id = COALESCE($3, discord_message_id),
                 completed_at = CURRENT_TIMESTAMP,
                 last_error = NULL,
                 updated_at = CURRENT_TIMESTAMP
           WHERE source_key = $1`,
-        [record.source_key, applied.rowNumber, applied.range]
+        [
+          record.source_key,
+          notification?.threadId || null,
+          notification?.messageId || null,
+        ]
       );
       completedCount += 1;
-      results.push({ sourceKey: record.source_key, success: true, ...applied });
+      results.push({
+        sourceKey: record.source_key,
+        success: true,
+        paymentApplied: Boolean(applied),
+        notified: Boolean(notification),
+        ...(applied || {}),
+      });
     } catch (error) {
       const message = String(error?.message || 'Unknown suspension payment sync error');
       await client.query(
@@ -169,11 +273,11 @@ async function processPendingApplications(client) {
       );
       failedCount += 1;
       results.push({ sourceKey: record.source_key, success: false, error: message });
-      console.error('❌ Failed to apply suspension to payment status sheet:', message);
+      console.error('❌ Failed suspension payment/Discord automation:', message);
     }
   }
 
-  return { completedCount, failedCount, results };
+  return { completedCount, failedCount, notifiedCount, results };
 }
 
 /**
@@ -197,6 +301,7 @@ export async function syncSuspensionPaymentStatuses({ pool }) {
         completedCount: 0,
         failedCount: 0,
         invalidCount: 0,
+        notifiedCount: 0,
       };
     }
 
@@ -220,6 +325,7 @@ export async function syncSuspensionPaymentStatuses({ pool }) {
         completedCount: 0,
         failedCount: 0,
         invalidCount: 0,
+        notifiedCount: 0,
       };
     }
 
@@ -240,7 +346,7 @@ export async function syncSuspensionPaymentStatuses({ pool }) {
     console.log(
       `✅ Suspension payment sync completed: new=${registered.discoveredCount}, `
       + `completed=${processed.completedCount}, failed=${processed.failedCount}, `
-      + `invalid=${registered.invalidCount}`
+      + `notified=${processed.notifiedCount}, invalid=${registered.invalidCount}`
     );
     return {
       success: processed.failedCount === 0,
@@ -271,6 +377,7 @@ export async function syncSuspensionPaymentStatuses({ pool }) {
       completedCount: 0,
       failedCount: 0,
       invalidCount: 0,
+      notifiedCount: 0,
     };
   } finally {
     if (lockAcquired) {

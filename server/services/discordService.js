@@ -293,6 +293,110 @@ export async function sendExtensionAgreementNotification({
   }
 }
 
+export function formatSuspensionForumThreadName(name) {
+  const normalized = String(name ?? '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return null;
+
+  const baseName = normalized.endsWith('様') ? normalized.slice(0, -1).trimEnd() : normalized;
+  return `${Array.from(baseName).slice(0, 99).join('')}様`;
+}
+
+export function parseDiscordForumTagIds(value) {
+  const rawIds = String(value ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (rawIds.some((id) => !/^\d{17,20}$/.test(id))) return null;
+  return [...new Set(rawIds)];
+}
+
+export function buildSuspensionDiscordForumMessage({
+  name,
+  studentId,
+  notionUrl,
+  suspensionStartDate,
+  suspensionEndDate,
+  appliedTagIds = [],
+}) {
+  const threadName = formatSuspensionForumThreadName(name);
+  if (!threadName) {
+    throw new Error('Suspension student name is missing');
+  }
+
+  const message = {
+    thread_name: threadName,
+    content: [
+      `学籍番号：${studentId || '-'}`,
+      `Notionリンク：${notionUrl || '-'}`,
+      `休会開始日：${suspensionStartDate || '-'}`,
+      `休会終了日：${suspensionEndDate || '-'}`,
+    ].join('\n'),
+    allowed_mentions: { parse: [] },
+  };
+
+  if (appliedTagIds.length > 0) {
+    message.applied_tags = appliedTagIds;
+  }
+  return message;
+}
+
+/**
+ * 休会申請をDiscordのフォーラムチャンネルへ新規投稿する。
+ * thread_nameが投稿タイトルになり、wait=trueで保存結果を受け取る。
+ */
+export async function sendSuspensionDiscordForumNotification(data) {
+  const webhookUrl = process.env.SUSPENSION_DISCORD_WEBHOOK_URL;
+  if (!webhookUrl) {
+    return {
+      success: false,
+      error: 'SUSPENSION_DISCORD_WEBHOOK_URL is not configured',
+    };
+  }
+  if (!isAllowedDiscordWebhookUrl(webhookUrl)) {
+    return { success: false, error: 'Suspension Discord webhook URL is invalid' };
+  }
+
+  const appliedTagIds = parseDiscordForumTagIds(
+    process.env.SUSPENSION_DISCORD_FORUM_TAG_IDS
+  );
+  if (appliedTagIds === null) {
+    return {
+      success: false,
+      error: 'SUSPENSION_DISCORD_FORUM_TAG_IDS contains an invalid tag ID',
+    };
+  }
+
+  let message;
+  try {
+    message = buildSuspensionDiscordForumMessage({ ...data, appliedTagIds });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+
+  try {
+    const executeUrl = new URL(webhookUrl);
+    executeUrl.searchParams.set('wait', 'true');
+    const response = await axios.post(executeUrl.toString(), message, {
+      timeout: 10000,
+    });
+    console.log(`✅ Sent suspension forum notification for ${data.studentId}`);
+    return {
+      success: true,
+      messageId: response.data?.id || null,
+      threadId: response.data?.channel_id || null,
+    };
+  } catch (error) {
+    console.error(
+      `❌ Failed to send suspension forum notification for ${data.studentId}:`,
+      error.message
+    );
+    return { success: false, error: error.message };
+  }
+}
+
 /**
  * 担当Tutorごとにヒアリング対象と延長審査対象の生徒リストをDiscordに送信
  */
@@ -514,6 +618,7 @@ export default {
   sendForcedWithdrawalNotification,
   sendForcedWithdrawalStudentNotification,
   sendExtensionAgreementNotification,
+  sendSuspensionDiscordForumNotification,
   sendMonthlyStudentListToTutors,
   sendIncompleteStudentListToTutors,
 };
