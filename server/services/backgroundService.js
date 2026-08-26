@@ -12,6 +12,7 @@ import { pool } from '../index.js';
 import { fetchStudents } from './notionService.js';
 import { calculateMonthsElapsed } from '../utils/dateUtils.js';
 import { syncAllAutomaticExaminationResults } from './examinationResultSyncService.js';
+import { syncSuspensionPaymentStatuses } from './suspensionPaymentSyncService.js';
 
 /**
  * バックグラウンドでデータを取得してキャッシュに保存
@@ -142,6 +143,14 @@ export async function initializeAutomaticExaminationResultSync() {
 }
 
 /**
+ * サーバー起動時に休会申請の処理済み状態を初期化し、新規申請を同期する。
+ */
+export async function initializeSuspensionPaymentSync() {
+  console.log('🚀 Running initial suspension payment sync...');
+  return await syncSuspensionPaymentStatuses({ pool });
+}
+
+/**
  * 毎時00分・30分に審査結果をGoogleフォームからDBへ同期する。
  * 各ページはこの処理を呼ばず、DBに保存済みの結果だけを読む。
  */
@@ -158,6 +167,25 @@ export function scheduleAutomaticExaminationResultSync() {
 
   task.start();
   console.log('✅ 30-minute examination result sync scheduler started');
+  return task;
+}
+
+/**
+ * 毎時00分・30分に新規休会申請を支払い状況シートへ反映する。
+ */
+export function scheduleSuspensionPaymentSync() {
+  const cronExpression = '*/30 * * * *';
+  console.log('⏰ Scheduling suspension payment sync every 30 minutes');
+
+  const task = cron.schedule(cronExpression, async () => {
+    console.log('⏰ Scheduled suspension payment sync triggered');
+    await syncSuspensionPaymentStatuses({ pool });
+  }, {
+    timezone: 'UTC',
+  });
+
+  task.start();
+  console.log('✅ 30-minute suspension payment sync scheduler started');
   return task;
 }
 
@@ -759,8 +787,10 @@ async function getExtensionResultsForExport(studentIds, cycle) {
 export default {
   initializeDataPreload,
   initializeAutomaticExaminationResultSync,
+  initializeSuspensionPaymentSync,
   scheduleDailyUpdate,
   scheduleAutomaticExaminationResultSync,
+  scheduleSuspensionPaymentSync,
   scheduleSuspensionEndNotifications,
   scheduleMonthlyStudentListNotifications,
   scheduleIncompleteListNotifications,

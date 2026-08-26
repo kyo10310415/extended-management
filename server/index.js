@@ -24,8 +24,10 @@ import forcedWithdrawalsRoutes from './routes/forced-withdrawals.js';
 import { 
   initializeDataPreload, 
   initializeAutomaticExaminationResultSync,
+  initializeSuspensionPaymentSync,
   scheduleDailyUpdate,
   scheduleAutomaticExaminationResultSync,
+  scheduleSuspensionPaymentSync,
   scheduleSuspensionEndNotifications,
   scheduleMonthlyStudentListNotifications,
   scheduleIncompleteListNotifications,
@@ -307,6 +309,43 @@ async function initDatabase() {
         ADD COLUMN IF NOT EXISTS student_discord_notification_sent_at TIMESTAMP;
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS suspension_payment_sync_state (
+        id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        initialized BOOLEAN NOT NULL DEFAULT false,
+        initialized_at TIMESTAMP,
+        last_sync_at TIMESTAMP,
+        last_error TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO suspension_payment_sync_state (id)
+      VALUES (1)
+      ON CONFLICT (id) DO NOTHING;
+
+      CREATE TABLE IF NOT EXISTS suspension_payment_syncs (
+        source_key VARCHAR(64) PRIMARY KEY,
+        source_row_number INTEGER NOT NULL,
+        submitted_at VARCHAR(50),
+        student_id VARCHAR(50),
+        suspension_start_date VARCHAR(20),
+        suspension_end_date VARCHAR(20),
+        start_year_month VARCHAR(7),
+        end_year_month VARCHAR(7),
+        sync_status VARCHAR(20) NOT NULL DEFAULT 'pending'
+          CHECK (sync_status IN ('baseline', 'pending', 'completed', 'failed', 'invalid')),
+        target_row_number INTEGER,
+        target_range VARCHAR(100),
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        completed_at TIMESTAMP,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_suspension_payment_syncs_status
+        ON suspension_payment_syncs(sync_status, source_row_number);
+    `);
+
     console.log('✅ Database tables initialized and migrated');
   } catch (error) {
     console.error('❌ Database initialization error:', error);
@@ -327,10 +366,14 @@ app.listen(PORT, async () => {
 
   // 審査結果は起動時に一度同期し、以降はページ表示と切り離して30分ごとに更新
   await initializeAutomaticExaminationResultSync();
+
+  // 休会申請も起動時に確認し、以降は30分ごとに新規レコードだけを反映
+  await initializeSuspensionPaymentSync();
   
   // 定期更新スケジュールを設定
   scheduleDailyUpdate(); // 毎日 AM 2:00 JST
   scheduleAutomaticExaminationResultSync(); // 毎時00分・30分
+  scheduleSuspensionPaymentSync(); // 毎時00分・30分
   scheduleSuspensionEndNotifications(); // 毎月15日 AM 9:00 JST
   scheduleMonthlyStudentListNotifications(); // 毎月1日 AM 9:00 JST
   scheduleIncompleteListNotifications(); // 毎月20日 AM 9:00 JST

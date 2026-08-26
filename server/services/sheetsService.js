@@ -1,12 +1,21 @@
 import { google } from 'googleapis';
 import { Gaxios } from 'gaxios';
 import dotenv from 'dotenv';
+import { createHash } from 'node:crypto';
 import cacheService from './cacheService.js';
 
 dotenv.config();
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEETS_ID;
-const SUSPENSION_SPREADSHEET_ID = '17ys2PZpDpffG3j4EQrXiLlwGbFxiNosBqMivL2quVEA';
+const SUSPENSION_SPREADSHEET_ID = process.env.SUSPENSION_SPREADSHEET_ID
+  || '17ys2PZpDpffG3j4EQrXiLlwGbFxiNosBqMivL2quVEA';
+const SUSPENSION_SHEET_NAME = process.env.SUSPENSION_SHEET_NAME || 'フォームの回答 1';
+const PAYMENT_STATUS_SPREADSHEET_ID = process.env.PAYMENT_STATUS_SPREADSHEET_ID
+  || '1iqrAhNjW8jTvobkur5N_9r9uUWFHCKqrhxM72X5z-iM';
+const PAYMENT_STATUS_SHEET_NAME = process.env.PAYMENT_STATUS_SHEET_NAME
+  || 'RAW_支払い状況';
+const PAYMENT_STATUS_MONTH_START_COLUMN = process.env.PAYMENT_STATUS_MONTH_START_COLUMN || 'N';
+const PAYMENT_STATUS_END_COLUMN = process.env.PAYMENT_STATUS_END_COLUMN || 'BP';
 const EXAMINATION_FORM_SPREADSHEET_ID = process.env.EXAMINATION_FORM_SPREADSHEET_ID
   || '1m7P2nsX-M9BGP2RHIj3CjAZiDPs2K9gu1Y_md7xiazQ';
 const EXAMINATION_FORM_SHEET_NAME = process.env.EXAMINATION_FORM_SHEET_NAME
@@ -143,6 +152,120 @@ export function columnNumberToLetter(columnNumber) {
   return letters;
 }
 
+export function columnLetterToNumber(columnLetter) {
+  const normalized = String(columnLetter ?? '').trim().toUpperCase();
+  if (!/^[A-Z]+$/.test(normalized)) return null;
+
+  return [...normalized].reduce(
+    (total, letter) => total * 26 + letter.charCodeAt(0) - 64,
+    0
+  );
+}
+
+/**
+ * Google Sheetsの表示日付から年月だけを取り出す。
+ * 日は1〜31を許容し、フォーム上の表記ゆれ（YYYY/M/D・YYYY-M-D）を吸収する。
+ */
+export function parseSuspensionYearMonth(value) {
+  const match = String(value ?? '').trim().match(
+    /^(\d{4})[/-](\d{1,2})(?:[/-](\d{1,2}))?(?:\s|$)/
+  );
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = match[3] ? Number(match[3]) : 1;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+
+  return `${year}-${String(month).padStart(2, '0')}`;
+}
+
+export function buildSuspensionApplicationKey({ submittedAt, studentId, rowNumber }) {
+  const sourceIdentity = String(submittedAt ?? '').trim() || `row:${rowNumber}`;
+  return createHash('sha256')
+    .update(`${sourceIdentity}\u001f${normalizeLessonStudentId(studentId)}`)
+    .digest('hex');
+}
+
+export function parseSuspensionApplicationRows(rows, firstRowNumber = 2) {
+  if (!Array.isArray(rows)) return [];
+
+  return rows
+    .map((row, index) => {
+      const rowNumber = firstRowNumber + index;
+      const submittedAt = String(row?.[0] ?? '').trim(); // A列
+      const studentId = normalizeLessonStudentId(row?.[7]); // H列
+      const suspensionStartDate = String(row?.[11] ?? '').trim(); // L列
+      const suspensionEndDate = String(row?.[12] ?? '').trim(); // M列
+      const startYearMonth = parseSuspensionYearMonth(suspensionStartDate);
+      const endYearMonth = parseSuspensionYearMonth(suspensionEndDate);
+      const hasAnyValue = row?.some(value => String(value ?? '').trim() !== '');
+
+      let validationError = null;
+      if (!studentId) {
+        validationError = '学籍番号が未入力です。';
+      } else if (!startYearMonth || !endYearMonth) {
+        validationError = '休会開始日または休会終了日を年月として読み取れません。';
+      } else if (startYearMonth > endYearMonth) {
+        validationError = '休会終了月が休会開始月より前です。';
+      }
+
+      return {
+        sourceKey: buildSuspensionApplicationKey({ submittedAt, studentId, rowNumber }),
+        sourceRowNumber: rowNumber,
+        submittedAt,
+        studentId,
+        suspensionStartDate,
+        suspensionEndDate,
+        startYearMonth,
+        endYearMonth,
+        validationError,
+        hasAnyValue,
+      };
+    })
+    .filter(record => record.hasAnyValue)
+    .map(({ hasAnyValue, ...record }) => record);
+}
+
+/**
+ * 支払い状況シートの年月ヘッダーから、休会期間に対応する連続セル範囲を作る。
+ */
+export function buildSuspensionPaymentPlan({
+  headerValues,
+  startYearMonth,
+  endYearMonth,
+  firstColumnNumber = 14,
+}) {
+  const startIndex = headerValues
+    .map(parseSalesForecastMonthHeader)
+    .indexOf(startYearMonth);
+  const endIndex = headerValues
+    .map(parseSalesForecastMonthHeader)
+    .indexOf(endYearMonth);
+
+  if (startIndex < 0 || endIndex < 0) {
+    throw new Error('支払い状況シートに休会期間の年月列がありません。');
+  }
+  if (endIndex < startIndex) {
+    throw new Error('休会終了月が休会開始月より前です。');
+  }
+
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    const expected = addMonthsToYearMonth(startYearMonth, index - startIndex);
+    if (parseSalesForecastMonthHeader(headerValues[index]) !== expected) {
+      throw new Error('支払い状況シートの年月列が連続していません。');
+    }
+  }
+
+  return {
+    startYearMonth,
+    endYearMonth,
+    startColumn: columnNumberToLetter(firstColumnNumber + startIndex),
+    endColumn: columnNumberToLetter(firstColumnNumber + endIndex),
+    monthCount: endIndex - startIndex + 1,
+  };
+}
+
 function isNonEmptySheetValue(value) {
   return value !== null
     && value !== undefined
@@ -219,6 +342,7 @@ async function getAutomationSheetsClient() {
 
 async function findStudentRowInSheet({
   sheets,
+  spreadsheetId = EXAMINATION_AUTOMATION_SPREADSHEET_ID,
   sheetName,
   studentIdColumn,
   firstRowNumber,
@@ -226,7 +350,7 @@ async function findStudentRowInSheet({
 }) {
   const escapedSheetName = sheetName.replace(/'/g, "''");
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: EXAMINATION_AUTOMATION_SPREADSHEET_ID,
+    spreadsheetId,
     range: `'${escapedSheetName}'!${studentIdColumn}${firstRowNumber}:${studentIdColumn}`,
   });
   const rowNumber = findStudentRowNumber(
@@ -239,6 +363,108 @@ async function findStudentRowInSheet({
     throw new Error(`${sheetName}に学籍番号 ${studentId} が見つかりません。`);
   }
   return rowNumber;
+}
+
+/**
+ * 休会申請フォームの全レコードを、処理済み判定に使える安定キー付きで取得する。
+ * キャッシュは使わず、30分同期ごとに新規行を確認する。
+ */
+export async function fetchSuspensionApplications() {
+  const sheets = await getAutomationSheetsClient();
+  const escapedSheetName = SUSPENSION_SHEET_NAME.replace(/'/g, "''");
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SUSPENSION_SPREADSHEET_ID,
+    range: `'${escapedSheetName}'!A2:M`,
+    valueRenderOption: 'FORMATTED_VALUE',
+  });
+
+  return parseSuspensionApplicationRows(response.data.values || []);
+}
+
+async function getPaymentStatusHeaders(sheets) {
+  const escapedSheetName = PAYMENT_STATUS_SHEET_NAME.replace(/'/g, "''");
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: PAYMENT_STATUS_SPREADSHEET_ID,
+    range: `'${escapedSheetName}'!${PAYMENT_STATUS_MONTH_START_COLUMN}13:${PAYMENT_STATUS_END_COLUMN}13`,
+    valueRenderOption: 'FORMATTED_VALUE',
+  });
+  return response.data.values?.[0] || [];
+}
+
+/**
+ * 学籍番号と休会年月を使い、RAW_支払い状況の該当月へ「休会」を書き込む。
+ * values.updateのため、既存の書式・入力規則は保持される。
+ */
+export async function applySuspensionPaymentStatus({
+  studentId,
+  startYearMonth,
+  endYearMonth,
+}) {
+  const sheets = await getAutomationSheetsClient();
+  const escapedSheetName = PAYMENT_STATUS_SHEET_NAME.replace(/'/g, "''");
+  const firstColumnNumber = columnLetterToNumber(PAYMENT_STATUS_MONTH_START_COLUMN);
+  if (!firstColumnNumber) {
+    throw new Error('支払い状況シートの月次開始列設定が不正です。');
+  }
+
+  const [rowNumber, headerValues] = await Promise.all([
+    findStudentRowInSheet({
+      sheets,
+      spreadsheetId: PAYMENT_STATUS_SPREADSHEET_ID,
+      sheetName: PAYMENT_STATUS_SHEET_NAME,
+      studentIdColumn: 'D',
+      firstRowNumber: 14,
+      studentId,
+    }),
+    getPaymentStatusHeaders(sheets),
+  ]);
+  const plan = buildSuspensionPaymentPlan({
+    headerValues,
+    startYearMonth,
+    endYearMonth,
+    firstColumnNumber,
+  });
+  const targetRange = `'${escapedSheetName}'!${plan.startColumn}${rowNumber}:${plan.endColumn}${rowNumber}`;
+  const currentResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId: PAYMENT_STATUS_SPREADSHEET_ID,
+    range: targetRange,
+    valueRenderOption: 'FORMATTED_VALUE',
+  });
+  const currentValues = currentResponse.data.values?.[0] || [];
+  const alreadyApplied = Array.from(
+    { length: plan.monthCount },
+    (_, index) => String(currentValues[index] ?? '').trim() === '休会'
+  ).every(Boolean);
+
+  if (!alreadyApplied) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: PAYMENT_STATUS_SPREADSHEET_ID,
+      range: targetRange,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [Array(plan.monthCount).fill('休会')] },
+    });
+  }
+
+  const verifyResponse = await sheets.spreadsheets.values.get({
+    spreadsheetId: PAYMENT_STATUS_SPREADSHEET_ID,
+    range: targetRange,
+    valueRenderOption: 'FORMATTED_VALUE',
+  });
+  const verifiedValues = verifyResponse.data.values?.[0] || [];
+  const verified = Array.from(
+    { length: plan.monthCount },
+    (_, index) => String(verifiedValues[index] ?? '').trim() === '休会'
+  ).every(Boolean);
+  if (!verified) {
+    throw new Error('支払い状況シートへの休会反映結果を確認できませんでした。');
+  }
+
+  return {
+    ...plan,
+    rowNumber,
+    range: targetRange,
+    alreadyApplied,
+  };
 }
 
 async function getSalesForecastHeaders(sheets) {
@@ -779,7 +1005,7 @@ export async function fetchFormUpdates() {
 
 /**
  * Google Sheets から休会情報を取得（キャッシュ対応）
- * H列: 学籍番号、I列: 休会開始日、K列: 休会期間
+ * H列: 学籍番号、K列: 休会期間、L列: 休会開始日、M列: 休会終了日
  */
 export async function fetchSuspensionData() {
   const cacheKey = 'sheets_suspension_data';
