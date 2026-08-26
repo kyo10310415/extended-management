@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "start": "node server/index.js",
     "test": "node --test server/services/examinationResultSync.test.js server/services/examinationAutomation.test.js server/services/forcedWithdrawal.test.js server/services/suspensionPaymentSync.test.js",
+    "test:suspension-discord": "node server/scripts/testSuspensionDiscord.js",
     "migrate": "node run-migration.js",
     "postinstall": "npm run migrate"
   },
