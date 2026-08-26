@@ -120,7 +120,7 @@ test('列記号はZ以降も列番号へ変換できる', () => {
   assert.equal(columnLetterToNumber('1A'), null);
 });
 
-test('休会Discord通知は生徒名＋様を投稿タイトルにして必要情報を本文へ入れる', () => {
+test('休会Discord通知は指定ユーザーをメンションして必要情報を投稿する', () => {
   assert.deepEqual(
     buildSuspensionDiscordForumMessage({
       name: '山田太郎',
@@ -132,12 +132,17 @@ test('休会Discord通知は生徒名＋様を投稿タイトルにして必要�
     {
       thread_name: '山田太郎様',
       content: [
+        '<@766666980086120470>',
+        '',
         '学籍番号：OLTS260001-AB',
         'Notionリンク：https://www.notion.so/example-page',
         '休会開始日：2026/09/01',
         '休会終了日：2026/11/30',
       ].join('\n'),
-      allowed_mentions: { parse: [] },
+      allowed_mentions: {
+        parse: [],
+        users: ['766666980086120470'],
+      },
     }
   );
 });
