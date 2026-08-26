@@ -11,7 +11,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server/index.js",
-    "test": "node --test server/services/examinationResultSync.test.js server/services/examinationAutomation.test.js server/services/forcedWithdrawal.test.js",
+    "test": "node --test server/services/examinationResultSync.test.js server/services/examinationAutomation.test.js server/services/forcedWithdrawal.test.js server/services/suspensionPaymentSync.test.js",
     "migrate": "node run-migration.js",
     "postinstall": "npm run migrate"
   },
