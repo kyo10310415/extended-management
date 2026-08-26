@@ -313,6 +313,10 @@ export function parseDiscordForumTagIds(value) {
   return [...new Set(rawIds)];
 }
 
+const SUSPENSION_NOTIFICATION_MENTION_USER_IDS = Object.freeze([
+  '766666980086120470',
+]);
+
 export function buildSuspensionDiscordForumMessage({
   name,
   studentId,
@@ -329,12 +333,17 @@ export function buildSuspensionDiscordForumMessage({
   const message = {
     thread_name: threadName,
     content: [
+      `<@${SUSPENSION_NOTIFICATION_MENTION_USER_IDS[0]}>`,
+      '',
       `学籍番号：${studentId || '-'}`,
       `Notionリンク：${notionUrl || '-'}`,
       `休会開始日：${suspensionStartDate || '-'}`,
       `休会終了日：${suspensionEndDate || '-'}`,
     ].join('\n'),
-    allowed_mentions: { parse: [] },
+    allowed_mentions: {
+      parse: [],
+      users: [...SUSPENSION_NOTIFICATION_MENTION_USER_IDS],
+    },
   };
 
   if (appliedTagIds.length > 0) {
