@@ -283,6 +283,7 @@ export async function processPendingExaminationDiscordNotifications({
         `SELECT extensions.student_id,
                 extensions.${discordResultLabelColumn} AS result_label,
                 students.name,
+                students.tutor,
                 students.notion_url
            FROM student_extensions AS extensions
            LEFT JOIN notion_students_cache AS students
@@ -298,6 +299,7 @@ export async function processPendingExaminationDiscordNotifications({
       for (const pending of pendingResult.rows) {
         const notification = await sendExaminationResultNotification({
           name: pending.name,
+          tutor: pending.tutor,
           studentId: pending.student_id,
           notionUrl: pending.notion_url,
           resultLabel: pending.result_label,

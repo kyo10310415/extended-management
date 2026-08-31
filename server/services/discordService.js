@@ -3,6 +3,7 @@ import { getTutorWebhooks, normalizeTutorName } from './tutorWebhookService.js';
 
 export function buildExaminationResultDiscordMessage({
   name,
+  tutor,
   studentId,
   notionUrl,
   resultLabel,
@@ -12,6 +13,7 @@ export function buildExaminationResultDiscordMessage({
       '@everyone',
       '延長審査報告',
       `生徒名：${name || '-'}`,
+      `担当Tutor名：${tutor || '-'}`,
       `学籍番号：${studentId || '-'}`,
       `NotionURL：${notionUrl || '-'}`,
       `審査結果：${resultLabel === 'PROプラン' ? 'PROプラン' : '延長'}`,
@@ -22,10 +24,11 @@ export function buildExaminationResultDiscordMessage({
 
 /**
  * 審査結果が「延長」へ更新されたことを専用Webhookへ通知する。
- * @param {{name: string, studentId: string, notionUrl: string, resultLabel: string}} student
+ * @param {{name: string, tutor: string, studentId: string, notionUrl: string, resultLabel: string}} student
  */
 export async function sendExaminationResultNotification({
   name,
+  tutor,
   studentId,
   notionUrl,
   resultLabel,
@@ -40,6 +43,7 @@ export async function sendExaminationResultNotification({
 
   const message = buildExaminationResultDiscordMessage({
     name,
+    tutor,
     studentId,
     notionUrl,
     resultLabel,

@@ -133,9 +133,10 @@ test('DB同期SQLは手動固定済みの審査結果を上書きしない', asy
   assert.deepEqual(result, { syncedCount: 2, mappedCount: 1 });
 });
 
-test('Discord通知はeveryoneメンションと指定項目を含みPROプラン表示を使う', () => {
+test('Discord通知は生徒名・担当Tutor名と指定項目を含みPROプラン表示を使う', () => {
   const message = buildExaminationResultDiscordMessage({
     name: '山田太郎',
+    tutor: '佐藤Tutor',
     studentId: 'OLTS-A',
     notionUrl: 'https://www.notion.so/example',
     resultLabel: 'PROプラン',
@@ -143,6 +144,7 @@ test('Discord通知はeveryoneメンションと指定項目を含みPROプラ�
 
   assert.match(message.content, /^@everyone\n延長審査報告/);
   assert.match(message.content, /生徒名：山田太郎/);
+  assert.match(message.content, /担当Tutor名：佐藤Tutor/);
   assert.match(message.content, /学籍番号：OLTS-A/);
   assert.match(message.content, /NotionURL：https:\/\/www\.notion\.so\/example/);
   assert.match(message.content, /審査結果：PROプラン/);
