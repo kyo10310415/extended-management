@@ -31,6 +31,7 @@ async function runMigration() {
       '009_add_suspension_discord_notification.sql',
       '010_gate_new_examination_form_responses.sql',
       '011_restore_examination_deploy_race.sql',
+      '012_restore_olts250991_examination.sql',
     ];
 
     for (const migrationFile of migrationFiles) {
