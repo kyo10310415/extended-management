@@ -5,8 +5,10 @@ import {
   mapExaminationFormResult,
 } from './sheetsService.js';
 import {
+  advanceExaminationFormSyncState,
   applyAutomaticExaminationResults,
   buildAutomaticExaminationSyncPayloads,
+  getOrInitializeExaminationFormSyncState,
   isValidExtensionCycle,
 } from './examinationResultSyncService.js';
 import { buildExaminationResultDiscordMessage } from './discordService.js';
@@ -47,6 +49,7 @@ test('同じ年月・学籍番号では最新回答を採用し、指定外の�
     result: '永久会員',
     sourceValue: '永久会員',
     sourceTimestamp: '2026/08/15 18:00',
+    sourceRowNumber: 3,
   });
   assert.equal(results['OLTS240002-BB'].result, '退会');
   assert.equal(results['OLTS240003-CC'], undefined);
@@ -73,8 +76,8 @@ test('バックグラウンド同期は画面と同じ月数・ステータス�
     available: true,
     resultsByStudent: {
       'OLTS-A': { result: '延長', sourceValue: '永久会員＋PROプラン' },
-      'OLTS-B': { result: '退会' },
-      'OLTS-C': { result: '永久会員' },
+      'OLTS-B': { result: '退会', sourceRowNumber: 101 },
+      'OLTS-C': { result: '永久会員', sourceRowNumber: 102 },
     },
   }]]);
 
@@ -88,13 +91,17 @@ test('バックグラウンド同期は画面と同じ月数・ステータス�
     },
     formResultsByOffset,
     monthOffsets: [0],
+    automationBaselineRow: 100,
   });
 
   assert.deepEqual(payloads.get(1).get('OLTS-A'), {
     result: '延長',
     sourceValue: '永久会員＋PROプラン',
+    sourceRowNumber: null,
+    automationEligible: false,
   });
   assert.equal(payloads.get(2).get('OLTS-B').result, '退会');
+  assert.equal(payloads.get(2).get('OLTS-B').automationEligible, true);
   assert.equal(payloads.get(3).get('OLTS-C').result, '永久会員');
   assert.equal(payloads.get(4).get('OLTS-C').result, '永久会員');
   assert.equal(payloads.get(1).has('OLTS-D'), false);
@@ -114,8 +121,8 @@ test('DB同期SQLは手動固定済みの審査結果を上書きしない', asy
     pool,
     cycle: 7,
     automaticResultsByStudent: new Map([
-      ['OLTS-A', '延長'],
-      ['OLTS-B', null],
+      ['OLTS-A', { result: '延長', automationEligible: true }],
+      ['OLTS-B', { result: null, automationEligible: false }],
     ]),
   });
 
@@ -123,14 +130,89 @@ test('DB同期SQLは手動固定済みの審査結果を上書きしない', asy
   assert.match(capturedQuery, /discord_notification_pending_7/);
   assert.match(capturedQuery, /revenue_extension_pending_7/);
   assert.match(capturedQuery, /revenue_extension_completed_7/);
-  assert.match(capturedQuery, /COALESCE\(source\.examination_result = '延長', FALSE\)/);
+  assert.match(capturedQuery, /source\.automation_eligible AND source\.examination_result = '延長'/);
+  assert.match(capturedQuery, /COALESCE\(EXCLUDED\.discord_notification_pending_7, FALSE\)/);
   assert.match(capturedQuery, /WHEN COALESCE\(student_extensions\.examination_result_manual_override_7, FALSE\)/);
   assert.deepEqual(capturedParams, [
-    ['OLTS-A', 'OLTS-B'],
-    ['延長', null],
-    ['延長', null],
+    ['OLTS-A'],
+    ['延長'],
+    ['延長'],
+    [true],
   ]);
-  assert.deepEqual(result, { syncedCount: 2, mappedCount: 1 });
+  assert.deepEqual(result, { syncedCount: 1, mappedCount: 1 });
+});
+
+test('基準行以前の回答だけならDB同期を実行しない', async () => {
+  let queryCalled = false;
+  const pool = {
+    async query() {
+      queryCalled = true;
+    },
+  };
+
+  const result = await applyAutomaticExaminationResults({
+    pool,
+    cycle: 1,
+    automaticResultsByStudent: new Map([
+      ['OLTS-OLD', { result: '延長', automationEligible: false }],
+    ]),
+  });
+
+  assert.equal(queryCalled, false);
+  assert.deepEqual(result, { syncedCount: 0, mappedCount: 0 });
+});
+
+test('初回同期は既存フォーム行を基準登録し、次回以降だけ行番号を進める', async () => {
+  const queries = [];
+  const pool = {
+    async query(query, params) {
+      queries.push({ query, params });
+      if (query.includes('INSERT INTO examination_form_sync_state')) {
+        return { rowCount: 1, rows: [{ last_processed_row: 1910 }] };
+      }
+      return { rowCount: 1, rows: [] };
+    },
+  };
+
+  const state = await getOrInitializeExaminationFormSyncState({
+    pool,
+    currentMaxSourceRowNumber: 1910,
+  });
+  assert.deepEqual(state, { lastProcessedRow: 1910, initialized: true });
+
+  await advanceExaminationFormSyncState({
+    pool,
+    currentMaxSourceRowNumber: 1912,
+  });
+  assert.deepEqual(queries[0].params, [1910]);
+  assert.match(queries[1].query, /GREATEST\(last_processed_row, \$1\)/);
+  assert.deepEqual(queries[1].params, [1912]);
+});
+
+test('既存基準行を除外し、新規フォーム行だけ自動化対象にする', () => {
+  const students = [
+    { studentId: 'OLTS-OLD', lessonStartDate: lessonStartDateForMonth(5), status: 'アクティブ' },
+    { studentId: 'OLTS-NEW', lessonStartDate: lessonStartDateForMonth(5), status: 'アクティブ' },
+  ];
+  const payloads = buildAutomaticExaminationSyncPayloads({
+    students,
+    suspensionData: {},
+    proStartMap: {},
+    formResultsByOffset: new Map([[0, {
+      available: true,
+      resultsByStudent: {
+        'OLTS-OLD': { result: '延長', sourceValue: '延長', sourceRowNumber: 1910 },
+        'OLTS-NEW': { result: '延長', sourceValue: '延長', sourceRowNumber: 1911 },
+      },
+    }]]),
+    monthOffsets: [0],
+    automationBaselineRow: 1910,
+  });
+
+  assert.equal(payloads.get(1).get('OLTS-OLD').result, '延長');
+  assert.equal(payloads.get(1).get('OLTS-OLD').automationEligible, false);
+  assert.equal(payloads.get(1).get('OLTS-NEW').result, '延長');
+  assert.equal(payloads.get(1).get('OLTS-NEW').automationEligible, true);
 });
 
 test('Discord通知は生徒名・担当Tutor名と指定項目を含みPROプラン表示を使う', () => {

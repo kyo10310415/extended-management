@@ -832,6 +832,7 @@ export function buildAutomaticExaminationResultsByStudent(rows, targetYearMonth)
       result: mapExaminationFormResult(sourceValue),
       sourceValue,
       sourceTimestamp: inputDate.displayValue,
+      sourceRowNumber: rowIndex + 2,
       sortKey: `${inputDate.sortKey}-${String(rowIndex).padStart(8, '0')}`,
     };
     const current = latestResponseByStudent[studentId];
@@ -848,6 +849,7 @@ export function buildAutomaticExaminationResultsByStudent(rows, targetYearMonth)
         result: response.result,
         sourceValue: response.sourceValue,
         sourceTimestamp: response.sourceTimestamp,
+        sourceRowNumber: response.sourceRowNumber,
       }])
   );
 }
@@ -903,15 +905,30 @@ export async function fetchAutomaticExaminationResultsForMonth(
   try {
     const { available, rows } = await fetchExaminationFormRows(forceRefresh);
     if (!available) {
-      return { available: false, targetYearMonth, resultsByStudent: {} };
+      return {
+        available: false,
+        targetYearMonth,
+        resultsByStudent: {},
+        maxSourceRowNumber: 1,
+      };
     }
 
     const resultsByStudent = buildAutomaticExaminationResultsByStudent(rows, targetYearMonth);
     console.log(`📋 Automatic examination results for ${targetYearMonth}: ${Object.keys(resultsByStudent).length} students`);
-    return { available: true, targetYearMonth, resultsByStudent };
+    return {
+      available: true,
+      targetYearMonth,
+      resultsByStudent,
+      maxSourceRowNumber: rows.length + 1,
+    };
   } catch (error) {
     console.error('❌ Error fetching automatic examination results:', error.message);
-    return { available: false, targetYearMonth, resultsByStudent: {} };
+    return {
+      available: false,
+      targetYearMonth,
+      resultsByStudent: {},
+      maxSourceRowNumber: 1,
+    };
   }
 }
 
