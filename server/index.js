@@ -272,6 +272,15 @@ async function initDatabase() {
     await pool.query(createTableQuery);
     await pool.query(migrationQuery);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS examination_form_sync_state (
+        singleton_id BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton_id = TRUE),
+        last_processed_row INTEGER NOT NULL CHECK (last_processed_row >= 1),
+        initialized_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // KPI月次スナップショットテーブルの作成
     await pool.query(`
       CREATE TABLE IF NOT EXISTS kpi_monthly_snapshots (

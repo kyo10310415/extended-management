@@ -37,22 +37,26 @@ function createCyclePayloads() {
   );
 }
 
-function getAutomaticResult(resultsByStudent, studentId) {
+function getAutomaticResult(resultsByStudent, studentId, automationBaselineRow) {
   const normalizedStudentId = normalizeLessonStudentId(studentId);
   const matchedResult = resultsByStudent?.[normalizedStudentId];
+  const sourceRowNumber = Number(matchedResult?.sourceRowNumber);
   return {
     result: matchedResult?.result || null,
     sourceValue: matchedResult?.sourceValue || null,
+    sourceRowNumber: Number.isInteger(sourceRowNumber) ? sourceRowNumber : null,
+    automationEligible: Number.isInteger(sourceRowNumber)
+      && sourceRowNumber > automationBaselineRow,
   };
 }
 
-function addTarget(payloads, cycle, studentId, resultsByStudent) {
+function addTarget(payloads, cycle, studentId, resultsByStudent, automationBaselineRow) {
   const trimmedStudentId = String(studentId ?? '').trim();
   if (!trimmedStudentId) return;
 
   payloads.get(cycle).set(
     trimmedStudentId,
-    getAutomaticResult(resultsByStudent, trimmedStudentId)
+    getAutomaticResult(resultsByStudent, trimmedStudentId, automationBaselineRow)
   );
 }
 
@@ -78,6 +82,7 @@ export function buildAutomaticExaminationSyncPayloads({
   proStartMap,
   formResultsByOffset,
   monthOffsets = EXAMINATION_SYNC_MONTH_OFFSETS,
+  automationBaselineRow = Number.MAX_SAFE_INTEGER,
 }) {
   const payloads = createCyclePayloads();
 
@@ -92,14 +97,14 @@ export function buildAutomaticExaminationSyncPayloads({
 
       if (isStandardExaminationStatus(student.status, monthOffset)) {
         if (adjustedMonths === 5) {
-          addTarget(payloads, 1, student.studentId, resultsByStudent);
+          addTarget(payloads, 1, student.studentId, resultsByStudent, automationBaselineRow);
         } else if (adjustedMonths === 11) {
-          addTarget(payloads, 2, student.studentId, resultsByStudent);
+          addTarget(payloads, 2, student.studentId, resultsByStudent, automationBaselineRow);
         }
       }
 
       if (adjustedMonths === 17 && isProExaminationStatus(student.status, monthOffset)) {
-        addTarget(payloads, 3, student.studentId, resultsByStudent);
+        addTarget(payloads, 3, student.studentId, resultsByStudent, automationBaselineRow);
       }
 
       const { proStartDate } = proStartMap[student.studentId] || {};
@@ -108,7 +113,7 @@ export function buildAutomaticExaminationSyncPayloads({
 
       for (let cycle = 4; cycle <= MAX_EXTENSION_CYCLE; cycle += 1) {
         if (proPlanMonths === examMonth(cycle)) {
-          addTarget(payloads, cycle, student.studentId, resultsByStudent);
+          addTarget(payloads, cycle, student.studentId, resultsByStudent, automationBaselineRow);
           break;
         }
       }
@@ -120,7 +125,7 @@ export function buildAutomaticExaminationSyncPayloads({
 
 /**
  * 1サイクル分の自動結果をDBへ一括反映する。
- * 手動固定済みの結果は保持し、自動管理中の空欄はnullでクリアする。
+ * 基準行より後に追加されたフォーム回答だけを対象にし、手動固定済みの結果は保持する。
  */
 export async function applyAutomaticExaminationResults({
   pool,
@@ -131,7 +136,9 @@ export async function applyAutomaticExaminationResults({
     throw new Error(`cycle must be between ${MIN_EXTENSION_CYCLE} and ${MAX_EXTENSION_CYCLE}`);
   }
 
-  const entries = [...automaticResultsByStudent.entries()];
+  const entries = [...automaticResultsByStudent.entries()].filter(([, value]) => (
+    value && typeof value === 'object' && value.automationEligible === true
+  ));
   if (entries.length === 0) {
     return { syncedCount: 0, mappedCount: 0 };
   }
@@ -149,6 +156,7 @@ export async function applyAutomaticExaminationResults({
     if (result !== '延長') return null;
     return sourceValue === '永久会員+PROプラン' ? 'PROプラン' : '延長';
   });
+  const automationEligibility = entries.map(() => true);
   const mappedCount = automaticResults.filter(Boolean).length;
   const examinationResultColumn = `examination_result_${cycle}`;
   const manualOverrideColumn = `examination_result_manual_override_${cycle}`;
@@ -171,12 +179,23 @@ export async function applyAutomaticExaminationResults({
      SELECT source.student_id,
             source.examination_result,
             FALSE,
-            COALESCE(source.examination_result = '延長', FALSE),
+            COALESCE(
+              source.automation_eligible AND source.examination_result = '延長',
+              FALSE
+            ),
             source.discord_result_label,
-            COALESCE(source.examination_result = '延長', FALSE),
+            COALESCE(
+              source.automation_eligible AND source.examination_result = '延長',
+              FALSE
+            ),
             CURRENT_TIMESTAMP
-       FROM unnest($1::text[], $2::text[], $3::text[])
-         AS source(student_id, examination_result, discord_result_label)
+       FROM unnest($1::text[], $2::text[], $3::text[], $4::boolean[])
+         AS source(
+           student_id,
+           examination_result,
+           discord_result_label,
+           automation_eligible
+         )
      ON CONFLICT (student_id)
      DO UPDATE SET
        ${examinationResultColumn} = CASE
@@ -187,8 +206,7 @@ export async function applyAutomaticExaminationResults({
        ${discordPendingColumn} = CASE
          WHEN COALESCE(student_extensions.${manualOverrideColumn}, FALSE)
            THEN student_extensions.${discordPendingColumn}
-         WHEN EXCLUDED.${examinationResultColumn} = '延長'
-          AND student_extensions.${examinationResultColumn} IS DISTINCT FROM '延長'
+         WHEN COALESCE(EXCLUDED.${discordPendingColumn}, FALSE)
           AND NOT COALESCE(student_extensions.${discordSentColumn}, FALSE)
            THEN TRUE
          WHEN EXCLUDED.${examinationResultColumn} IS DISTINCT FROM '延長'
@@ -197,19 +215,14 @@ export async function applyAutomaticExaminationResults({
        END,
        ${discordResultLabelColumn} = CASE
          WHEN NOT COALESCE(student_extensions.${manualOverrideColumn}, FALSE)
-          AND EXCLUDED.${examinationResultColumn} = '延長'
-          AND (
-            student_extensions.${examinationResultColumn} IS DISTINCT FROM '延長'
-            OR COALESCE(student_extensions.${discordPendingColumn}, FALSE)
-          )
+          AND COALESCE(EXCLUDED.${discordPendingColumn}, FALSE)
            THEN EXCLUDED.${discordResultLabelColumn}
          ELSE student_extensions.${discordResultLabelColumn}
        END,
        ${revenuePendingColumn} = CASE
          WHEN COALESCE(student_extensions.${manualOverrideColumn}, FALSE)
            THEN student_extensions.${revenuePendingColumn}
-         WHEN EXCLUDED.${examinationResultColumn} = '延長'
-          AND student_extensions.${examinationResultColumn} IS DISTINCT FROM '延長'
+         WHEN COALESCE(EXCLUDED.${revenuePendingColumn}, FALSE)
           AND NOT COALESCE(student_extensions.${revenueCompletedColumn}, FALSE)
            THEN TRUE
          WHEN EXCLUDED.${examinationResultColumn} IS DISTINCT FROM '延長'
@@ -223,7 +236,7 @@ export async function applyAutomaticExaminationResults({
            THEN CURRENT_TIMESTAMP
          ELSE student_extensions.updated_at
        END`,
-    [studentIds, automaticResults, notificationResultLabels]
+    [studentIds, automaticResults, notificationResultLabels, automationEligibility]
   );
 
   console.log(
@@ -369,6 +382,55 @@ async function fetchFormResultsForOffsets(monthOffsets) {
   return resultsByOffset;
 }
 
+export async function getOrInitializeExaminationFormSyncState({
+  pool,
+  currentMaxSourceRowNumber,
+}) {
+  const currentMaxRow = Math.max(1, Number(currentMaxSourceRowNumber) || 1);
+  const inserted = await pool.query(
+    `INSERT INTO examination_form_sync_state (
+       singleton_id,
+       last_processed_row,
+       initialized_at,
+       updated_at
+     )
+     VALUES (TRUE, $1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+     ON CONFLICT (singleton_id) DO NOTHING
+     RETURNING last_processed_row`,
+    [currentMaxRow]
+  );
+
+  if (inserted.rowCount === 1) {
+    console.log(`✅ Initialized examination form baseline at row ${currentMaxRow}`);
+    return { lastProcessedRow: currentMaxRow, initialized: true };
+  }
+
+  const existing = await pool.query(
+    `SELECT last_processed_row
+       FROM examination_form_sync_state
+      WHERE singleton_id = TRUE`
+  );
+  const lastProcessedRow = Math.max(
+    1,
+    Number(existing.rows[0]?.last_processed_row) || currentMaxRow
+  );
+  return { lastProcessedRow, initialized: false };
+}
+
+export async function advanceExaminationFormSyncState({
+  pool,
+  currentMaxSourceRowNumber,
+}) {
+  const currentMaxRow = Math.max(1, Number(currentMaxSourceRowNumber) || 1);
+  await pool.query(
+    `UPDATE examination_form_sync_state
+        SET last_processed_row = GREATEST(last_processed_row, $1),
+            updated_at = CURRENT_TIMESTAMP
+      WHERE singleton_id = TRUE`,
+    [currentMaxRow]
+  );
+}
+
 async function performFullAutomaticExaminationResultSync({
   pool,
   monthOffsets,
@@ -421,6 +483,16 @@ async function performFullAutomaticExaminationResultSync({
     .map(student => String(student.studentId ?? '').trim())
     .filter(Boolean);
   const proStartMap = await fetchProStartDates(studentIds);
+  const currentMaxSourceRowNumber = Math.max(
+    1,
+    ...monthOffsets.map(
+      offset => Number(formResultsByOffset.get(offset)?.maxSourceRowNumber) || 1
+    )
+  );
+  const syncState = await getOrInitializeExaminationFormSyncState({
+    pool,
+    currentMaxSourceRowNumber,
+  });
 
   const payloads = buildAutomaticExaminationSyncPayloads({
     students,
@@ -428,6 +500,7 @@ async function performFullAutomaticExaminationResultSync({
     proStartMap,
     formResultsByOffset,
     monthOffsets,
+    automationBaselineRow: syncState.lastProcessedRow,
   });
 
   let syncedCount = 0;
@@ -441,6 +514,11 @@ async function performFullAutomaticExaminationResultSync({
     syncedCount += result.syncedCount;
     mappedCount += result.mappedCount;
   }
+
+  await advanceExaminationFormSyncState({
+    pool,
+    currentMaxSourceRowNumber,
+  });
 
   const discordNotifications = await processPendingExaminationDiscordNotifications({ pool });
   const examinationAutomations = await processPendingExaminationAutomations({ pool });

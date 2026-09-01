@@ -29,6 +29,7 @@ async function runMigration() {
       '007_add_examination_automation_columns.sql',
       '008_create_suspension_payment_sync.sql',
       '009_add_suspension_discord_notification.sql',
+      '010_gate_new_examination_form_responses.sql',
     ];
 
     for (const migrationFile of migrationFiles) {
