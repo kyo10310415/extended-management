@@ -15,6 +15,7 @@ import {
 } from './proPlanExternalService.js';
 import { sendExaminationResultNotification } from './discordService.js';
 import { processPendingExaminationAutomations } from './examinationAutomationService.js';
+import { ENTRY_PLAN_NAME } from '../utils/examinationCycle.js';
 
 export const MIN_EXTENSION_CYCLE = 1;
 export const MAX_EXTENSION_CYCLE = 10;
@@ -94,6 +95,12 @@ export function buildAutomaticExaminationSyncPayloads({
       const suspension = suspensionData[student.studentId];
       const suspensionMonths = calculateEffectiveSuspensionMonths(suspension, monthOffset);
       const adjustedMonths = Math.max(0, student.monthsElapsed - suspensionMonths);
+      const isEntryPlan = student.plan === ENTRY_PLAN_NAME;
+
+      if (isEntryPlan) {
+        // EP延長審査はフォーム同期を行わず、画面からの手動入力だけを使用する。
+        continue;
+      }
 
       if (isStandardExaminationStatus(student.status, monthOffset)) {
         if (adjustedMonths === 5) {
@@ -303,7 +310,7 @@ export async function processPendingExaminationDiscordNotifications({
              ON students.student_id = extensions.student_id
           WHERE COALESCE(extensions.${discordPendingColumn}, FALSE)
             AND NOT COALESCE(extensions.${discordSentColumn}, FALSE)
-            AND extensions.${examinationResultColumn} = '延長'
+            AND extensions.${examinationResultColumn} IN ('延長', 'アップセル')
             ${studentFilter}
           ORDER BY extensions.student_id`,
         params

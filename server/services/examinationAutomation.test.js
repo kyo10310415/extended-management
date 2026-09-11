@@ -4,6 +4,7 @@ import {
   addMonthsToYearMonth,
   buildSalesForecastExtensionPlan,
   columnNumberToLetter,
+  formatSalesForecastAmount,
   parseSalesForecastMonthHeader,
 } from './sheetsService.js';
 import {
@@ -76,6 +77,12 @@ test('シート列番号はZ以降も正しくA1表記に変換する', () => {
 test('年月加算は12月から翌年1月へ進む', () => {
   assert.equal(addMonthsToYearMonth('2026-12', 1), '2027-01');
   assert.equal(addMonthsToYearMonth('2026-07', 5), '2026-12');
+});
+
+test('売上予測へ入力する金額をカンマ区切りテキストへ整形する', () => {
+  assert.equal(formatSalesForecastAmount(5980), '5,980');
+  assert.equal(formatSalesForecastAmount('22,000'), '22,000');
+  assert.throws(() => formatSalesForecastAmount(''), /金額が不正/);
 });
 
 test('統括チェックは空白・未確認・確認済だけを許可する', () => {

@@ -8,6 +8,7 @@ function StudentTable({
   showExaminationColumn,
   showStatusColumn,
   showLessonDatesColumn = false,
+  allowUpsell = false,
 }) {
   const [editingStudent, setEditingStudent] = useState(null)
   const [formData, setFormData] = useState({})
@@ -73,16 +74,23 @@ function StudentTable({
   }, [formData, onUpdate, originalExaminationResult])
 
   const handleSave = useCallback(async (studentId) => {
-    const changedToExtension = formData.examination_result === '延長'
-      && originalExaminationResult !== '延長'
+    const notificationResults = allowUpsell ? ['延長', 'アップセル'] : ['延長']
+    const changedToNotificationResult = notificationResults.includes(formData.examination_result)
+      && originalExaminationResult !== formData.examination_result
 
-    if (changedToExtension && !originalDiscordNotificationSent) {
+    if (changedToNotificationResult && !originalDiscordNotificationSent) {
       setDiscordPromptStudentId(studentId)
       return
     }
 
     await performSave(studentId, false)
-  }, [formData.examination_result, originalExaminationResult, originalDiscordNotificationSent, performSave])
+  }, [
+    allowUpsell,
+    formData.examination_result,
+    originalExaminationResult,
+    originalDiscordNotificationSent,
+    performSave,
+  ])
 
   const handleCancel = useCallback(() => {
     setEditingStudent(null)
@@ -405,6 +413,7 @@ function StudentTable({
                         >
                           <option value="">選択</option>
                           <option value="延長">延長</option>
+                          {allowUpsell && <option value="アップセル">アップセル</option>}
                           <option value="在籍">在籍</option>
                           <option value="退会">退会</option>
                           <option value="永久会員">永久会員</option>
@@ -416,6 +425,8 @@ function StudentTable({
                           <span className={`px-1 py-0.5 text-[11px] leading-tight rounded-full ${
                             student.extensionData?.examination_result === '延長'
                               ? 'bg-green-100 text-green-800'
+                              : student.extensionData?.examination_result === 'アップセル'
+                              ? 'bg-cyan-100 text-cyan-800'
                               : student.extensionData?.examination_result === '在籍'
                               ? 'bg-blue-100 text-blue-800'
                               : student.extensionData?.examination_result === '退会'
@@ -572,7 +583,7 @@ function StudentTable({
               Discordに送信しますか？
             </h3>
             <p className="mt-2 text-sm text-gray-600">
-              審査結果「延長」を @everyone へ通知します。
+              審査結果「{formData.examination_result}」を @everyone へ通知します。
             </p>
             <div className="mt-6 flex flex-wrap justify-end gap-2">
               <button

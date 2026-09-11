@@ -11,6 +11,10 @@ import cacheService from '../services/cacheService.js';
 import databaseCacheService from '../services/databaseCacheService.js';
 import { manualUpdate } from '../services/backgroundService.js';
 import { fetchProStartDates, calculateProPlanMonths } from '../services/proPlanExternalService.js';
+import {
+  ENTRY_PLAN_NAME,
+  getEntryPlanExaminationCycle,
+} from '../utils/examinationCycle.js';
 
 const router = express.Router();
 
@@ -104,8 +108,11 @@ router.get('/hearing', async (req, res) => {
     // 今月・翌月はアクティブのみ。過去月は正規退会・強制退会も含める
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
       .filter(s =>
-        s.status === 'アクティブ' ||
-        (monthOffset < 0 && (s.status === '正規退会' || s.status === '強制退会'))
+        s.plan !== ENTRY_PLAN_NAME
+        && (
+          s.status === 'アクティブ' ||
+          (monthOffset < 0 && (s.status === '正規退会' || s.status === '強制退会'))
+        )
       )
       .map(student => {
         const suspension = suspensionData[student.studentId];
@@ -170,10 +177,13 @@ router.get('/examination', async (req, res) => {
     // 過去月はさらに強制退会も含める
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
       .filter(s =>
-        s.status === 'アクティブ' ||
-        s.status === '正規退会' ||
-        s.status === '無断キャンセル' ||
-        (monthOffset < 0 && s.status === '強制退会')
+        s.plan !== ENTRY_PLAN_NAME
+        && (
+          s.status === 'アクティブ' ||
+          s.status === '正規退会' ||
+          s.status === '無断キャンセル' ||
+          (monthOffset < 0 && s.status === '強制退会')
+        )
       )
       .map(student => {
         const suspension = suspensionData[student.studentId];
@@ -210,6 +220,68 @@ router.get('/examination', async (req, res) => {
     });
   } catch (error) {
     console.error('Error in /api/notion/examination:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/notion/entry-plan-examination
+ * エントリープランの5ヶ月目・11ヶ月目・以降6ヶ月ごとの延長審査対象を取得する。
+ */
+router.get('/entry-plan-examination', async (req, res) => {
+  try {
+    const monthOffset = parseInt(req.query.monthOffset) || 0;
+    const [students, suspensionData, lessonSchedule] = await Promise.all([
+      fetchStudents(),
+      fetchSuspensionData(),
+      fetchLessonDatesForMonth(monthOffset),
+    ]);
+
+    const entryPlanStudents = enrichStudentsWithMonths(students, monthOffset)
+      .filter(s =>
+        s.plan === ENTRY_PLAN_NAME
+        && (
+          s.status === 'アクティブ' ||
+          s.status === '正規退会' ||
+          s.status === '無断キャンセル' ||
+          (monthOffset < 0 && s.status === '強制退会')
+        )
+      )
+      .map(student => {
+        const suspension = suspensionData[student.studentId];
+        const suspensionMonths = calculateEffectiveSuspensionMonths(suspension, monthOffset);
+        const adjustedMonths = Math.max(0, student.monthsElapsed - suspensionMonths);
+
+        return {
+          ...student,
+          adjustedMonths,
+          cycle: getEntryPlanExaminationCycle(adjustedMonths),
+          suspensionMonths,
+          hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
+          suspensionStartDate: suspension?.suspensionStartDate || null,
+          suspensionRecords: suspension?.records || [],
+          lessonDates: getLessonDatesForStudent(lessonSchedule.lessonDatesByStudent, student.studentId),
+        };
+      })
+      .filter(student => student.cycle !== null);
+
+    const breakdown = entryPlanStudents.reduce((counts, student) => {
+      counts[`cycle${student.cycle}`] = (counts[`cycle${student.cycle}`] || 0) + 1;
+      return counts;
+    }, {});
+
+    res.json({
+      success: true,
+      data: entryPlanStudents,
+      count: entryPlanStudents.length,
+      monthOffset,
+      breakdown,
+    });
+  } catch (error) {
+    console.error('Error in /api/notion/entry-plan-examination:', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -297,8 +369,11 @@ router.get('/pro-examination', async (req, res) => {
     // 今月・翌月はアクティブのみ。過去月は正規退会・強制退会も含める
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
       .filter(s =>
-        s.status === 'アクティブ' ||
-        (monthOffset < 0 && (s.status === '正規退会' || s.status === '強制退会'))
+        s.plan !== ENTRY_PLAN_NAME
+        && (
+          s.status === 'アクティブ' ||
+          (monthOffset < 0 && (s.status === '正規退会' || s.status === '強制退会'))
+        )
       )
       .map(student => {
         const suspension = suspensionData[student.studentId];

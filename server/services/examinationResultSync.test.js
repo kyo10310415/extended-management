@@ -13,6 +13,10 @@ import {
 } from './examinationResultSyncService.js';
 import { buildExaminationResultDiscordMessage } from './discordService.js';
 import { isExaminationOverdue } from '../../src/utils/examinationStatus.js';
+import {
+  getEntryPlanExaminationCycle,
+  getExaminationRevenueAmount,
+} from '../utils/examinationCycle.js';
 
 function lessonStartDateForMonth(monthsElapsed) {
   const now = new Date();
@@ -64,6 +68,25 @@ test('拡張サイクルは1回目から10回目だけを許可する', () => {
   assert.equal(isValidExtensionCycle(1.5), false);
 });
 
+test('エントリープランの審査回数を5ヶ月目から6ヶ月ごとに判定する', () => {
+  assert.equal(getEntryPlanExaminationCycle(5), 1);
+  assert.equal(getEntryPlanExaminationCycle(11), 2);
+  assert.equal(getEntryPlanExaminationCycle(17), 3);
+  assert.equal(getEntryPlanExaminationCycle(23), 4);
+  assert.equal(getEntryPlanExaminationCycle(59), 10);
+  assert.equal(getEntryPlanExaminationCycle(4), null);
+  assert.equal(getEntryPlanExaminationCycle(12), null);
+  assert.equal(getEntryPlanExaminationCycle(65), null);
+});
+
+test('審査結果と契約プランから売上予測へ入力する金額を判定する', () => {
+  assert.equal(getExaminationRevenueAmount('エントリープラン', '延長'), 5980);
+  assert.equal(getExaminationRevenueAmount('エントリープラン', 'アップセル'), 22000);
+  assert.equal(getExaminationRevenueAmount('通常プラン', '延長'), 22000);
+  assert.equal(getExaminationRevenueAmount('通常プラン', 'アップセル'), null);
+  assert.equal(getExaminationRevenueAmount('エントリープラン', '退会'), null);
+});
+
 test('バックグラウンド同期は画面と同じ月数・ステータス条件で対象を振り分ける', () => {
   const students = [
     { studentId: 'OLTS-A', lessonStartDate: lessonStartDateForMonth(6), status: 'アクティブ' },
@@ -105,6 +128,47 @@ test('バックグラウンド同期は画面と同じ月数・ステータス�
   assert.equal(payloads.get(3).get('OLTS-C').result, '永久会員');
   assert.equal(payloads.get(4).get('OLTS-C').result, '永久会員');
   assert.equal(payloads.get(1).has('OLTS-D'), false);
+});
+
+test('エントリープランはフォーム回答から審査結果を自動同期しない', () => {
+  const students = [
+    {
+      studentId: 'OLTS-ENTRY-3',
+      lessonStartDate: lessonStartDateForMonth(17),
+      status: 'アクティブ',
+      plan: 'エントリープラン',
+    },
+    {
+      studentId: 'OLTS-ENTRY-4',
+      lessonStartDate: lessonStartDateForMonth(23),
+      status: 'アクティブ',
+      plan: 'エントリープラン',
+    },
+  ];
+  const formResultsByOffset = new Map([[0, {
+    available: true,
+    resultsByStudent: {
+      'OLTS-ENTRY-3': { result: '延長', sourceValue: '延長', sourceRowNumber: 201 },
+      'OLTS-ENTRY-4': { result: '永久会員', sourceValue: '永久会員', sourceRowNumber: 202 },
+    },
+  }]]);
+
+  const payloads = buildAutomaticExaminationSyncPayloads({
+    students,
+    suspensionData: {},
+    proStartMap: {
+      'OLTS-ENTRY-3': { proStartDate: lessonStartDateForMonth(11) },
+      'OLTS-ENTRY-4': { proStartDate: lessonStartDateForMonth(17) },
+    },
+    formResultsByOffset,
+    monthOffsets: [0],
+    automationBaselineRow: 200,
+  });
+
+  for (const cyclePayload of payloads.values()) {
+    assert.equal(cyclePayload.has('OLTS-ENTRY-3'), false);
+    assert.equal(cyclePayload.has('OLTS-ENTRY-4'), false);
+  }
 });
 
 test('DB同期SQLは手動固定済みの審査結果を上書きしない', async () => {
@@ -231,6 +295,18 @@ test('Discord通知は生徒名・担当Tutor名と指定項目を含みPROプ�
   assert.match(message.content, /NotionURL：https:\/\/www\.notion\.so\/example/);
   assert.match(message.content, /審査結果：PROプラン/);
   assert.deepEqual(message.allowed_mentions, { parse: ['everyone'] });
+});
+
+test('EPアップセルのDiscord通知は審査結果をアップセルと表示する', () => {
+  const message = buildExaminationResultDiscordMessage({
+    name: '山田太郎',
+    tutor: '佐藤Tutor',
+    studentId: 'OLTS-ENTRY',
+    notionUrl: 'https://www.notion.so/example',
+    resultLabel: 'アップセル',
+  });
+
+  assert.match(message.content, /審査結果：アップセル/);
 });
 
 test('最初のレッスン日の翌日以降で審査結果が空欄なら未実施と判定する', () => {
