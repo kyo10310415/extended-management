@@ -8,6 +8,11 @@ import {
   isValidExecutiveCheck,
   processPendingExaminationAutomations,
 } from '../services/examinationAutomationService.js';
+import {
+  ENTRY_PLAN_NAME,
+  getExaminationRevenueAmount,
+  UPSELL_EXAMINATION_RESULT,
+} from '../utils/examinationCycle.js';
 
 const router = express.Router();
 
@@ -86,6 +91,7 @@ router.post('/bulk', async (req, res) => {
         executive_check: row[`executive_check_${cycleNumber}`] || '',
         revenue_extension_pending: row[`revenue_extension_pending_${cycleNumber}`] || false,
         revenue_extension_completed: row[`revenue_extension_completed_${cycleNumber}`] || false,
+        revenue_extension_amount: row[`revenue_extension_amount_${cycleNumber}`] || null,
         revenue_extension_end_month: row[`revenue_extension_end_month_${cycleNumber}`] || null,
         student_extension_notification_pending: row[`student_extension_notification_pending_${cycleNumber}`] || false,
         student_extension_notification_sent: row[`student_extension_notification_sent_${cycleNumber}`] || false,
@@ -151,6 +157,7 @@ router.get('/:studentId', async (req, res) => {
       executive_check: row[`executive_check_${cycle}`] || '',
       revenue_extension_pending: row[`revenue_extension_pending_${cycle}`] || false,
       revenue_extension_completed: row[`revenue_extension_completed_${cycle}`] || false,
+      revenue_extension_amount: row[`revenue_extension_amount_${cycle}`] || null,
       revenue_extension_end_month: row[`revenue_extension_end_month_${cycle}`] || null,
       student_extension_notification_pending: row[`student_extension_notification_pending_${cycle}`] || false,
       student_extension_notification_sent: row[`student_extension_notification_sent_${cycle}`] || false,
@@ -215,6 +222,30 @@ router.post('/:studentId', async (req, res) => {
   console.log('  データ:', { extension_certainty, hearing_status, examination_result, notes });
 
   try {
+    let studentPlan = null;
+    if (examinationResultWasManuallyChanged) {
+      const studentPlanResult = await pool.query(
+        'SELECT plan FROM notion_students_cache WHERE student_id = $1',
+        [studentId]
+      );
+      studentPlan = studentPlanResult.rows[0]?.plan || null;
+    }
+    const revenueAmount = examinationResultWasManuallyChanged
+      ? getExaminationRevenueAmount(studentPlan, examination_result)
+      : null;
+    const isAutomationResult = revenueAmount !== null;
+
+    if (
+      examinationResultWasManuallyChanged
+      && examination_result === UPSELL_EXAMINATION_RESULT
+      && studentPlan !== ENTRY_PLAN_NAME
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: 'アップセルはエントリープランの延長審査でのみ選択できます。',
+      });
+    }
+
     // サイクルに応じたカラム名を構築
     const certaintyCol = `extension_certainty_${cycleNumber}`;
     const hearingCol = `hearing_status_${cycleNumber}`;
@@ -227,6 +258,7 @@ router.post('/:studentId', async (req, res) => {
     const executiveCheckCol = `executive_check_${cycleNumber}`;
     const revenuePendingCol = `revenue_extension_pending_${cycleNumber}`;
     const revenueCompletedCol = `revenue_extension_completed_${cycleNumber}`;
+    const revenueAmountCol = `revenue_extension_amount_${cycleNumber}`;
     const revenueEndMonthCol = `revenue_extension_end_month_${cycleNumber}`;
     const studentNotificationPendingCol = `student_extension_notification_pending_${cycleNumber}`;
     const studentNotificationSentCol = `student_extension_notification_sent_${cycleNumber}`;
@@ -247,7 +279,7 @@ router.post('/:studentId', async (req, res) => {
       ) {
         return res.status(409).json({
           success: false,
-          error: '売上予測シートの延長処理が完了するまで「確認済」にはできません。',
+          error: '売上予測シートへの金額書き込みが完了するまで「確認済」にはできません。',
         });
       }
     }
@@ -273,6 +305,7 @@ router.post('/:studentId', async (req, res) => {
          ${discordResultLabelCol},
          ${executiveCheckCol},
          ${revenuePendingCol},
+         ${revenueAmountCol},
          ${studentNotificationPendingCol},
          ${notesCol},
          updated_at)
@@ -282,10 +315,11 @@ router.post('/:studentId', async (req, res) => {
          $3,
          CASE WHEN $6 THEN NULLIF($4, '') ELSE NULL END,
          $6,
-         CASE WHEN $6 AND $7 AND NULLIF($4, '') = '延長' THEN TRUE ELSE FALSE END,
-         CASE WHEN $6 AND $7 AND NULLIF($4, '') = '延長' THEN '延長' ELSE NULL END,
+         CASE WHEN $6 AND $7 AND $10 THEN TRUE ELSE FALSE END,
+         CASE WHEN $6 AND $7 AND $10 THEN $11 ELSE NULL END,
          CASE WHEN $8 THEN NULLIF($9, '') ELSE NULL END,
-         CASE WHEN $6 AND NULLIF($4, '') = '延長' THEN TRUE ELSE FALSE END,
+         CASE WHEN $6 AND $10 THEN TRUE ELSE FALSE END,
+         CASE WHEN $6 AND $10 THEN $12 ELSE NULL END,
          CASE WHEN $8 AND NULLIF($9, '') = '確認済' THEN TRUE ELSE FALSE END,
          $5,
          CURRENT_TIMESTAMP
@@ -305,8 +339,8 @@ router.post('/:studentId', async (req, res) => {
          ${discordPendingCol} = CASE
            WHEN $6
             AND $7
-            AND EXCLUDED.${examCol} = '延長'
-            AND student_extensions.${examCol} IS DISTINCT FROM '延長'
+            AND $10
+            AND student_extensions.${examCol} IS DISTINCT FROM EXCLUDED.${examCol}
             AND NOT COALESCE(student_extensions.${discordSentCol}, FALSE)
              THEN TRUE
            WHEN $6 THEN FALSE
@@ -315,10 +349,10 @@ router.post('/:studentId', async (req, res) => {
          ${discordResultLabelCol} = CASE
            WHEN $6
             AND $7
-            AND EXCLUDED.${examCol} = '延長'
-            AND student_extensions.${examCol} IS DISTINCT FROM '延長'
+            AND $10
+            AND student_extensions.${examCol} IS DISTINCT FROM EXCLUDED.${examCol}
             AND NOT COALESCE(student_extensions.${discordSentCol}, FALSE)
-             THEN '延長'
+             THEN $11
            ELSE student_extensions.${discordResultLabelCol}
          END,
          ${executiveCheckCol} = CASE
@@ -327,13 +361,23 @@ router.post('/:studentId', async (req, res) => {
          END,
          ${revenuePendingCol} = CASE
            WHEN $6
-            AND EXCLUDED.${examCol} = '延長'
-            AND student_extensions.${examCol} IS DISTINCT FROM '延長'
+            AND $10
+            AND student_extensions.${examCol} IS DISTINCT FROM EXCLUDED.${examCol}
             AND NOT COALESCE(student_extensions.${revenueCompletedCol}, FALSE)
              THEN TRUE
-           WHEN $6 AND EXCLUDED.${examCol} IS DISTINCT FROM '延長'
+           WHEN $6 AND NOT $10
              THEN FALSE
            ELSE COALESCE(student_extensions.${revenuePendingCol}, FALSE)
+         END,
+         ${revenueAmountCol} = CASE
+           WHEN $6
+            AND $10
+            AND student_extensions.${examCol} IS DISTINCT FROM EXCLUDED.${examCol}
+            AND NOT COALESCE(student_extensions.${revenueCompletedCol}, FALSE)
+             THEN $12
+           WHEN $6 AND NOT $10
+             THEN NULL
+           ELSE student_extensions.${revenueAmountCol}
          END,
          ${studentNotificationPendingCol} = CASE
            WHEN $8
@@ -357,6 +401,9 @@ router.post('/:studentId', async (req, res) => {
         discordNotificationWasRequested,
         executiveCheckWasProvided,
         executive_check,
+        isAutomationResult,
+        isAutomationResult ? examination_result : null,
+        revenueAmount,
       ]
     );
 
@@ -367,7 +414,7 @@ router.post('/:studentId', async (req, res) => {
     if (
       examinationResultWasManuallyChanged
       && discordNotificationWasRequested
-      && examination_result === '延長'
+      && isAutomationResult
     ) {
       try {
         const processed = await processPendingExaminationDiscordNotifications({
@@ -444,6 +491,7 @@ router.post('/:studentId', async (req, res) => {
       executive_check: row[executiveCheckCol] || '',
       revenue_extension_pending: row[revenuePendingCol] || false,
       revenue_extension_completed: row[revenueCompletedCol] || false,
+      revenue_extension_amount: row[revenueAmountCol] || null,
       revenue_extension_end_month: row[revenueEndMonthCol] || null,
       student_extension_notification_pending: row[studentNotificationPendingCol] || false,
       student_extension_notification_sent: row[studentNotificationSentCol] || false,

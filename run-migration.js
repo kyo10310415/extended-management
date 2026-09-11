@@ -32,6 +32,7 @@ async function runMigration() {
       '010_gate_new_examination_form_responses.sql',
       '011_restore_examination_deploy_race.sql',
       '012_restore_olts250991_examination.sql',
+      '013_add_revenue_extension_amount.sql',
     ];
 
     for (const migrationFile of migrationFiles) {

@@ -8,6 +8,10 @@ export function buildExaminationResultDiscordMessage({
   notionUrl,
   resultLabel,
 }) {
+  const displayedResult = resultLabel === 'PROプラン' || resultLabel === 'アップセル'
+    ? resultLabel
+    : '延長';
+
   return {
     content: [
       '@everyone',
@@ -16,14 +20,14 @@ export function buildExaminationResultDiscordMessage({
       `担当Tutor名：${tutor || '-'}`,
       `学籍番号：${studentId || '-'}`,
       `NotionURL：${notionUrl || '-'}`,
-      `審査結果：${resultLabel === 'PROプラン' ? 'PROプラン' : '延長'}`,
+      `審査結果：${displayedResult}`,
     ].join('\n'),
     allowed_mentions: { parse: ['everyone'] },
   };
 }
 
 /**
- * 審査結果が「延長」へ更新されたことを専用Webhookへ通知する。
+ * 審査結果が通知対象へ更新されたことを専用Webhookへ通知する。
  * @param {{name: string, tutor: string, studentId: string, notionUrl: string, resultLabel: string}} student
  */
 export async function sendExaminationResultNotification({

@@ -25,6 +25,7 @@ function cycleColumns(cycle) {
     executiveCheck: `executive_check_${cycle}`,
     revenuePending: `revenue_extension_pending_${cycle}`,
     revenueCompleted: `revenue_extension_completed_${cycle}`,
+    revenueAmount: `revenue_extension_amount_${cycle}`,
     revenueStartMonth: `revenue_extension_start_month_${cycle}`,
     revenueEndMonth: `revenue_extension_end_month_${cycle}`,
     revenueSyncedAt: `revenue_extension_synced_at_${cycle}`,
@@ -59,12 +60,14 @@ async function processRevenueExtensions({ client, cycles, studentId }) {
 
     const pendingRows = await client.query(
       `SELECT student_id,
+              ${columns.examinationResult} AS examination_result,
+              ${columns.revenueAmount} AS amount,
               ${columns.revenueStartMonth} AS start_month,
               ${columns.revenueEndMonth} AS end_month
          FROM student_extensions
         WHERE COALESCE(${columns.revenuePending}, FALSE)
           AND NOT COALESCE(${columns.revenueCompleted}, FALSE)
-          AND ${columns.examinationResult} = '延長'
+          AND ${columns.examinationResult} IN ('延長', 'アップセル')
           ${studentFilter}
         ORDER BY student_id`,
       params
@@ -72,6 +75,7 @@ async function processRevenueExtensions({ client, cycles, studentId }) {
 
     for (const pending of pendingRows.rows) {
       try {
+        const revenueAmount = Number(pending.amount) || 22000;
         let startYearMonth = pending.start_month;
         let endYearMonth = pending.end_month;
 
@@ -101,8 +105,9 @@ async function processRevenueExtensions({ client, cycles, studentId }) {
             WHERE student_id = $1
               AND COALESCE(${columns.revenuePending}, FALSE)
               AND NOT COALESCE(${columns.revenueCompleted}, FALSE)
-              AND ${columns.examinationResult} = '延長'`,
-          [pending.student_id]
+              AND ${columns.examinationResult} = $2
+              AND COALESCE(${columns.revenueAmount}, 22000) = $3`,
+          [pending.student_id, pending.examination_result, revenueAmount]
         );
         if (currentState.rowCount !== 1) {
           throw new Error('追記処理の開始前に審査結果が更新されました。');
@@ -112,6 +117,7 @@ async function processRevenueExtensions({ client, cycles, studentId }) {
           studentId: pending.student_id,
           startYearMonth,
           endYearMonth,
+          amount: revenueAmount,
         });
 
         const updateResult = await client.query(
@@ -123,8 +129,9 @@ async function processRevenueExtensions({ client, cycles, studentId }) {
                   updated_at = CURRENT_TIMESTAMP
             WHERE student_id = $1
               AND COALESCE(${columns.revenuePending}, FALSE)
-              AND ${columns.examinationResult} = '延長'`,
-          [pending.student_id]
+              AND ${columns.examinationResult} = $2
+              AND COALESCE(${columns.revenueAmount}, 22000) = $3`,
+          [pending.student_id, pending.examination_result, revenueAmount]
         );
 
         if (updateResult.rowCount !== 1) {
@@ -138,6 +145,7 @@ async function processRevenueExtensions({ client, cycles, studentId }) {
           success: true,
           startYearMonth,
           endYearMonth,
+          amount: revenueAmount,
         });
       } catch (error) {
         failedCount += 1;

@@ -326,12 +326,20 @@ export function buildSalesForecastExtensionPlan({
   };
 }
 
-function normalizeExtensionPrice(value) {
+export function normalizeSalesForecastAmount(value) {
   return String(value ?? '').replace(/[\s,¥￥]/g, '');
 }
 
-function isExtensionPrice(value) {
-  return normalizeExtensionPrice(value) === '22000';
+export function formatSalesForecastAmount(value) {
+  const normalized = normalizeSalesForecastAmount(value);
+  if (!/^\d+$/.test(normalized) || Number(normalized) <= 0) {
+    throw new Error('売上予測シートへ追記する金額が不正です。');
+  }
+  return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function isSalesForecastAmount(value, expectedAmount) {
+  return normalizeSalesForecastAmount(value) === normalizeSalesForecastAmount(expectedAmount);
 }
 
 async function getAutomationSheetsClient() {
@@ -508,7 +516,9 @@ export async function applySalesForecastExtensionPlan({
   studentId,
   startYearMonth,
   endYearMonth,
+  amount = 22000,
 }) {
+  const formattedAmount = formatSalesForecastAmount(amount);
   const sheets = await getAutomationSheetsClient();
   const escapedSheetName = SALES_FORECAST_SHEET_NAME.replace(/'/g, "''");
   const [rowNumber, headerValues] = await Promise.all([
@@ -544,18 +554,21 @@ export async function applySalesForecastExtensionPlan({
   });
   const currentValues = currentResponse.data.values?.[0] || [];
   const hasConflict = Array.from({ length: 6 }, (_, index) => currentValues[index])
-    .some(value => isNonEmptySheetValue(value) && !isExtensionPrice(value));
+    .some(value => isNonEmptySheetValue(value) && !isSalesForecastAmount(value, formattedAmount));
 
   if (hasConflict) {
     throw new Error('売上予測シートの追記予定範囲に別の値が入っています。');
   }
 
-  if (!Array.from({ length: 6 }, (_, index) => currentValues[index]).every(isExtensionPrice)) {
+  if (!Array.from(
+    { length: 6 },
+    (_, index) => isSalesForecastAmount(currentValues[index], formattedAmount)
+  ).every(Boolean)) {
     await sheets.spreadsheets.values.update({
       spreadsheetId: EXAMINATION_AUTOMATION_SPREADSHEET_ID,
       range: targetRange,
       valueInputOption: 'RAW',
-      requestBody: { values: [Array(6).fill('22,000')] },
+      requestBody: { values: [Array(6).fill(formattedAmount)] },
     });
   }
 
@@ -565,11 +578,19 @@ export async function applySalesForecastExtensionPlan({
     valueRenderOption: 'FORMATTED_VALUE',
   });
   const verifiedValues = verifyResponse.data.values?.[0] || [];
-  if (!Array.from({ length: 6 }, (_, index) => verifiedValues[index]).every(isExtensionPrice)) {
+  if (!Array.from(
+    { length: 6 },
+    (_, index) => isSalesForecastAmount(verifiedValues[index], formattedAmount)
+  ).every(Boolean)) {
     throw new Error('売上予測シートへの追記結果を確認できませんでした。');
   }
 
-  return { startYearMonth, endYearMonth, range: targetRange };
+  return {
+    startYearMonth,
+    endYearMonth,
+    range: targetRange,
+    amount: Number(normalizeSalesForecastAmount(formattedAmount)),
+  };
 }
 
 export async function getExtensionAgreementStudentChatDestination(studentId) {

@@ -122,7 +122,7 @@ function ExaminationList({ entryPlan = false }) {
       console.log('  更新データ:', updatedData);
       
       // 審査結果が入力された場合、フォームの送信状況を確認
-      if (updatedData.examination_result) {
+      if (!entryPlan && updatedData.examination_result) {
         console.log('  📋 審査結果が入力されました。フォームの送信状況を確認中...');
         
         try {
@@ -389,6 +389,7 @@ function ExaminationList({ entryPlan = false }) {
             >
               <option value="">すべて</option>
               <option value="延長">延長</option>
+              {entryPlan && <option value="アップセル">アップセル</option>}
               <option value="在籍">在籍</option>
               <option value="退会">退会</option>
               <option value="永久会員">永久会員</option>
@@ -432,6 +433,7 @@ function ExaminationList({ entryPlan = false }) {
           showExaminationColumn={true}
           showStatusColumn={true}
           showLessonDatesColumn={true}
+          allowUpsell={entryPlan}
         />
       )}
     </div>

@@ -234,9 +234,8 @@ router.get('/examination', async (req, res) => {
 router.get('/entry-plan-examination', async (req, res) => {
   try {
     const monthOffset = parseInt(req.query.monthOffset) || 0;
-    const [students, formUpdates, suspensionData, lessonSchedule] = await Promise.all([
+    const [students, suspensionData, lessonSchedule] = await Promise.all([
       fetchStudents(),
-      fetchFormUpdates(),
       fetchSuspensionData(),
       fetchLessonDatesForMonth(monthOffset),
     ]);
@@ -264,7 +263,6 @@ router.get('/entry-plan-examination', async (req, res) => {
           hasSuspensionHistory: suspension?.hasSuspensionHistory || false,
           suspensionStartDate: suspension?.suspensionStartDate || null,
           suspensionRecords: suspension?.records || [],
-          formLastUpdate: formUpdates[student.studentId] || null,
           lessonDates: getLessonDatesForStudent(lessonSchedule.lessonDatesByStudent, student.studentId),
         };
       })
