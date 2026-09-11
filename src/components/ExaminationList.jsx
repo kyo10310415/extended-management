@@ -1,7 +1,14 @@
 import { useState, useEffect, useMemo } from 'react'
 import StudentTable from './StudentTable'
 
-function ExaminationList() {
+function getCycleForAdjustedMonths(adjustedMonths) {
+  const months = Number(adjustedMonths)
+  if (!Number.isInteger(months) || months < 5 || (months - 5) % 6 !== 0) return null
+  const cycle = ((months - 5) / 6) + 1
+  return cycle <= 10 ? cycle : null
+}
+
+function ExaminationList({ entryPlan = false }) {
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -19,65 +26,47 @@ function ExaminationList() {
 
   useEffect(() => {
     fetchExaminationStudents()
-  }, [monthOffset])
+  }, [monthOffset, entryPlan])
 
   const fetchExaminationStudents = async () => {
     try {
       setLoading(true)
       setRefreshing(false) // 初回読み込みの場合はrefreshingをfalseに
-      const response = await fetch(`/api/notion/examination?monthOffset=${monthOffset}`)
+      const endpoint = entryPlan ? 'entry-plan-examination' : 'examination'
+      const response = await fetch(`/api/notion/${endpoint}?monthOffset=${monthOffset}`)
       const data = await response.json()
 
       if (data.success) {
-        // 調整後月数が5ヶ月目と11ヶ月目の生徒を分ける
-        const month5Students = data.data.filter(s => s.adjustedMonths === 5);
-        const month11Students = data.data.filter(s => s.adjustedMonths === 11);
-        
-        // それぞれのサイクルで一括取得
-        const cycle1Ids = month5Students.map(s => s.studentId);
-        const cycle2Ids = month11Students.map(s => s.studentId);
-        
-        // サイクル1のデータ取得（5ヶ月目）
-        let cycle1Data = {};
-        if (cycle1Ids.length > 0) {
-          const res1 = await fetch('/api/students/bulk', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              studentIds: cycle1Ids,
-              cycle: 1,
-            }),
-          });
-          const data1 = await res1.json();
-          cycle1Data = data1.data || {};
-        }
-        
-        // サイクル2のデータ取得（11ヶ月目）
-        let cycle2Data = {};
-        if (cycle2Ids.length > 0) {
-          const res2 = await fetch('/api/students/bulk', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              studentIds: cycle2Ids,
-              cycle: 2,
-            }),
-          });
-          const data2 = await res2.json();
-          cycle2Data = data2.data || {};
-        }
-
-        // データをマージ（各生徒のサイクルを個別に判定）
-        const enrichedStudents = data.data.map(student => {
-          const cycle = student.adjustedMonths === 11 ? 2 : 1;
-          const extensionData = cycle === 1 ? cycle1Data[student.studentId] : cycle2Data[student.studentId];
-          
-          return {
+        const targetStudents = data.data
+          .map(student => ({
             ...student,
-            cycle,  // 個別のサイクル情報を保存
-            extensionData: extensionData || null,
-          };
-        });
+            cycle: Number(student.cycle) || getCycleForAdjustedMonths(student.adjustedMonths),
+          }))
+          .filter(student => student.cycle !== null)
+
+        const studentIdsByCycle = targetStudents.reduce((groups, student) => {
+          if (!groups[student.cycle]) groups[student.cycle] = []
+          groups[student.cycle].push(student.studentId)
+          return groups
+        }, {})
+
+        const extensionDataByCycle = Object.fromEntries(await Promise.all(
+          Object.entries(studentIdsByCycle).map(async ([cycle, studentIds]) => {
+            const bulkResponse = await fetch('/api/students/bulk', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ studentIds, cycle: Number(cycle) }),
+            })
+            const bulkData = await bulkResponse.json()
+            if (!bulkData.success) throw new Error(bulkData.error || '延長管理データの取得に失敗しました')
+            return [cycle, bulkData.data || {}]
+          })
+        ))
+
+        const enrichedStudents = targetStudents.map(student => ({
+          ...student,
+          extensionData: extensionDataByCycle[student.cycle]?.[student.studentId] || null,
+        }))
 
         // 延長確度が「対象外」の生徒を除外
         const filteredStudents = enrichedStudents.filter(student => 
@@ -273,7 +262,9 @@ function ExaminationList() {
         <div className="opacity-50 pointer-events-none">
           <div>
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">📋 延長審査一覧</h2>
+              <h2 className="text-2xl font-bold text-gray-900">
+                {entryPlan ? '🧾 EP延長審査' : '📋 延長審査一覧'}
+              </h2>
             </div>
           </div>
         </div>
@@ -293,7 +284,9 @@ function ExaminationList() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">
-          📋 延長審査一覧（5ヶ月目・11ヶ月目）
+          {entryPlan
+            ? '🧾 EP延長審査（5ヶ月目・以降6ヶ月ごと）'
+            : '📋 延長審査一覧（5ヶ月目・11ヶ月目）'}
         </h2>
         <div className="flex items-center gap-3">
           {/* 更新ボタン */}
@@ -426,7 +419,7 @@ function ExaminationList() {
 
       {students.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
-          現在、延長審査対象の生徒はいません
+          現在、{entryPlan ? 'EP延長審査' : '延長審査'}対象の生徒はいません
         </div>
       ) : filteredStudents.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
