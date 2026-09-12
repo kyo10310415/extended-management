@@ -350,7 +350,7 @@ router.post('/:studentId', async (req, res) => {
          CASE WHEN $6 AND $7 AND $10 THEN $11 ELSE NULL END,
          CASE WHEN $8 THEN NULLIF($9, '') ELSE NULL END,
          CASE WHEN $6 AND $10 THEN TRUE ELSE FALSE END,
-         CASE WHEN $6 AND $10 THEN $12 ELSE NULL END,
+         CASE WHEN $6 AND $10 THEN $12::INTEGER ELSE NULL END,
          CASE WHEN $8 AND NULLIF($9, '') = '確認済' THEN TRUE ELSE FALSE END,
          $5,
          CURRENT_TIMESTAMP
@@ -405,7 +405,7 @@ router.post('/:studentId', async (req, res) => {
             AND $10
             AND student_extensions.${examCol} IS DISTINCT FROM EXCLUDED.${examCol}
             AND NOT COALESCE(student_extensions.${revenueCompletedCol}, FALSE)
-             THEN $12
+             THEN $12::INTEGER
            WHEN $6 AND NOT $10
              THEN NULL
            ELSE student_extensions.${revenueAmountCol}
