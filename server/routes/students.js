@@ -13,6 +13,7 @@ import {
   getExaminationRevenueAmount,
   UPSELL_EXAMINATION_RESULT,
 } from '../utils/examinationCycle.js';
+import { saveHearingExtensionData } from '../services/studentExtensionService.js';
 
 const router = express.Router();
 
@@ -177,6 +178,36 @@ router.get('/:studentId', async (req, res) => {
       success: false,
       error: error.message,
     });
+  }
+});
+
+/**
+ * POST /api/students/:studentId/hearing
+ * ヒアリング画面の編集項目を審査自動化とは独立して保存する。
+ */
+router.post('/:studentId/hearing', async (req, res) => {
+  const { studentId } = req.params;
+  const { extension_certainty, hearing_status, notes, cycle } = req.body;
+  const cycleNumber = parseCycle(cycle ?? 1);
+
+  if (!cycleNumber) {
+    return res.status(400).json({ success: false, error: 'cycle must be between 1 and 10' });
+  }
+
+  try {
+    const data = await saveHearingExtensionData({
+      queryable: pool,
+      studentId,
+      cycle: cycleNumber,
+      extensionCertainty: extension_certainty,
+      hearingStatus: hearing_status,
+      notes,
+    });
+
+    return res.json({ success: true, data });
+  } catch (error) {
+    console.error('Error saving hearing data:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
