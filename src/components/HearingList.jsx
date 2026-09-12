@@ -121,7 +121,7 @@ function HearingList() {
       console.log('  サイクル:', cycle);
       console.log('  更新データ:', updatedData);
       
-      const response = await fetch(`/api/students/${studentId}`, {
+      const response = await fetch(`/api/students/${encodeURIComponent(studentId)}/hearing`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...updatedData, cycle }),
@@ -131,21 +131,26 @@ function HearingList() {
 
       console.log('  レスポンス:', data);
 
-      if (data.success) {
+      if (response.ok && data.success) {
         console.log('  ✅ 更新成功 - ローカル状態を更新');
         // ローカル状態を更新
         setStudents(prev =>
           prev.map(s =>
             s.studentId === studentId
-              ? { ...s, extensionData: data.data }
+              ? {
+                  ...s,
+                  extensionData: { ...s.extensionData, ...data.data },
+                }
               : s
           )
         )
       } else {
         console.error('  ❌ 更新失敗:', data.error);
       }
+      return data
     } catch (err) {
       console.error('  ❌ エラー:', err)
+      return { success: false, error: err.message }
     }
   }
 
