@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
+import { aggregateTutorKpiSnapshots } from '../utils/tutorKpi'
 
 // ========== テーブル列定義 ==========
 const cols = [
@@ -308,15 +309,108 @@ function PastMonthTab() {
   )
 }
 
+// ========== 累計タブ（保存済みスナップショット） ==========
+function CumulativeTab() {
+  const [tutorData, setTutorData] = useState([])
+  const [period, setPeriod] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [viewMode, setViewMode] = useState('table')
+
+  useEffect(() => {
+    const fetchCumulative = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+        const res = await fetch('/api/kpi-snapshots')
+        const d = await res.json()
+        if (!res.ok || !d.success) {
+          throw new Error(d.error || '累計データの取得に失敗しました')
+        }
+
+        const populatedSnapshots = d.data.filter(snapshot =>
+          Array.isArray(snapshot.tutorKpi) && snapshot.tutorKpi.length > 0
+        )
+        setTutorData(aggregateTutorKpiSnapshots(populatedSnapshots))
+        setPeriod(populatedSnapshots.length > 0 ? {
+          firstLabel: populatedSnapshots[0].monthLabel,
+          lastLabel: populatedSnapshots[populatedSnapshots.length - 1].monthLabel,
+          monthCount: populatedSnapshots.length,
+        } : null)
+      } catch (e) {
+        console.error(e)
+        setError(e.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCumulative()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex justify-center h-32 items-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return <p className="text-sm text-red-600">{error}</p>
+  }
+
+  if (tutorData.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+        <p className="text-gray-400">Tutor別データを含むスナップショットがありません</p>
+        <p className="text-sm text-gray-400 mt-1">「KPI履歴」タブでスナップショットを保存してください</p>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div>
+          <p className="text-sm text-gray-600">
+            <span className="font-semibold text-blue-700">
+              {period.firstLabel}〜{period.lastLabel}
+            </span>
+            <span className="ml-2">（{period.monthCount}ヶ月分）</span>
+          </p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            保存済みスナップショットを合算し、延長率は累計件数から再計算しています。今月の未保存データは含みません。
+          </p>
+        </div>
+        <div className="flex gap-1">
+          <button
+            onClick={() => setViewMode('table')}
+            className={`px-3 py-1.5 rounded text-xs font-medium transition ${viewMode === 'table' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 hover:bg-blue-50'}`}
+          >📋 テーブル</button>
+          <button
+            onClick={() => setViewMode('chart')}
+            className={`px-3 py-1.5 rounded text-xs font-medium transition ${viewMode === 'chart' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 hover:bg-blue-50'}`}
+          >📊 グラフ</button>
+        </div>
+      </div>
+
+      {viewMode === 'table'
+        ? <TutorTable data={tutorData} />
+        : <TutorBarChart data={tutorData} />}
+    </div>
+  )
+}
+
 // ========== メインコンポーネント ==========
 function KpiByTutor() {
-  const [mainTab, setMainTab] = useState('current') // current | past
+  const [mainTab, setMainTab] = useState('current') // current | past | cumulative
 
   return (
     <div>
       <h2 className="text-2xl font-bold text-gray-900 mb-2">👤 担当Tutor別 延長率</h2>
       <p className="text-sm text-gray-500 mb-5">
-        今月分はリアルタイムデータ、過去分はスナップショット保存データを表示します。
+        今月分はリアルタイムデータ、過去分と累計はスナップショット保存データを表示します。
       </p>
 
       {/* 今月 / 過去 タブ */}
@@ -341,9 +435,23 @@ function KpiByTutor() {
         >
           🗂️ 過去（スナップショット）
         </button>
+        <button
+          onClick={() => setMainTab('cumulative')}
+          className={`px-5 py-3 text-sm font-semibold border-b-2 transition -mb-px ${
+            mainTab === 'cumulative'
+              ? 'border-blue-600 text-blue-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          📊 累計
+        </button>
       </div>
 
-      {mainTab === 'current' ? <CurrentMonthTab /> : <PastMonthTab />}
+      {mainTab === 'current'
+        ? <CurrentMonthTab />
+        : mainTab === 'past'
+          ? <PastMonthTab />
+          : <CumulativeTab />}
     </div>
   )
 }
