@@ -338,6 +338,15 @@ export function formatSalesForecastAmount(value) {
   return normalized.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
+export function buildSalesForecastAmountUpdate(amount, monthCount = 6) {
+  const formattedAmount = formatSalesForecastAmount(amount);
+  return {
+    formattedAmount,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [Array(monthCount).fill(formattedAmount)] },
+  };
+}
+
 function isSalesForecastAmount(value, expectedAmount) {
   return normalizeSalesForecastAmount(value) === normalizeSalesForecastAmount(expectedAmount);
 }
@@ -518,7 +527,11 @@ export async function applySalesForecastExtensionPlan({
   endYearMonth,
   amount = 22000,
 }) {
-  const formattedAmount = formatSalesForecastAmount(amount);
+  const {
+    formattedAmount,
+    valueInputOption,
+    requestBody,
+  } = buildSalesForecastAmountUpdate(amount);
   const sheets = await getAutomationSheetsClient();
   const escapedSheetName = SALES_FORECAST_SHEET_NAME.replace(/'/g, "''");
   const [rowNumber, headerValues] = await Promise.all([
@@ -567,8 +580,8 @@ export async function applySalesForecastExtensionPlan({
     await sheets.spreadsheets.values.update({
       spreadsheetId: EXAMINATION_AUTOMATION_SPREADSHEET_ID,
       range: targetRange,
-      valueInputOption: 'RAW',
-      requestBody: { values: [Array(6).fill(formattedAmount)] },
+      valueInputOption,
+      requestBody,
     });
   }
 

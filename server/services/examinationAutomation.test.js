@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   addMonthsToYearMonth,
+  buildSalesForecastAmountUpdate,
   buildSalesForecastExtensionPlan,
   columnNumberToLetter,
   formatSalesForecastAmount,
@@ -83,6 +84,16 @@ test('売上予測へ入力する金額をカンマ区切りテキストへ整�
   assert.equal(formatSalesForecastAmount(5980), '5,980');
   assert.equal(formatSalesForecastAmount('22,000'), '22,000');
   assert.throws(() => formatSalesForecastAmount(''), /金額が不正/);
+});
+
+test('売上予測金額は先頭アポストロフィを付けずユーザー入力として書き込む', () => {
+  assert.deepEqual(buildSalesForecastAmountUpdate(22000), {
+    formattedAmount: '22,000',
+    valueInputOption: 'USER_ENTERED',
+    requestBody: {
+      values: [['22,000', '22,000', '22,000', '22,000', '22,000', '22,000']],
+    },
+  });
 });
 
 test('統括チェックは空白・未確認・確認済だけを許可する', () => {
