@@ -230,7 +230,8 @@ export function parseSuspensionApplicationRows(rows, firstRowNumber = 2) {
 }
 
 /**
- * 支払い状況シートの年月ヘッダーから、休会期間に対応する連続セル範囲を作る。
+ * 支払いは前月末に実施されるため、休会期間の各月を1か月前へずらして
+ * 支払い状況シート上の連続セル範囲を作る。
  */
 export function buildSuspensionPaymentPlan({
   headerValues,
@@ -238,12 +239,18 @@ export function buildSuspensionPaymentPlan({
   endYearMonth,
   firstColumnNumber = 14,
 }) {
+  const paymentStartYearMonth = addMonthsToYearMonth(startYearMonth, -1);
+  const paymentEndYearMonth = addMonthsToYearMonth(endYearMonth, -1);
+  if (!paymentStartYearMonth || !paymentEndYearMonth) {
+    throw new Error('休会開始月または休会終了月が不正です。');
+  }
+
   const startIndex = headerValues
     .map(parseSalesForecastMonthHeader)
-    .indexOf(startYearMonth);
+    .indexOf(paymentStartYearMonth);
   const endIndex = headerValues
     .map(parseSalesForecastMonthHeader)
-    .indexOf(endYearMonth);
+    .indexOf(paymentEndYearMonth);
 
   if (startIndex < 0 || endIndex < 0) {
     throw new Error('支払い状況シートに休会期間の年月列がありません。');
@@ -253,15 +260,15 @@ export function buildSuspensionPaymentPlan({
   }
 
   for (let index = startIndex; index <= endIndex; index += 1) {
-    const expected = addMonthsToYearMonth(startYearMonth, index - startIndex);
+    const expected = addMonthsToYearMonth(paymentStartYearMonth, index - startIndex);
     if (parseSalesForecastMonthHeader(headerValues[index]) !== expected) {
       throw new Error('支払い状況シートの年月列が連続していません。');
     }
   }
 
   return {
-    startYearMonth,
-    endYearMonth,
+    startYearMonth: paymentStartYearMonth,
+    endYearMonth: paymentEndYearMonth,
     startColumn: columnNumberToLetter(firstColumnNumber + startIndex),
     endColumn: columnNumberToLetter(firstColumnNumber + endIndex),
     monthCount: endIndex - startIndex + 1,
