@@ -63,7 +63,7 @@ test('同じフォーム送信は行番号が変わっても同じ処理キー�
   assert.match(first, /^[a-f0-9]{64}$/);
 });
 
-test('2026年9月から11月は実シート構造上BB列からBD列になる', () => {
+test('2026年9月から11月の休会は前月支払いのBA列からBC列になる', () => {
   const headerValues = buildMonthlyHeaders('2023-05', 47);
 
   assert.deepEqual(
@@ -74,16 +74,16 @@ test('2026年9月から11月は実シート構造上BB列からBD列になる', 
       firstColumnNumber: 14,
     }),
     {
-      startYearMonth: '2026-09',
-      endYearMonth: '2026-11',
-      startColumn: 'BB',
-      endColumn: 'BD',
+      startYearMonth: '2026-08',
+      endYearMonth: '2026-10',
+      startColumn: 'BA',
+      endColumn: 'BC',
       monthCount: 3,
     }
   );
 });
 
-test('年をまたぐ休会期間も開始月・終了月を含めて連続範囲にする', () => {
+test('年をまたぐ休会期間も前月支払いへずらして連続範囲にする', () => {
   assert.deepEqual(
     buildSuspensionPaymentPlan({
       headerValues: ['2026/11', '2026/12', '2027/1', '2027/2'],
@@ -92,10 +92,10 @@ test('年をまたぐ休会期間も開始月・終了月を含めて連続範�
       firstColumnNumber: 55,
     }),
     {
-      startYearMonth: '2026-12',
-      endYearMonth: '2027-02',
-      startColumn: 'BD',
-      endColumn: 'BF',
+      startYearMonth: '2026-11',
+      endYearMonth: '2027-01',
+      startColumn: 'BC',
+      endColumn: 'BE',
       monthCount: 3,
     }
   );
@@ -104,7 +104,7 @@ test('年をまたぐ休会期間も開始月・終了月を含めて連続範�
 test('支払い状況シートの年月が欠けている場合は書き込み計画を作らない', () => {
   assert.throws(
     () => buildSuspensionPaymentPlan({
-      headerValues: ['2026/9', '2026/11'],
+      headerValues: ['2026/8', '2026/10'],
       startYearMonth: '2026-09',
       endYearMonth: '2026-11',
       firstColumnNumber: 54,
