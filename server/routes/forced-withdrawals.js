@@ -28,6 +28,8 @@ async function findStudent(queryable, studentId) {
     `SELECT
        student_id AS "studentId",
        name,
+       tutor,
+       notion_url AS "notionUrl",
        TO_CHAR(lesson_start_date, 'YYYY-MM-DD') AS "lessonStartDate"
      FROM notion_students_cache
      WHERE UPPER(student_id) = ANY($1::text[])
@@ -169,6 +171,8 @@ router.post('/', async (req, res) => {
     const operationNotification = await sendForcedWithdrawalNotification({
       name: student.name,
       studentId: student.studentId,
+      tutor: student.tutor,
+      notionUrl: student.notionUrl,
       forcedWithdrawalDate,
       withdrawalReason,
     });

@@ -42,6 +42,8 @@ test('Discord通知は指定3ユーザーへのメンションと申請内容を
   const message = buildForcedWithdrawalDiscordMessage({
     name: '山田太郎',
     studentId: 'OLTS240001-AA',
+    tutor: '佐藤Tutor',
+    notionUrl: 'https://www.notion.so/example',
     forcedWithdrawalDate: '2026-08-25',
     withdrawalReason: '音信不通',
   });
@@ -51,6 +53,8 @@ test('Discord通知は指定3ユーザーへのメンションと申請内容を
   assert.match(message.content, /<@1423132417744441445>/);
   assert.match(message.content, /生徒名：山田太郎/);
   assert.match(message.content, /学籍番号：OLTS240001-AA/);
+  assert.match(message.content, /担当Tutor：佐藤Tutor/);
+  assert.match(message.content, /NotionリンクURL：https:\/\/www\.notion\.so\/example/);
   assert.match(message.content, /強制退会日：2026-08-25/);
   assert.match(message.content, /退会理由：音信不通/);
   assert.deepEqual(message.allowed_mentions, {
