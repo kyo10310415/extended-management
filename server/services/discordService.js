@@ -81,6 +81,8 @@ const FORCED_WITHDRAWAL_MENTION_USER_IDS = Object.freeze([
 export function buildForcedWithdrawalDiscordMessage({
   name,
   studentId,
+  tutor,
+  notionUrl,
   forcedWithdrawalDate,
   withdrawalReason,
 }) {
@@ -94,6 +96,8 @@ export function buildForcedWithdrawalDiscordMessage({
       '強制退会申請',
       `生徒名：${name || '-'}`,
       `学籍番号：${studentId || '-'}`,
+      `担当Tutor：${tutor || '-'}`,
+      `NotionリンクURL：${notionUrl || '-'}`,
       `強制退会日：${forcedWithdrawalDate || '-'}`,
       `退会理由：${withdrawalReason || '-'}`,
     ].join('\n'),
