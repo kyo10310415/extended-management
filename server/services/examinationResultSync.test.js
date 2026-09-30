@@ -16,6 +16,7 @@ import { isExaminationOverdue } from '../../src/utils/examinationStatus.js';
 import {
   getEntryPlanExaminationCycle,
   getExaminationRevenueAmount,
+  isActiveExaminationStudent,
 } from '../utils/examinationCycle.js';
 
 function lessonStartDateForMonth(monthsElapsed) {
@@ -85,6 +86,21 @@ test('審査結果と契約プランから売上予測へ入力する金額を�
   assert.equal(getExaminationRevenueAmount('通常プラン', '延長'), 22000);
   assert.equal(getExaminationRevenueAmount('通常プラン', 'アップセル'), null);
   assert.equal(getExaminationRevenueAmount('エントリープラン', '退会'), null);
+});
+
+test('延長審査画面はアクティブな生徒だけを表示対象にする', () => {
+  const students = [
+    { studentId: 'OLTS-A', status: 'アクティブ' },
+    { studentId: 'OLTS-B', status: '正規退会' },
+    { studentId: 'OLTS-C', status: '強制退会' },
+    { studentId: 'OLTS-D', status: '無断キャンセル' },
+    { studentId: 'OLTS-E', status: '休会' },
+  ];
+
+  assert.deepEqual(
+    students.filter(isActiveExaminationStudent).map(student => student.studentId),
+    ['OLTS-A']
+  );
 });
 
 test('バックグラウンド同期は画面と同じ月数・ステータス条件で対象を振り分ける', () => {

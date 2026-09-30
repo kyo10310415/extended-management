@@ -3,6 +3,13 @@ export const MAX_EXTENSION_CYCLE = 10;
 export const UPSELL_EXAMINATION_RESULT = 'アップセル';
 
 /**
+ * 延長審査画面に表示できる生徒かを返す。
+ */
+export function isActiveExaminationStudent(student) {
+  return student?.status === 'アクティブ';
+}
+
+/**
  * エントリープランの延長審査回数を返す。
  * 5ヶ月目を1回目とし、以降6ヶ月ごと（11, 17, ... 59ヶ月目）を対象にする。
  */

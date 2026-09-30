@@ -14,6 +14,7 @@ import { fetchProStartDates, calculateProPlanMonths } from '../services/proPlanE
 import {
   ENTRY_PLAN_NAME,
   getEntryPlanExaminationCycle,
+  isActiveExaminationStudent,
 } from '../utils/examinationCycle.js';
 
 const router = express.Router();
@@ -173,17 +174,11 @@ router.get('/examination', async (req, res) => {
       fetchLessonDatesForMonth(monthOffset),
     ]);
     
-    // アクティブ + 正規退会 + 無断キャンセルは常に表示
-    // 過去月はさらに強制退会も含める
+    // 延長審査画面には対象月にかかわらずアクティブな生徒のみ表示する
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
       .filter(s =>
         s.plan !== ENTRY_PLAN_NAME
-        && (
-          s.status === 'アクティブ' ||
-          s.status === '正規退会' ||
-          s.status === '無断キャンセル' ||
-          (monthOffset < 0 && s.status === '強制退会')
-        )
+        && isActiveExaminationStudent(s)
       )
       .map(student => {
         const suspension = suspensionData[student.studentId];
@@ -243,12 +238,7 @@ router.get('/entry-plan-examination', async (req, res) => {
     const entryPlanStudents = enrichStudentsWithMonths(students, monthOffset)
       .filter(s =>
         s.plan === ENTRY_PLAN_NAME
-        && (
-          s.status === 'アクティブ' ||
-          s.status === '正規退会' ||
-          s.status === '無断キャンセル' ||
-          (monthOffset < 0 && s.status === '強制退会')
-        )
+        && isActiveExaminationStudent(s)
       )
       .map(student => {
         const suspension = suspensionData[student.studentId];
@@ -366,14 +356,11 @@ router.get('/pro-examination', async (req, res) => {
       fetchLessonDatesForMonth(monthOffset),
     ]);
     
-    // 今月・翌月はアクティブのみ。過去月は正規退会・強制退会も含める
+    // 延長審査画面には対象月にかかわらずアクティブな生徒のみ表示する
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
       .filter(s =>
         s.plan !== ENTRY_PLAN_NAME
-        && (
-          s.status === 'アクティブ' ||
-          (monthOffset < 0 && (s.status === '正規退会' || s.status === '強制退会'))
-        )
+        && isActiveExaminationStudent(s)
       )
       .map(student => {
         const suspension = suspensionData[student.studentId];
