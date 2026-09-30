@@ -14,6 +14,7 @@
  */
 
 import pkg from 'pg';
+import { isActiveExaminationStudent } from '../utils/examinationCycle.js';
 const { Pool } = pkg;
 
 // 外部 DB 用 Pool（接続が必要な場合のみ作成）
@@ -194,11 +195,12 @@ export async function fetchAdvancedHearingStudents(notionStudents, round, monthO
 export async function fetchAdvancedExaminationStudents(notionStudents, round, monthOffset = 0) {
   const targetMonths = examMonth(round);
 
-  const allIds = notionStudents.map(s => s.studentId);
+  const activeStudents = notionStudents.filter(isActiveExaminationStudent);
+  const allIds = activeStudents.map(s => s.studentId);
   const proStartMap = await fetchProStartDates(allIds);
 
   const result = [];
-  for (const student of notionStudents) {
+  for (const student of activeStudents) {
     const { proStartDate } = proStartMap[student.studentId] || {};
     const proMonths = calculateProPlanMonths(proStartDate, monthOffset);
     if (proMonths === targetMonths) {
