@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { aggregateTutorKpiSnapshots } from './tutorKpi.js'
+import { aggregateTutorKpiSnapshots, buildTutorKpiCumulativeCsv } from './tutorKpi.js'
 
 test('Tutor別KPIは保存済み月次データの件数を合算し率を再計算する', () => {
   const result = aggregateTutorKpiSnapshots([
@@ -68,4 +68,36 @@ test('Tutor別KPI累計は空データを無視しTutorごとに分ける', () =
   assert.deepEqual(result.map(row => row.tutor), ['Tutor A', 'Tutor B'])
   assert.equal(result[0].overallExtensionRate, 100)
   assert.equal(result[1].overallExtensionRate, 50)
+})
+
+test('Tutor別KPI累計をBOM付きCSVへ出力する', () => {
+  const csv = buildTutorKpiCumulativeCsv([{
+    tutor: 'Tutor "A"',
+    exam1stTargetCount: 4,
+    exam1stExtensionCount: 2,
+    exam1stWithdrawalCount: 2,
+    exam1stExtensionRate: 50,
+    exam2ndTargetCount: 2,
+    exam2ndExtensionCount: 2,
+    exam2ndWithdrawalCount: 0,
+    exam2ndExtensionRate: 100,
+    exam3rdTargetCount: 2,
+    exam3rdExtensionCount: 1,
+    exam3rdLifetimeCount: 1,
+    exam3rdExtensionRate: 50,
+    totalTargetCount: 8,
+    totalExtensionCount: 5,
+    overallExtensionRate: 62.5,
+  }])
+
+  assert.equal(csv.charCodeAt(0), 0xFEFF)
+  assert.match(csv, /^\uFEFF"担当Tutor","1回目対象"/)
+  assert.match(csv, /"Tutor ""A""","4","2","2","50\.0%"/)
+  assert.match(csv, /"8","5","62\.5%"$/)
+})
+
+test('CSV出力では数式として解釈されるTutor名を無効化する', () => {
+  const csv = buildTutorKpiCumulativeCsv([{ tutor: '=IMPORTXML("https://example.com")' }])
+
+  assert.match(csv, /"'=IMPORTXML\(""https:\/\/example\.com""\)"/)
 })
