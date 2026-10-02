@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import { aggregateTutorKpiSnapshots } from '../utils/tutorKpi'
+import { aggregateTutorKpiSnapshots, buildTutorKpiCumulativeCsv } from '../utils/tutorKpi'
 
 // ========== テーブル列定義 ==========
 const cols = [
@@ -348,6 +348,24 @@ function CumulativeTab() {
     fetchCumulative()
   }, [])
 
+  const exportCsv = () => {
+    const csv = buildTutorKpiCumulativeCsv(tutorData)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const periodLabel = [period?.firstLabel, period?.lastLabel]
+      .filter(Boolean)
+      .join('_')
+      .replace(/[\\/:*?"<>|]/g, '-')
+
+    link.href = url
+    link.download = `Tutor別KPI_累計${periodLabel ? `_${periodLabel}` : ''}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center h-32 items-center">
@@ -392,6 +410,10 @@ function CumulativeTab() {
             onClick={() => setViewMode('chart')}
             className={`px-3 py-1.5 rounded text-xs font-medium transition ${viewMode === 'chart' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 hover:bg-blue-50'}`}
           >📊 グラフ</button>
+          <button
+            onClick={exportCsv}
+            className="ml-2 px-3 py-1.5 rounded text-xs font-semibold text-white bg-green-600 hover:bg-green-700 transition"
+          >📥 CSV出力</button>
         </div>
       </div>
 
