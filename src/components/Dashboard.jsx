@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react'
+import {
+  calculateExtensionCertaintyStats,
+  getAdvancedExaminationTargets,
+} from '../utils/dashboardKpi'
 
 function Dashboard() {
   const [stats, setStats] = useState({
@@ -17,6 +21,7 @@ function Dashboard() {
     // 計算されたKPI
     extensionCountKPI: 0,
     certaintyFilledCount: 0,
+    certaintyTargetCount: 0,
     extensionCount: 0,
     withdrawalCount: 0,
     extensionRate: 0,
@@ -72,19 +77,17 @@ function Dashboard() {
       const allRes = await fetch('/api/notion/students')
       const allData = await allRes.json()
 
-      const [hearingRes, examRes, proExamRes, proPlanRes, proExam4thRes] = await Promise.all([
+      const [hearingRes, examRes, proExamRes, proPlanRes] = await Promise.all([
         fetch('/api/notion/hearing'),
         fetch('/api/notion/examination'),
         fetch('/api/notion/pro-examination'),
         fetch('/api/pro-plan/students'),
-        fetch('/api/pro-plan/advanced-examination?round=4&monthOffset=0'),
       ])
 
       const hearingData = await hearingRes.json()
       const examData = await examRes.json()
       const proExamData = await proExamRes.json()
       const proPlanData = await proPlanRes.json()
-      const proExam4thData = await proExam4thRes.json()
 
       console.log('  ヒアリング対象:', hearingData.data?.length);
       console.log('  延長審査対象:', examData.data?.length);
@@ -184,10 +187,32 @@ function Dashboard() {
         console.log('  サイクル3延長審査データ取得:', Object.keys(exam3Data).length);
       }
 
-      // 4回目延長審査データ（PROプラン継続5か月目）
-      // /api/pro-plan/advanced-examination はすでに extensionData を含む
-      const proExam4thStudents = (proExam4thData.data || []);
-      console.log('  - PRO継続5か月目（4回目審査）:', proExam4thStudents.length);
+      // 4〜10回目のPro延長審査対象を、生徒マスタに付与済みのPRO継続月数から抽出する
+      const advancedTargets = getAdvancedExaminationTargets(allData.data || [])
+      const advancedTargetsByRound = advancedTargets.reduce((groups, student) => {
+        if (!groups[student.round]) groups[student.round] = []
+        groups[student.round].push(student)
+        return groups
+      }, {})
+      const advancedExtensionMaps = Object.fromEntries(await Promise.all(
+        Object.entries(advancedTargetsByRound).map(async ([round, students]) => {
+          const response = await fetch('/api/students/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              studentIds: students.map(student => student.studentId),
+              cycle: Number(round),
+            }),
+          })
+          const data = await response.json()
+          return [Number(round), data.success ? data.data || {} : {}]
+        })
+      ))
+      const advancedExaminationStudents = advancedTargets.map(student => ({
+        ...student,
+        extensionData: advancedExtensionMaps[student.round]?.[student.studentId] || null,
+      }))
+      console.log('  - PRO審査（4回目〜）:', advancedExaminationStudents.length)
 
       // データマージ（各生徒に正しいサイクルのデータを紐付け）
       const hearingStudents = (hearingData.data || []).map(s => {
@@ -223,21 +248,10 @@ function Dashboard() {
         s.extensionData?.extension_certainty !== '対象外'
       );
 
-      // 4回目（PRO継続5か月目）の審査生徒
-      // advanced-examination API はすでに extensionData を含む
-      // extensionData は { extension_certainty_4, examination_result_4, ... } 形式なので
-      // 3回目と同じフィールド名に正規化する
-      const proExamination4thStudents = proExam4thStudents.map(s => ({
-        ...s,
-        extensionData: s.extensionData
-          ? {
-              extension_certainty: s.extensionData.extension_certainty_4,
-              examination_result:  s.extensionData.examination_result_4,
-              hearing_status:      s.extensionData.hearing_status_4,
-              notes:               s.extensionData.notes_4,
-            }
-          : null,
-      })).filter(s => s.extensionData?.extension_certainty !== '対象外');
+      // 既存の4回目KPIカードには4回目の対象だけを使用する
+      const proExamination4thStudents = advancedExaminationStudents
+        .filter(student => student.round === 4)
+        .filter(student => student.extensionData?.extension_certainty !== '対象外')
 
       // KPI計算（1回目＋2回目＋3回目＋4回目の合計）
       // --- 3回目の中間値（統計用）---
@@ -271,11 +285,16 @@ function Dashboard() {
       console.log('  延長審査対象（全体）:', examinationCount,
         `(1・2回目: ${examinationStudents.length}, 3回目: ${proExaminationStudents.length}, 4回目: ${proExamination4thStudents.length})`);
 
-      // 延長確度記入済み = 確度が入力されている - 「対象外」
-      const certaintyFilledCount = hearingStudents.filter(s => 
-        s.extensionData?.extension_certainty && 
-        s.extensionData.extension_certainty !== '対象外'
-      ).length
+      // 延長確度は延長審査一覧・Pro延長審査・Pro審査（4回目～）の表示対象から集計
+      const certaintyStats = calculateExtensionCertaintyStats([
+        ...examinationStudents,
+        ...proExaminationStudents,
+        ...advancedExaminationStudents,
+      ])
+      const certaintyFilledCount = certaintyStats.filledCount
+      const certaintyTargetCount = examinationStudents.length
+        + proExaminationStudents.length
+        + advancedExaminationStudents.length
 
       // 延長数 = 1・2回目「延長」 + 3回目「延長」 + 4回目「延長」
       const extensionCount = examinationStudents.filter(s => 
@@ -308,18 +327,10 @@ function Dashboard() {
         examinationStudents.filter(s => s.extensionData?.examination_result === '退会').length
       const remainingCount = remaining12Count + _exam3rdRemainingCount + _exam4thRemainingCount
 
-      // 延長確度別カウント
-      const certaintyHigh = hearingStudents.filter(s => 
-        s.extensionData?.extension_certainty === '高'
-      ).length
-
-      const certaintyMid = hearingStudents.filter(s => 
-        s.extensionData?.extension_certainty === '中'
-      ).length
-
-      const certaintyLow = hearingStudents.filter(s => 
-        s.extensionData?.extension_certainty === '低'
-      ).length
+      // 延長確度別カウントも同じ延長審査対象から集計
+      const certaintyHigh = certaintyStats.highCount
+      const certaintyMid = certaintyStats.midCount
+      const certaintyLow = certaintyStats.lowCount
 
       // 延長審査1回目（調整後月数5ヶ月目）
       const exam1stStudents = examinationStudents.filter(s => s.adjustedMonths === 5)
@@ -432,6 +443,7 @@ function Dashboard() {
         proPlanRate,
         extensionCountKPI: Math.ceil(examinationCount * prev.extensionRateKPI / 100),
         certaintyFilledCount,
+        certaintyTargetCount,
         extensionCount,
         withdrawalCount,
         extensionRate,
@@ -621,8 +633,10 @@ function Dashboard() {
     )
   }
 
-  // 全体の延長審査対象数（1・2回目 + 3回目）
-  const examinationTargetCount = stats.examinationStudents.length + stats.exam3rdTargetCount
+  // 全体の延長審査対象数（1・2回目 + 3回目 + 4回目）
+  const examinationTargetCount = stats.examinationStudents.length
+    + stats.exam3rdTargetCount
+    + stats.exam4thTargetCount
 
   return (
     <div>
@@ -686,8 +700,8 @@ function Dashboard() {
           <p className="text-xs text-gray-600 mb-1">延長確度記入済み</p>
           <p className="text-3xl font-bold text-blue-600">{stats.certaintyFilledCount}</p>
           <p className="text-xs text-gray-500 mt-1">
-            {stats.hearingStudents.length > 0 ? 
-              `${((stats.certaintyFilledCount / stats.hearingStudents.length) * 100).toFixed(1)}%` : 
+            {stats.certaintyTargetCount > 0 ?
+              `${((stats.certaintyFilledCount / stats.certaintyTargetCount) * 100).toFixed(1)}%` :
               '0%'}
           </p>
         </div>
