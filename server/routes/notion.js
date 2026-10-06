@@ -106,14 +106,11 @@ router.get('/hearing', async (req, res) => {
       fetchLessonDatesForMonth(monthOffset),
     ]);
     
-    // 今月・翌月はアクティブのみ。過去月は正規退会・強制退会も含める
+    // ヒアリング一覧には対象月にかかわらずアクティブな生徒のみ表示する
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
       .filter(s =>
         s.plan !== ENTRY_PLAN_NAME
-        && (
-          s.status === 'アクティブ' ||
-          (monthOffset < 0 && (s.status === '正規退会' || s.status === '強制退会'))
-        )
+        && s.status === 'アクティブ'
       )
       .map(student => {
         const suspension = suspensionData[student.studentId];
@@ -296,12 +293,9 @@ router.get('/pro-hearing', async (req, res) => {
       fetchLessonDatesForMonth(monthOffset),
     ]);
     
-    // 今月・翌月はアクティブのみ。過去月は正規退会・強制退会も含める
+    // Proヒアリングには対象月にかかわらずアクティブな生徒のみ表示する
     const allActiveStudents = enrichStudentsWithMonths(students, monthOffset)
-      .filter(s =>
-        s.status === 'アクティブ' ||
-        (monthOffset < 0 && (s.status === '正規退会' || s.status === '強制退会'))
-      )
+      .filter(s => s.status === 'アクティブ')
       .map(student => {
         const suspension = suspensionData[student.studentId];
         const suspensionMonths = calculateEffectiveSuspensionMonths(suspension, monthOffset);
