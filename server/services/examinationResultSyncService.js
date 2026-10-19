@@ -20,6 +20,10 @@ import { ENTRY_PLAN_NAME } from '../utils/examinationCycle.js';
 export const MIN_EXTENSION_CYCLE = 1;
 export const MAX_EXTENSION_CYCLE = 10;
 export const EXAMINATION_SYNC_MONTH_OFFSETS = Object.freeze([-6, -5, -4, -3, -2, -1, 0, 1]);
+export const AUTOMATICALLY_OVERRIDABLE_MANUAL_RESULTS = Object.freeze([
+  '未払い',
+  '音信不通',
+]);
 
 let fullSyncPromise = null;
 
@@ -27,6 +31,13 @@ export function isValidExtensionCycle(cycle) {
   return Number.isInteger(cycle)
     && cycle >= MIN_EXTENSION_CYCLE
     && cycle <= MAX_EXTENSION_CYCLE;
+}
+
+export function canAutomaticallyOverwriteExaminationResult(manualOverride, currentResult) {
+  if (manualOverride !== true) return true;
+  return AUTOMATICALLY_OVERRIDABLE_MANUAL_RESULTS.includes(
+    String(currentResult ?? '').trim()
+  );
 }
 
 function createCyclePayloads() {
@@ -132,7 +143,8 @@ export function buildAutomaticExaminationSyncPayloads({
 
 /**
  * 1サイクル分の自動結果をDBへ一括反映する。
- * 基準行より後に追加されたフォーム回答だけを対象にし、手動固定済みの結果は保持する。
+ * 基準行より後に追加されたフォーム回答だけを対象にする。
+ * 手動固定済みの結果は保持するが、「未払い」「音信不通」は自動結果で更新できる。
  */
 export async function applyAutomaticExaminationResults({
   pool,
@@ -172,6 +184,11 @@ export async function applyAutomaticExaminationResults({
   const discordResultLabelColumn = `discord_notification_result_label_${cycle}`;
   const revenuePendingColumn = `revenue_extension_pending_${cycle}`;
   const revenueCompletedColumn = `revenue_extension_completed_${cycle}`;
+  const manualResultIsLocked = `COALESCE(student_extensions.${manualOverrideColumn}, FALSE)
+         AND NOT (
+           COALESCE(BTRIM(student_extensions.${examinationResultColumn}), '')
+             = ANY($5::text[])
+         )`;
 
   await pool.query(
     `INSERT INTO student_extensions (
@@ -206,12 +223,19 @@ export async function applyAutomaticExaminationResults({
      ON CONFLICT (student_id)
      DO UPDATE SET
        ${examinationResultColumn} = CASE
-         WHEN COALESCE(student_extensions.${manualOverrideColumn}, FALSE)
+         WHEN ${manualResultIsLocked}
            THEN student_extensions.${examinationResultColumn}
          ELSE EXCLUDED.${examinationResultColumn}
        END,
-       ${discordPendingColumn} = CASE
+       ${manualOverrideColumn} = CASE
          WHEN COALESCE(student_extensions.${manualOverrideColumn}, FALSE)
+          AND COALESCE(BTRIM(student_extensions.${examinationResultColumn}), '')
+              = ANY($5::text[])
+           THEN FALSE
+         ELSE COALESCE(student_extensions.${manualOverrideColumn}, FALSE)
+       END,
+       ${discordPendingColumn} = CASE
+         WHEN ${manualResultIsLocked}
            THEN student_extensions.${discordPendingColumn}
          WHEN COALESCE(EXCLUDED.${discordPendingColumn}, FALSE)
           AND NOT COALESCE(student_extensions.${discordSentColumn}, FALSE)
@@ -221,13 +245,13 @@ export async function applyAutomaticExaminationResults({
          ELSE student_extensions.${discordPendingColumn}
        END,
        ${discordResultLabelColumn} = CASE
-         WHEN NOT COALESCE(student_extensions.${manualOverrideColumn}, FALSE)
+         WHEN NOT (${manualResultIsLocked})
           AND COALESCE(EXCLUDED.${discordPendingColumn}, FALSE)
            THEN EXCLUDED.${discordResultLabelColumn}
          ELSE student_extensions.${discordResultLabelColumn}
        END,
        ${revenuePendingColumn} = CASE
-         WHEN COALESCE(student_extensions.${manualOverrideColumn}, FALSE)
+         WHEN ${manualResultIsLocked}
            THEN student_extensions.${revenuePendingColumn}
          WHEN COALESCE(EXCLUDED.${revenuePendingColumn}, FALSE)
           AND NOT COALESCE(student_extensions.${revenueCompletedColumn}, FALSE)
@@ -237,13 +261,19 @@ export async function applyAutomaticExaminationResults({
          ELSE student_extensions.${revenuePendingColumn}
        END,
        updated_at = CASE
-         WHEN NOT COALESCE(student_extensions.${manualOverrideColumn}, FALSE)
+         WHEN NOT (${manualResultIsLocked})
           AND student_extensions.${examinationResultColumn}
               IS DISTINCT FROM EXCLUDED.${examinationResultColumn}
            THEN CURRENT_TIMESTAMP
          ELSE student_extensions.updated_at
        END`,
-    [studentIds, automaticResults, notificationResultLabels, automationEligibility]
+    [
+      studentIds,
+      automaticResults,
+      notificationResultLabels,
+      automationEligibility,
+      AUTOMATICALLY_OVERRIDABLE_MANUAL_RESULTS,
+    ]
   );
 
   console.log(
