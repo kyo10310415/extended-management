@@ -5,9 +5,11 @@ import {
   mapExaminationFormResult,
 } from './sheetsService.js';
 import {
+  AUTOMATICALLY_OVERRIDABLE_MANUAL_RESULTS,
   advanceExaminationFormSyncState,
   applyAutomaticExaminationResults,
   buildAutomaticExaminationSyncPayloads,
+  canAutomaticallyOverwriteExaminationResult,
   getOrInitializeExaminationFormSyncState,
   isValidExtensionCycle,
 } from './examinationResultSyncService.js';
@@ -86,6 +88,15 @@ test('審査結果と契約プランから売上予測へ入力する金額を�
   assert.equal(getExaminationRevenueAmount('通常プラン', '延長'), 22000);
   assert.equal(getExaminationRevenueAmount('通常プラン', 'アップセル'), null);
   assert.equal(getExaminationRevenueAmount('エントリープラン', '退会'), null);
+});
+
+test('手動入力した未払い・音信不通だけは自動結果で上書きできる', () => {
+  assert.deepEqual(AUTOMATICALLY_OVERRIDABLE_MANUAL_RESULTS, ['未払い', '音信不通']);
+  assert.equal(canAutomaticallyOverwriteExaminationResult(true, '未払い'), true);
+  assert.equal(canAutomaticallyOverwriteExaminationResult(true, ' 音信不通 '), true);
+  assert.equal(canAutomaticallyOverwriteExaminationResult(true, '延長'), false);
+  assert.equal(canAutomaticallyOverwriteExaminationResult(true, '退会'), false);
+  assert.equal(canAutomaticallyOverwriteExaminationResult(false, '延長'), true);
 });
 
 test('延長審査画面はアクティブな生徒だけを表示対象にする', () => {
@@ -187,7 +198,7 @@ test('エントリープランはフォーム回答から審査結果を自動�
   }
 });
 
-test('DB同期SQLは手動固定済みの審査結果を上書きしない', async () => {
+test('DB同期SQLは未払い・音信不通を除く手動固定済みの審査結果を上書きしない', async () => {
   let capturedQuery;
   let capturedParams;
   const pool = {
@@ -213,11 +224,14 @@ test('DB同期SQLは手動固定済みの審査結果を上書きしない', asy
   assert.match(capturedQuery, /source\.automation_eligible AND source\.examination_result = '延長'/);
   assert.match(capturedQuery, /COALESCE\(EXCLUDED\.discord_notification_pending_7, FALSE\)/);
   assert.match(capturedQuery, /WHEN COALESCE\(student_extensions\.examination_result_manual_override_7, FALSE\)/);
+  assert.match(capturedQuery, /= ANY\(\$5::text\[\]\)/);
+  assert.match(capturedQuery, /examination_result_manual_override_7 = CASE/);
   assert.deepEqual(capturedParams, [
     ['OLTS-A'],
     ['延長'],
     ['延長'],
     [true],
+    ['未払い', '音信不通'],
   ]);
   assert.deepEqual(result, { syncedCount: 1, mappedCount: 1 });
 });
