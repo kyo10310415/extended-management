@@ -1,86 +1,99 @@
-/**
- * WannaV Dashboard SSO認証ミドルウェア (ES6 Module)
- * 
- * 使い方:
- * 1. このファイルをプロジェクトに配置
- * 2. メインファイルで以下のようにインポート:
- *    import ssoAuthMiddleware from './middleware/sso-auth-middleware.js';
- * 3. すべてのルートの前にミドルウェアを追加:
- *    app.use(ssoAuthMiddleware);
- */
-
 import jwt from 'jsonwebtoken';
 
-// WannaV Dashboardと同じJWT_SECRETを使用
-const JWT_SECRET = process.env.JWT_SECRET || 'wannav-secret-key-change-in-production';
-const DASHBOARD_URL = process.env.DASHBOARD_URL || 'https://wannav-main.onrender.com';
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const ALLOWED_ROLES = new Set(['admin', 'leader']);
+const COOKIE_NAME = 'wannav_sso';
 
-function ssoAuthMiddleware(req, res, next) {
-  // API エンドポイントは認証をスキップ
-  if (req.path.startsWith('/api/')) {
-    console.log(`🔓 API エンドポイント認証スキップ: ${req.path}`);
-    return next();
+export function readSsoConfiguration(env = process.env) {
+  const secret = env.JWT_SECRET;
+  if (typeof secret !== 'string' || secret.trim().length < 32 || /change-in-production|your-shared-secret/i.test(secret)) {
+    throw new Error('JWT_SECRET must be a configured shared secret of at least 32 characters');
   }
-  
-  // 静的ファイルは認証をスキップ
-  if (req.path.startsWith('/assets/') || req.path.endsWith('.js') || req.path.endsWith('.css') || req.path.endsWith('.ico')) {
-    return next();
-  }
-  
-  // 認証トークンをチェック
-  const tokenFromQuery = req.query.auth_token;
-  const tokenFromCookie = req.cookies?.wannav_sso;
-
-  const token = tokenFromQuery || tokenFromCookie;
-
-  // トークンがない場合はダッシュボードにリダイレクト
-  if (!token) {
-    console.log('❌ SSO トークンなし → ダッシュボードにリダイレクト');
-    return res.redirect(DASHBOARD_URL);
-  }
-
+  let appUrl;
+  let dashboardUrl;
   try {
-    // トークンを検証
-    const decoded = jwt.verify(token, JWT_SECRET);
-    
-    // SSOトークンかチェック
-    if (decoded.type !== 'sso') {
-      console.log('❌ 無効なトークンタイプ');
-      return res.redirect(DASHBOARD_URL);
-    }
-
-    console.log(`✅ SSO 認証成功: ${decoded.username} (${decoded.role})`);
-
-    // ユーザー情報をrequestに追加
-    req.user = {
-      id: decoded.userId,
-      username: decoded.username,
-      role: decoded.role
-    };
-
-    // クエリパラメータからトークンを取得した場合、Cookieに保存
-    if (tokenFromQuery) {
-      res.cookie('wannav_sso', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        maxAge: 60 * 60 * 1000, // 1時間
-        sameSite: 'lax'
-      });
-      
-      // トークンをURLから削除してリダイレクト
-      const urlWithoutToken = req.originalUrl.split('?')[0];
-      return res.redirect(urlWithoutToken);
-    }
-
-    next();
-  } catch (error) {
-    console.error('❌ SSO トークン検証エラー:', error.message);
-    
-    // トークンが期限切れの場合、Cookieをクリア
-    res.clearCookie('wannav_sso');
-    
-    return res.redirect(DASHBOARD_URL);
+    appUrl = new URL(env.APP_ORIGIN);
+    dashboardUrl = new URL(env.DASHBOARD_URL || 'https://wannav-main.onrender.com');
+  } catch {
+    throw new Error('APP_ORIGIN and DASHBOARD_URL must be absolute HTTP(S) URLs');
   }
+  for (const url of [appUrl, dashboardUrl]) {
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password
+      || (env.NODE_ENV === 'production' && url.protocol !== 'https:')) {
+      throw new Error('SSO URLs must use HTTPS in production and must not contain credentials');
+    }
+  }
+  if (appUrl.pathname !== '/' || appUrl.search || appUrl.hash) {
+    throw new Error('APP_ORIGIN must contain only the scheme, hostname and optional port');
+  }
+  return {
+    secret,
+    appOrigin: appUrl.origin,
+    dashboardUrl: dashboardUrl.href,
+    secure: env.NODE_ENV === 'production'
+  };
 }
 
-export default ssoAuthMiddleware;
+export function createSsoAuthMiddleware(configuration) {
+  const { secret, appOrigin, dashboardUrl, secure } = configuration;
+  const cookieOptions = { httpOnly: true, secure, sameSite: 'lax', path: '/' };
+
+  return function ssoAuthMiddleware(req, res, next) {
+    const normalizedPath = req.path.toLowerCase();
+    const isApi = normalizedPath === '/api' || normalizedPath.startsWith('/api/');
+    const isRead = req.method === 'GET' || req.method === 'HEAD';
+    if (isRead && (req.path === '/api/health'
+      || (!isApi && (req.path.startsWith('/assets/') || req.path === '/favicon.ico')))) {
+      return next();
+    }
+
+    const reject = (status, message) => {
+      res.set('Cache-Control', 'no-store');
+      if (status === 401) res.clearCookie(COOKIE_NAME, cookieOptions);
+      if (isApi) return res.status(status).json({ error: message, loginUrl: dashboardUrl });
+      if (status === 403) return res.status(403).send('このシステムを利用する権限がありません。');
+      return res.redirect(dashboardUrl);
+    };
+
+    // Query tokens are accepted only for the existing top-level SSO landing flow.
+    const queryToken = !isApi && isRead ? req.query.auth_token : undefined;
+    const token = queryToken || req.cookies?.[COOKIE_NAME];
+    if (typeof token !== 'string' || !token) return reject(401, '認証が必要です。');
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, secret, { algorithms: ['HS256'], maxAge: '1h' });
+      if (!decoded || typeof decoded !== 'object' || decoded.type !== 'sso'
+        || !Number.isFinite(decoded.exp) || !decoded.userId
+        || typeof decoded.username !== 'string' || !decoded.username
+        || new URL(decoded.targetUrl).origin !== appOrigin) {
+        return reject(401, '認証情報が無効です。');
+      }
+    } catch {
+      return reject(401, '認証の有効期限が切れたか、認証情報が無効です。');
+    }
+
+    // All-student finance and withdrawal administration is restricted to leaders.
+    // Crew access requires a separate assignment-level authorization model.
+    if (!ALLOWED_ROLES.has(decoded.role)) return reject(403, 'このシステムを利用する権限がありません。');
+
+    if (!SAFE_METHODS.has(req.method)
+      && (req.get('Origin') !== appOrigin || req.get('X-WannaV-Request') !== '1')) {
+      return reject(403, '操作元を確認できません。画面を開き直してください。');
+    }
+
+    req.user = { id: decoded.userId, username: decoded.username, role: decoded.role };
+    res.set('Cache-Control', 'no-store');
+    if (queryToken) {
+      res.set('Referrer-Policy', 'no-referrer');
+      res.cookie(COOKIE_NAME, token, {
+        ...cookieOptions,
+        maxAge: Math.max(0, Math.min(60 * 60 * 1000, decoded.exp * 1000 - Date.now()))
+      });
+      const destination = new URL(req.originalUrl, appOrigin);
+      destination.searchParams.delete('auth_token');
+      return res.redirect(destination.pathname + destination.search);
+    }
+    return next();
+  };
+}

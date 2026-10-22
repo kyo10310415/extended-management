@@ -40,6 +40,22 @@
 2. **Google Spreadsheet**: 延長フォームの最終更新月（学籍番号で照合）
 3. **PostgreSQL**: 手動入力データ（延長確度、ヒアリング、審査結果、備考）
 
+## 認証と運用時の設定
+
+業務画面・業務APIはWannaV DashboardのSSOを必須とし、`admin` / `leader` のみ利用できます。全生徒・売上・退会情報を扱うため、`crew` は拒否します。Tutor等の担当者限定アクセスが必要な場合は、担当者と生徒を結ぶ認可仕様を別途定義してください。
+
+- `JWT_SECRET`: Dashboardと一致する32文字以上のランダムな共有鍵。未設定・短い鍵・既定の例示値では起動を拒否します。鍵の値はログへ出力しないでください。
+- `APP_ORIGIN`: このアプリの正規の公開origin（例 `https://extension.example.com`）。パス・query・fragmentは付けません。公開URLの`scheme/hostname/port`がDashboardのSSO発行時`targetUrl`と一致する必要があります。本番ではHTTPS必須です。
+- `DASHBOARD_URL`: ログイン案内先。既定は既存のWannaV Dashboardです。
+
+SSOの署名（HS256）・期限・種別・本人情報・役割・送信先originを検証します。既存の `?auth_token=...` によるSSO着地はHTMLのGETだけで受け付け、HttpOnly / SameSite=Lax Cookieへ保存後にURLからトークンを除きます。業務APIのqueryにトークンを付けても認証されません。APIの認証失敗は401、権限不足は403のJSONとなり、画面は再ログインまたはアクセス拒否表示へ切り替わります。
+
+更新系APIはCookieに加え、`Origin`が`APP_ORIGIN`と一致し`X-WannaV-Request: 1`があることを要求します。画面の共通fetch処理がこのヘッダーを付けます。外部HTTPジョブで匿名APIを呼ぶ運用は利用できません。既存の定期同期・通知は同一プロセスからサービス関数を直接呼ぶため、この変更による認証除外は不要です。GET/HEAD `/api/health` とビルド済みassetsだけは匿名アクセス可能です。
+
+本番への適用前に、上記の設定、Dashboardの対象URL、`admin`/`leader`の正規SSO、Cookie期限切れ、更新系APIと自動ジョブの動作を隔離環境で確認してください。Vite開発サーバーだけではHTMLのSSO着地を処理しないため、SSO確認は`npm run build`後のバックエンド配信と同一originで行います。
+
+監査・依存導入のみの場合は `npm ci --ignore-scripts` を使用してください。通常の`npm install`は既存のpostinstall経由でDBマイグレーションを実行します。今回の認証修正にDB変更やデータ移行はありません。
+
 ## 🛠️ 技術スタック
 
 ### フロントエンド

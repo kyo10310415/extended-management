@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Dashboard from './components/Dashboard'
 import HearingList from './components/HearingList'
 import ExaminationList from './components/ExaminationList'
@@ -15,6 +15,12 @@ import KpiByTutor from './components/KpiByTutor'
 import ForcedWithdrawalList from './components/ForcedWithdrawalList'
 
 function App() {
+  const [accessDenied, setAccessDenied] = useState(false)
+  useEffect(() => {
+    const handleAccessDenied = () => setAccessDenied(true)
+    window.addEventListener('wannav-access-denied', handleAccessDenied)
+    return () => window.removeEventListener('wannav-access-denied', handleAccessDenied)
+  }, [])
   const [activeTab, setActiveTab] = useState('dashboard')
   // 一度でも開いたタブを記録（初回だけマウントするため）
   const [visitedTabs, setVisitedTabs] = useState(new Set(['dashboard']))
@@ -60,6 +66,16 @@ function App() {
     { id: 'kpi-chart',        component: <KpiChart /> },
     { id: 'kpi-tutor',        component: <KpiByTutor /> },
   ]
+
+  if (accessDenied) {
+    return (
+      <main className="p-8" role="alert">
+        <h1 className="text-xl font-bold">操作を続けられません</h1>
+        <p className="mt-3">権限または認証状態を確認できません。画面を開き直すか、管理者にお問い合わせください。</p>
+        <button className="mt-4 underline" onClick={() => window.location.reload()}>画面を開き直す</button>
+      </main>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
