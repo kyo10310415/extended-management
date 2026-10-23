@@ -229,3 +229,9 @@ CREATE TABLE student_extensions (
 `postinstall`を撤去し、通常の`npm install`/`npm ci`で`run-migration.js`を呼ばないようにしました。今回の変更自体にDBスキーマ変更はなく、本番migrationを手動で実行する必要はありません。
 新規環境・将来のスキーマ変更時は、管理者が対象DBとバックアップ、必要なSQL差分を確認して明示移行を行ってください。既存の`npm run migrate`には過去のデータ修復SQLも含まれるため、無条件に全件を再実行しないでください。
 サーバー起動時の既存`initDatabase()`（テーブル・列の初期化/一部データ更新）と通常の自動同期は今回変更していません。これは依存導入時の副作用を除く変更であり、起動時のDB更新を全廃したものではありません。
+
+### 依存関係の互換更新（2026-10-23）
+既存manifest範囲内のlock更新でproxy-addr2.0.8、Express4.22.3、Axios1.20.0、PostCSS8.5.31、Rollup4.65.0等へ更新。認証・同期・DB・API実装は変更していません。Node22.23.4でnpm ci（ignore-scripts）、68テスト、フロントbuildが成功。production auditはCritical1/High15/Moderate11/Low1からCritical0/High6/Moderate7/Low1です。残るHighはTailwind等のビルド依存とVite、ModerateはGoogle関連等を含み、解消済みとは判定していません。サーバーはビルド済みdistをExpressで配信し、Viteサーバーは開発用です。実DB・同期・通知・Google通信はテストで実行していません。
+proxy-addrの公式影響条件は特定のIPv6 trust subnet誤設定で、確認したアプリコードにtrust proxy設定はありません。依存警告と攻撃成立は区別します。
+https://github.com/advisories/GHSA-jqcg-44mw-7w3h
+https://github.com/advisories/GHSA-mw96-cpmx-2vgc
