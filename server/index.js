@@ -8,7 +8,7 @@ import cookieParser from 'cookie-parser';
 const { Pool } = pkg;
 
 // SSO Authentication Middleware
-import ssoAuthMiddleware from './middleware/sso-auth-middleware.js';
+import { createSsoAuthMiddleware, readSsoConfiguration } from './middleware/sso-auth-middleware.js';
 
 // Routes
 import notionRoutes from './routes/notion.js';
@@ -36,6 +36,7 @@ import {
 } from './services/backgroundService.js';
 
 dotenv.config();
+const ssoConfiguration = readSsoConfiguration();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,12 +60,12 @@ pool.query('SELECT NOW()', (err, res) => {
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: ssoConfiguration.appOrigin, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
 // SSO Authentication (must be before routes)
-app.use(ssoAuthMiddleware);
+app.use(createSsoAuthMiddleware(ssoConfiguration));
 
 // Serve static files from dist directory
 app.use(express.static(path.join(__dirname, '../dist')));
