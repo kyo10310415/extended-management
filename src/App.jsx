@@ -13,9 +13,20 @@ import KpiHistory from './components/KpiHistory'
 import KpiChart from './components/KpiChart'
 import KpiByTutor from './components/KpiByTutor'
 import ForcedWithdrawalList from './components/ForcedWithdrawalList'
+import CrewWorkspace from './components/CrewWorkspace'
 
 function App() {
   const [accessDenied, setAccessDenied] = useState(false)
+  const [session, setSession] = useState(null)
+  useEffect(() => {
+    let active = true
+    fetch('/api/auth/me').then(async response => {
+      if (!response.ok) throw new Error()
+      const user = await response.json()
+      if (active) setSession(user)
+    }).catch(() => { if (active) setAccessDenied(true) })
+    return () => { active = false }
+  }, [])
   useEffect(() => {
     const handleAccessDenied = () => setAccessDenied(true)
     window.addEventListener('wannav-access-denied', handleAccessDenied)
@@ -76,6 +87,9 @@ function App() {
       </main>
     )
   }
+
+  if (!session) return <main className="p-8">認証状態を確認しています…</main>
+  if (session.role === 'crew') return <CrewWorkspace tutorConfigured={session.tutorConfigured} />
 
   return (
     <div className="min-h-screen bg-gray-50">

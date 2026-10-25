@@ -13,12 +13,16 @@ const pool = new Pool({
  * データベースキャッシュサービス
  * Notionから取得したデータをPostgreSQLにキャッシュ
  */
-class DatabaseCacheService {
+export class DatabaseCacheService {
+  constructor(queryPool = pool) {
+    this.pool = queryPool;
+  }
+
   /**
    * Notionの生徒データをデータベースにキャッシュ
    */
   async cacheNotionStudents(students) {
-    const client = await pool.connect();
+    const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       
@@ -56,6 +60,24 @@ class DatabaseCacheService {
         ]);
       }
       
+      // Record the complete successful fetch, including an empty result. Legacy
+      // cache rows may remain for compatibility but are not current crew grants.
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS notion_student_access_snapshot (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          synced_at TIMESTAMP NOT NULL,
+          student_ids JSONB NOT NULL
+        )
+      `);
+      const studentIds = [...new Set(students.map(student => String(student.studentId)))];
+      await client.query(`
+        INSERT INTO notion_student_access_snapshot (id, synced_at, student_ids)
+        VALUES (1, CURRENT_TIMESTAMP, $1::jsonb)
+        ON CONFLICT (id) DO UPDATE SET
+          synced_at = EXCLUDED.synced_at,
+          student_ids = EXCLUDED.student_ids
+      `, [JSON.stringify(studentIds)]);
+
       await client.query('COMMIT');
       console.log(`✅ Successfully cached ${students.length} students to database`);
       
