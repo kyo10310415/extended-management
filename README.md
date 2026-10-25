@@ -2,6 +2,10 @@
 
 生徒の延長審査管理を効率化するWebアプリケーション
 
+## Google Sheets SDKの更新検証
+
+Google API SDKは`googleapis@150.0.1`に固定しています。認証設定・シート構造・業務ジョブの設定変更は不要です。`npm test`には、実際のSheetsサービス処理から生成される読取り・書込みリクエスト（休会反映の`USER_ENTERED`、月次レポートの`RAW`と既存`resource`形式）を検証するテストを含みます。テストはHTTP adapterを模擬し、合成データだけを使用するため、Google・DB・Discordへ接続しません。実Google認証と本番シートへの書込みはこのテストの検証範囲外です。
+
 ## 🎯 機能
 
 ### ダッシュボード
