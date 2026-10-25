@@ -42,7 +42,7 @@
 
 ## 認証と運用時の設定
 
-業務画面・業務APIはWannaV DashboardのSSOを必須とし、`admin` / `leader` のみ利用できます。全生徒・売上・退会情報を扱うため、`crew` は拒否します。Tutor等の担当者限定アクセスが必要な場合は、担当者と生徒を結ぶ認可仕様を別途定義してください。
+業務画面・業務APIはWannaV DashboardのSSOが必須です。admin/leaderは従来の管理画面、crewは管理者が明示登録した担任Tutorの担当生徒専用画面を利用します。crewには全体一覧・KPI・同期・管理操作を許可しません。
 
 - `JWT_SECRET`: Dashboardと一致する32文字以上のランダムな共有鍵。未設定・短い鍵・既定の例示値では起動を拒否します。鍵の値はログへ出力しないでください。
 - `APP_ORIGIN`: このアプリの正規の公開origin（例 `https://extension.example.com`）。パス・query・fragmentは付けません。公開URLの`scheme/hostname/port`がDashboardのSSO発行時`targetUrl`と一致する必要があります。本番ではHTTPS必須です。
@@ -235,3 +235,10 @@ CREATE TABLE student_extensions (
 proxy-addrの公式影響条件は特定のIPv6 trust subnet誤設定で、確認したアプリコードにtrust proxy設定はありません。依存警告と攻撃成立は区別します。
 https://github.com/advisories/GHSA-jqcg-44mw-7w3h
 https://github.com/advisories/GHSA-mw96-cpmx-2vgc
+
+### crewの担当生徒アクセス（2026-10-25）
+1. 共通ダッシュボードを更新後、管理者がユーザー管理のcrew行にある「担任Tutor対応名」へNotionの単一の担任Tutor名を完全一致で登録します。ログイン名からは推測しません。
+2. この更新後に管理者の既存データ更新または定期同期を1回成功させ、最新取得集合のsnapshotを作ります。crewの閲覧で全体同期は実行しません。snapshot不在・48時間超過・取得不能時はcrewを拒否します。最新取得集合から消えた生徒は、古いキャッシュ行が残っていても許可しません。既存の共有キャッシュを削除する変更ではありません。
+3. crewは共通ダッシュボードから延長管理を開き直します。SSOに署名されたtutorNameと同期済み担当データの完全一致で、一覧・個別取得・更新を限定します。対応名の変更/解除後も既発行SSOは最大1時間有効です。担当変更は次の正常同期後に反映されます。
+4. crewはヒアリング状況・延長確度・備考・審査結果を更新できます。審査結果変更は保存値から判定し既存の対象生徒限定の売上転記/通知へつなぎます。役員確認の変更、全体API、CSV/シート出力、全体通知、設定/診断は拒否。担当外ID・未対応名・未知APIは既定拒否です。
+検証はfixtureのDB/HTTPだけで行い、実生徒更新・審査・通知・売上転記をテストとして実行しません。

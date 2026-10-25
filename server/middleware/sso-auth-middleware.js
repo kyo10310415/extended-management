@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-const ALLOWED_ROLES = new Set(['admin', 'leader']);
+const ALLOWED_ROLES = new Set(['admin', 'leader', 'crew']);
 const COOKIE_NAME = 'wannav_sso';
 
 export function readSsoConfiguration(env = process.env) {
@@ -73,9 +73,10 @@ export function createSsoAuthMiddleware(configuration) {
       return reject(401, '認証の有効期限が切れたか、認証情報が無効です。');
     }
 
-    // All-student finance and withdrawal administration is restricted to leaders.
-    // Crew access requires a separate assignment-level authorization model.
     if (!ALLOWED_ROLES.has(decoded.role)) return reject(403, 'このシステムを利用する権限がありません。');
+    if (decoded.role === 'crew' && (decoded.iss !== new URL(dashboardUrl).origin || decoded.aud !== appOrigin)) {
+      return reject(401, '認証情報が無効です。');
+    }
 
     if (!SAFE_METHODS.has(req.method)
       && (req.get('Origin') !== appOrigin || req.get('X-WannaV-Request') !== '1')) {
@@ -83,6 +84,11 @@ export function createSsoAuthMiddleware(configuration) {
     }
 
     req.user = { id: decoded.userId, username: decoded.username, role: decoded.role };
+    if (decoded.role === 'crew') {
+      req.user.tutorName = typeof decoded.tutorName === 'string' && decoded.tutorName.length <= 100
+        && decoded.tutorName.trim() === decoded.tutorName && !/[\x00-\x1f\x7f]/.test(decoded.tutorName)
+        ? decoded.tutorName : null;
+    }
     res.set('Cache-Control', 'no-store');
     if (queryToken) {
       res.set('Referrer-Policy', 'no-referrer');

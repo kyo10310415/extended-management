@@ -72,10 +72,17 @@ test('valid leader and administrator cookies authenticate', async () => {
   }
 });
 
-test('crew and unknown roles cannot access all-student administration', async () => {
-  for (const role of ['crew', 'unknown']) {
+test('unknown roles cannot authenticate', async () => {
+  for (const role of ['unknown']) {
     assert.equal((await request('/api/students', { headers: cookie(token({ role })) })).status, 403);
   }
+});
+
+test('crew authentication requires the dashboard issuer and audience and carries only signed tutor mapping', async () => {
+  assert.equal((await request('/api/students', { headers: cookie(token({ role: 'crew', tutorName: 'Fixture Tutor' })) })).status, 401);
+  const response = await request('/', { headers: cookie(token({ role: 'crew', tutorName: 'Fixture Tutor', iss: new URL(dashboardUrl).origin, aud: appOrigin })) });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).user.tutorName, 'Fixture Tutor');
 });
 
 test('wrong key, expiry, algorithm, token type, audience target and missing identity are rejected', async () => {
