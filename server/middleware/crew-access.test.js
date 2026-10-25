@@ -5,12 +5,12 @@ import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'node:crypto';
 import { createSsoAuthMiddleware } from './sso-auth-middleware.js';
-import { createCrewAccessMiddleware, createAssignedStudentsHandler } from './crew-access.js';
+import { createCrewAccessMiddleware, createCrewStudentsHandler } from './crew-access.js';
 
 const secret = randomBytes(48).toString('hex');
 const origin = 'https://extension.example.test';
 const issuer = 'https://dashboard.example.test';
-const body = { cycle: 1, extension_certainty: '高', hearing_status: true, notes: 'fixture', examination_result: '延長' };
+const body = { cycle: 1, extension_certainty: '高', hearing_status: true, notes: 'fixture' };
 
 async function fixture(t, { tutorName = 'Tutor A', role = 'crew', fail = false } = {}) {
   const calls = [];
@@ -25,17 +25,17 @@ async function fixture(t, { tutorName = 'Tutor A', role = 'crew', fail = false }
     if (sql.startsWith('SELECT s.student_id FROM')) {
       assert.match(sql, /a\.student_ids @> jsonb_build_array\(s\.student_id\)/);
       assert.match(sql, /INTERVAL '48 hours'/);
-      return { rows: snapshotValid && assigned && params[0] === 'own-1' && params[1] === 'Tutor A' ? [{ student_id: 'own-1' }] : [] };
+      return { rows: snapshotValid && assigned && ['own-1', 'other-2'].includes(params[0]) ? [{ student_id: 'own-1' }] : [] };
     }
     if (sql.startsWith('SELECT examination_result')) return { rows: [{ result: '在籍' }] };
-    assert.match(sql, /AND s\.tutor = \$1/);
-    return { rows: params[0] === 'Tutor A' ? [{ studentId: 'own-1', tutor: 'Tutor A', name: 'Fixture' }] : [] };
+    assert.doesNotMatch(sql, /s\.tutor =/);
+    return { rows: [{ studentId: 'own-1', name: 'Fixture' }, { studentId: 'other-2', name: 'Other Fixture' }] };
   } };
   const app = express();
   app.use(express.json(), cookieParser(), createSsoAuthMiddleware({ secret, appOrigin: origin, dashboardUrl: issuer, secure: true }));
   app.use(createCrewAccessMiddleware({ queryable: db }));
   app.get('/api/auth/me', (req, res) => res.json({ role: req.user.role, tutorConfigured: !!req.user.tutorName }));
-  app.get('/api/crew/students', createAssignedStudentsHandler({ queryable: db }));
+  app.get('/api/crew/students', createCrewStudentsHandler({ queryable: db }));
   app.use((req, res) => { legacyCalls++; submitted = req.body; res.json({ success: true, data: { student_id: 'own-1', notes: 'fixture', executive_check: 'PRIVATE_FIXTURE' } }); });
   const server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
   t.after(() => new Promise(resolve => server.close(resolve)));
@@ -46,27 +46,27 @@ async function fixture(t, { tutorName = 'Tutor A', role = 'crew', fail = false }
   }) };
 }
 
-test('crew list uses only signed mapping and a parameterized assigned-only query', async t => {
+test('crew list includes all current students without tutor configuration', async t => {
   const f = await fixture(t);
   const response = await f.request('/api/crew/students?cycle=2&tutorName=Tutor%20B');
   assert.equal(response.status, 200);
-  assert.deepEqual((await response.json()).data.map(s => s.studentId), ['own-1']);
-  assert.deepEqual(f.calls[1].params, ['Tutor A']);
+  assert.deepEqual((await response.json()).data.map(s => s.studentId), ['own-1', 'other-2']);
+  assert.equal(f.calls[1].params, undefined);
   assert.equal(f.count(), 0);
 });
 
-test('unmapped crew can see setup status but cannot reach student handlers', async t => {
+test('unmapped crew can read all students and update hearing fields', async t => {
   const f = await fixture(t, { tutorName: null });
   assert.equal((await f.request('/api/auth/me')).status, 200);
-  assert.equal((await f.request('/api/crew/students')).status, 403);
-  assert.equal((await f.request('/api/students/own-1')).status, 403);
-  assert.equal(f.calls.length, 0);
+  assert.equal((await f.request('/api/crew/students')).status, 200);
+  assert.equal((await f.request('/api/students/own-1')).status, 200);
+  assert.equal((await f.request('/api/students/other-2/hearing', { method: 'POST', body: JSON.stringify(body) })).status, 200);
 });
 
-test('other students, legacy lists, bulk requests and every administrative route fail before handlers', async t => {
+test('unknown students, legacy lists, bulk requests and administrative routes fail before handlers', async t => {
   const f = await fixture(t);
   for (const [method, path] of [
-    ['GET', '/api/students/other-2'], ['POST', '/api/students/other-2'],
+    ['GET', '/api/students/unknown'], ['POST', '/api/students/other-2'],
     ['GET', '/api/notion/students'], ['POST', '/api/students/bulk'], ['POST', '/api/notion/update'],
     ['GET', '/api/notifications/debug-tutor-webhooks'], ['POST', '/api/kpi-snapshots/save'],
     ['GET', '/api/pro-plan/students'], ['POST', '/api/forced-withdrawals'], ['GET', '/API/crew/students'],
@@ -74,7 +74,7 @@ test('other students, legacy lists, bulk requests and every administrative route
   assert.equal(f.count(), 0);
 });
 
-test('assigned responses omit executive and financial fields and ownership changes take effect next request', async t => {
+test('crew responses omit executive and financial fields and removed students are denied', async t => {
   const f = await fixture(t);
   let response = await f.request('/api/students/own-1');
   assert.equal(response.status, 200);
@@ -84,17 +84,18 @@ test('assigned responses omit executive and financial fields and ownership chang
   assert.equal(response.status, 403);
 });
 
-test('assigned update rejects privileged fields and injects a stored-result transition flag', async t => {
+test('crew can update exactly three hearing fields but never examination or privileged state', async t => {
   const f = await fixture(t);
-  assert.equal((await f.request('/api/students/own-1', { method: 'POST', body: JSON.stringify({ ...body, executive_check: '確認済' }) })).status, 400);
-  assert.equal((await f.request('/api/students/own-1', { method: 'POST', body: JSON.stringify({ ...body, examination_result_manually_changed: false }) })).status, 400);
-  const response = await f.request('/api/students/own-1', { method: 'POST', body: JSON.stringify(body) });
+  for (const key of ['examination_result', 'examination_result_manually_changed', 'executive_check', 'send_discord_notification', 'student_id', 'revenue_extension_pending']) {
+    assert.equal((await f.request('/api/students/own-1/hearing', { method: 'POST', body: JSON.stringify({ ...body, [key]: 'forged' }) })).status, 400);
+  }
+  assert.equal((await f.request('/api/students/own-1', { method: 'POST', body: JSON.stringify(body) })).status, 403);
+  assert.equal(f.count(), 0);
+  const response = await f.request('/api/students/other-2/hearing', { method: 'POST', body: JSON.stringify(body) });
   assert.equal(response.status, 200);
+  assert.deepEqual(f.submitted(), body);
   assert.equal(f.count(), 1);
-  assert.equal(f.submitted().examination_result_manually_changed, true);
-  assert.ok(f.calls.some(call => call.sql.startsWith('SELECT examination_result_1')));
 });
-
 test('invalid cycles and input reject without interpolating SQL, lookup failures disclose no data', async t => {
   const f = await fixture(t);
   assert.equal((await f.request('/api/crew/students?cycle=1%20OR%201=1')).status, 400);

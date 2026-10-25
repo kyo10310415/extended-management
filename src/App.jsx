@@ -89,7 +89,7 @@ function App() {
   }
 
   if (!session) return <main className="p-8">認証状態を確認しています…</main>
-  if (session.role === 'crew') return <CrewWorkspace tutorConfigured={session.tutorConfigured} />
+  if (session.role === 'crew') return <CrewWorkspace />
 
   return (
     <div className="min-h-screen bg-gray-50">
