@@ -1,6 +1,15 @@
 const CERTAINTIES = new Set(['', '高', '中', '低', '対象外']);
 const FIELDS = new Set(['cycle', 'extension_certainty', 'hearing_status', 'notes']);
 const STUDENT_FIELDS = ['student_id', 'extension_certainty', 'hearing_status', 'notes', 'examination_result', 'updated_at', 'created_at'];
+const CREW_READ_PATHS = new Set([
+  '/api/notion/students', '/api/notion/hearing', '/api/notion/examination',
+  '/api/notion/entry-plan-examination', '/api/notion/pro-hearing',
+  '/api/notion/pro-examination', '/api/notion/suspension-history',
+  '/api/pro-plan/students', '/api/pro-plan/advanced-hearing',
+  '/api/pro-plan/advanced-examination', '/api/pro-plan/advanced-all',
+  '/api/forced-withdrawals', '/api/kpi-export/current-kpi',
+  '/api/kpi-snapshots', '/api/kpi-snapshots/list',
+]);
 
 export function readCycle(value = 1) {
   const number = Number(value);
@@ -15,6 +24,19 @@ export function createCrewAccessMiddleware({ queryable }) {
     if (!req.path.toLowerCase().startsWith('/api')) return next();
     if (req.method === 'GET' && req.path === '/api/auth/me') return next();
     const deny = () => res.status(403).json({ error: 'この操作はcrewに許可されていません。' });
+    if (req.method === 'GET' && (CREW_READ_PATHS.has(req.path)
+      || /^\/api\/kpi-snapshots\/\d{4}-\d{2}$/.test(req.path)
+      || /^\/api\/forced-withdrawals\/student\/[A-Za-z0-9_-]{1,50}$/.test(req.path))) return next();
+    // These POST routes only read records; permit their exact input contracts.
+    if (req.method === 'POST' && ['/api/students/bulk', '/api/pro-plan/bulk'].includes(req.path)) {
+      const body = req.body;
+      const allowed = req.path === '/api/students/bulk' ? ['studentIds', 'cycle'] : ['studentIds'];
+      if (!body || Object.keys(body).some(key => !allowed.includes(key))
+        || !Array.isArray(body.studentIds) || body.studentIds.length < 1 || body.studentIds.length > 10000
+        || body.studentIds.some(value => typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,50}$/.test(value))
+        || (req.path === '/api/students/bulk' && !readCycle(body.cycle))) return res.status(400).json({ error: 'Invalid read request' });
+      return next();
+    }
     if (req.method === 'GET' && req.path === '/api/crew/students') return next();
     const match = req.path.match(/^\/api\/students\/([^/]+)(\/hearing)?$/);
     if (!match || !(req.method === 'GET' && !match[2] || req.method === 'POST' && match[2])) return deny();
@@ -44,7 +66,7 @@ export function createCrewAccessMiddleware({ queryable }) {
       const json = res.json.bind(res);
       res.json = body => {
         if (res.statusCode >= 400) return json({ success: false, error: '処理できませんでした。権限または入力内容を確認してください。' });
-        if (body?.data) body = { success: body.success, data: Object.fromEntries(STUDENT_FIELDS
+        if (req.method !== 'GET' && body?.data) body = { success: body.success, data: Object.fromEntries(STUDENT_FIELDS
           .filter(key => Object.hasOwn(body.data, key)).map(key => [key, body.data[key]])) };
         return json(body);
       };

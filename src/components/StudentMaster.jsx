@@ -1,6 +1,8 @@
+import { useIsCrew } from '../session'
 import { useState, useEffect } from 'react'
 
 function StudentMaster() {
+  const isCrew = useIsCrew()
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -48,6 +50,7 @@ function StudentMaster() {
     try {
       setIsRefreshing(true)
       
+      if (isCrew) { await fetchAllStudents(); return }
       // バックグラウンドサービスで更新
       const response = await fetch('/api/notion/update', { method: 'POST' })
       const result = await response.json()
@@ -159,7 +162,7 @@ function StudentMaster() {
         <div className="flex items-center gap-3">
           <button
             onClick={handleExportSpreadsheet}
-            disabled={isExporting}
+            disabled={isCrew || isExporting}
             className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow"
           >
             {isExporting ? '📤 出力中...' : '📊 CSV出力'}

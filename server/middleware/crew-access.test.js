@@ -67,18 +67,18 @@ test('unknown students, legacy lists, bulk requests and administrative routes fa
   const f = await fixture(t);
   for (const [method, path] of [
     ['GET', '/api/students/unknown'], ['POST', '/api/students/other-2'],
-    ['GET', '/api/notion/students'], ['POST', '/api/students/bulk'], ['POST', '/api/notion/update'],
+    ['POST', '/api/notion/update'],
     ['GET', '/api/notifications/debug-tutor-webhooks'], ['POST', '/api/kpi-snapshots/save'],
-    ['GET', '/api/pro-plan/students'], ['POST', '/api/forced-withdrawals'], ['GET', '/API/crew/students'],
+    ['POST', '/api/forced-withdrawals'], ['GET', '/API/crew/students'],
   ]) assert.equal((await f.request(path, { method, ...(method === 'POST' ? { body: JSON.stringify(body) } : {}) })).status, 403);
   assert.equal(f.count(), 0);
 });
 
-test('crew responses omit executive and financial fields and removed students are denied', async t => {
+test('shared UI can read examination state but removed students are denied', async t => {
   const f = await fixture(t);
   let response = await f.request('/api/students/own-1');
   assert.equal(response.status, 200);
-  assert.equal(JSON.stringify(await response.json()).includes('PRIVATE_FIXTURE'), false);
+  assert.equal(JSON.stringify(await response.json()).includes('PRIVATE_FIXTURE'), true);
   f.revoke();
   response = await f.request('/api/students/own-1');
   assert.equal(response.status, 403);
@@ -110,6 +110,33 @@ test('leader retains existing routes and does not use a crew scope', async t => 
   const f = await fixture(t, { role: 'leader', tutorName: null });
   assert.equal((await f.request('/api/notion/update', { method: 'POST', body: '{}' })).status, 200);
   assert.equal(f.calls.length, 0);
+});
+
+test('shared UI read endpoints work for crew while debug, exports and all administrative writes remain closed', async t => {
+  const f = await fixture(t, { tutorName: null });
+  for (const path of ['/api/notion/students', '/api/notion/hearing', '/api/notion/examination',
+    '/api/notion/entry-plan-examination', '/api/notion/pro-hearing', '/api/notion/pro-examination',
+    '/api/notion/suspension-history', '/api/pro-plan/students', '/api/pro-plan/advanced-examination',
+    '/api/kpi-export/current-kpi', '/api/kpi-snapshots', '/api/kpi-snapshots/list', '/api/kpi-snapshots/2026-10', '/api/forced-withdrawals']) {
+    assert.equal((await f.request(path)).status, 200, path);
+  }
+  for (const path of ['/api/notion/debug/tutors', '/api/notion/export-spreadsheet', '/api/pro-plan/external-db/test', '/api/pro-plan/debug-months']) {
+    assert.equal((await f.request(path)).status, 403, path);
+  }
+  for (const path of ['/api/notion/cache/clear', '/api/kpi-export/setup-sheet', '/api/kpi-export/append-monthly', '/api/kpi-snapshots/save', '/api/kpi-snapshots/import-csv', '/api/pro-plan/own-1']) {
+    assert.equal((await f.request(path, { method: 'POST', body: '{}' })).status, 403, path);
+  }
+});
+
+test('bulk POST reads validate IDs, fields and cycles without granting write routes', async t => {
+  const f = await fixture(t);
+  for (const path of ['/api/students/bulk', '/api/pro-plan/bulk']) {
+    const data = { studentIds: ['own-1', 'other-2'], ...(path.includes('/students/') ? { cycle: 2 } : {}) };
+    assert.equal((await f.request(path, { method: 'POST', body: JSON.stringify(data) })).status, 200);
+    for (const value of [{ ...data, examination_result: '延長' }, { ...data, studentIds: ['bad/id'] }, { ...data, studentIds: [] }]) {
+      assert.equal((await f.request(path, { method: 'POST', body: JSON.stringify(value) })).status, 400);
+    }
+  }
 });
 
 test('expired snapshots block both assigned list and writes even if the cached tutor row remains', async t => {

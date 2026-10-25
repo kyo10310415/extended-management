@@ -1,6 +1,8 @@
+import { useIsCrew } from '../session'
 import { useState, useEffect } from 'react'
 
 function SuspensionList() {
+  const isCrew = useIsCrew()
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -39,7 +41,7 @@ function SuspensionList() {
       setRefreshing(true)
       
       // キャッシュクリア
-      await fetch('/api/notion/cache/clear', {
+      if (!isCrew) await fetch('/api/notion/cache/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })

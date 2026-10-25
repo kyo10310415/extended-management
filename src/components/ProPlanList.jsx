@@ -1,6 +1,8 @@
+import { useIsCrew } from '../session'
 import { useState, useEffect } from 'react'
 
 function ProPlanList() {
+  const isCrew = useIsCrew()
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -57,7 +59,7 @@ function ProPlanList() {
       setRefreshing(true)
       
       // キャッシュクリア
-      await fetch('/api/notion/cache/clear', {
+      if (!isCrew) await fetch('/api/notion/cache/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -380,7 +382,7 @@ function ProPlanList() {
                         type="month"
                         value={student.proPlanStartMonth || ''}
                         onChange={(e) => handleProPlanStartMonthChange(student.studentId, e.target.value)}
-                        disabled={saving[student.studentId]}
+                        disabled={isCrew || saving[student.studentId]}
                         className="px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                       />
                     </td>
@@ -390,7 +392,7 @@ function ProPlanList() {
                           type="checkbox"
                           checked={student.promotionReviewed || false}
                           onChange={(e) => handlePromotionReviewedToggle(student.studentId, e.target.checked)}
-                          disabled={saving[student.studentId]}
+                          disabled={isCrew || saving[student.studentId]}
                           className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50"
                         />
                       </div>
@@ -400,7 +402,7 @@ function ProPlanList() {
                         <select
                           value={student.proPlanStatus || ''}
                           onChange={(e) => handleProPlanStatusChange(student.studentId, e.target.value)}
-                          disabled={saving[student.studentId]}
+                          disabled={isCrew || saving[student.studentId]}
                           className="px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                         >
                           <option value=""></option>

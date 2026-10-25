@@ -13,7 +13,7 @@ import KpiHistory from './components/KpiHistory'
 import KpiChart from './components/KpiChart'
 import KpiByTutor from './components/KpiByTutor'
 import ForcedWithdrawalList from './components/ForcedWithdrawalList'
-import CrewWorkspace from './components/CrewWorkspace'
+import { SessionContext } from './session'
 
 function App() {
   const [accessDenied, setAccessDenied] = useState(false)
@@ -89,10 +89,9 @@ function App() {
   }
 
   if (!session) return <main className="p-8">認証状態を確認しています…</main>
-  if (session.role === 'crew') return <CrewWorkspace />
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <SessionContext.Provider value={session}><div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -157,7 +156,7 @@ function App() {
           </p>
         </div>
       </footer>
-    </div>
+    </div></SessionContext.Provider>
   )
 }
 
