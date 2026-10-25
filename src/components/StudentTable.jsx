@@ -1,3 +1,4 @@
+import { useIsCrew } from '../session'
 import { useState, useMemo, useCallback } from 'react'
 import { isExaminationOverdue } from '../utils/examinationStatus'
 
@@ -10,6 +11,7 @@ function StudentTable({
   showLessonDatesColumn = false,
   allowUpsell = false,
 }) {
+  const isCrew = useIsCrew()
   const [editingStudent, setEditingStudent] = useState(null)
   const [formData, setFormData] = useState({})
   const [originalExaminationResult, setOriginalExaminationResult] = useState('')
@@ -36,7 +38,9 @@ function StudentTable({
   }, [showExaminationColumn])
 
   const performSave = useCallback(async (studentId, sendDiscordNotification) => {
-    const response = await onUpdate(studentId, {
+    const response = await onUpdate(studentId, isCrew ? {
+      extension_certainty: formData.extension_certainty, hearing_status: formData.hearing_status, notes: formData.notes,
+    } : {
       ...formData,
       examination_result_manually_changed:
         formData.examination_result !== originalExaminationResult,
@@ -71,9 +75,10 @@ function StudentTable({
     setEditingStudent(null)
     setOriginalExaminationResult('')
     setOriginalDiscordNotificationSent(false)
-  }, [formData, onUpdate, originalExaminationResult])
+  }, [formData, onUpdate, originalExaminationResult, isCrew])
 
   const handleSave = useCallback(async (studentId) => {
+    if (isCrew) return performSave(studentId, false)
     const notificationResults = allowUpsell ? ['延長', 'アップセル'] : ['延長']
     const changedToNotificationResult = notificationResults.includes(formData.examination_result)
       && originalExaminationResult !== formData.examination_result
@@ -85,6 +90,7 @@ function StudentTable({
 
     await performSave(studentId, false)
   }, [
+    isCrew,
     allowUpsell,
     formData.examination_result,
     originalExaminationResult,
@@ -407,6 +413,7 @@ function StudentTable({
                     <td className="px-2 py-1 whitespace-nowrap">
                       {isEditing ? (
                         <select
+                          disabled={isCrew}
                           value={formData.examination_result}
                           onChange={(e) => setFormData({ ...formData, examination_result: e.target.value })}
                           className="px-2 py-1 border border-gray-300 rounded text-xs w-full"
@@ -461,6 +468,7 @@ function StudentTable({
                     <td className="px-2 py-1 whitespace-nowrap">
                       {isEditing ? (
                         <select
+                          disabled={isCrew}
                           value={formData.executive_check || ''}
                           onChange={(e) => setFormData({ ...formData, executive_check: e.target.value })}
                           className="px-1 py-1 border border-gray-300 rounded text-[10px] w-full"

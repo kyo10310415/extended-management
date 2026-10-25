@@ -1,3 +1,5 @@
+import { useIsCrew } from '../session'
+import { requestStudentUpdate } from '../utils/studentUpdate'
 /**
  * ProHearingAdvanced.jsx
  *
@@ -22,6 +24,7 @@ function hearingMonth(round) {
 const MAX_ROUND = 10
 
 function ProHearingAdvanced() {
+  const isCrew = useIsCrew()
   const [round, setRound] = useState(4)          // 選択中の回数
   const [monthOffset, setMonthOffset] = useState(0)
   const [students, setStudents] = useState([])
@@ -78,11 +81,7 @@ function ProHearingAdvanced() {
   const handleUpdate = async (studentId, updatedData) => {
     try {
       const cycle = round  // round をそのまま cycle として利用
-      const res = await fetch(`/api/students/${studentId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...updatedData, cycle }),
-      })
+      const res = await requestStudentUpdate(isCrew, studentId, { ...updatedData, cycle })
       const data = await res.json()
       if (data.success) {
         setStudents(prev =>

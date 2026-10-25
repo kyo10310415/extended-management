@@ -1,3 +1,4 @@
+import { useIsCrew } from '../session'
 import { useState, useEffect } from 'react'
 import {
   calculateExtensionCertaintyStats,
@@ -5,6 +6,7 @@ import {
 } from '../utils/dashboardKpi'
 
 function Dashboard() {
+  const isCrew = useIsCrew()
   const [stats, setStats] = useState({
     loading: true,
     refreshing: false, // 手動更新中フラグ
@@ -500,7 +502,7 @@ function Dashboard() {
     
     try {
       // キャッシュをクリア
-      await fetch('/api/notion/cache/clear', { method: 'POST' });
+      if (!isCrew) await fetch('/api/notion/cache/clear', { method: 'POST' });
       console.log('  ✅ キャッシュクリア完了');
       
       // データを再取得
@@ -915,7 +917,7 @@ function Dashboard() {
           <div className="flex gap-3">
             <button
               onClick={handleSetupKPISheet}
-              disabled={kpiExport.creating}
+              disabled={isCrew || kpiExport.creating}
               className={`flex-1 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
                 kpiExport.creating
                   ? 'bg-gray-400 cursor-not-allowed'
@@ -936,7 +938,7 @@ function Dashboard() {
 
             <button
               onClick={handleExportMonthlyKPI}
-              disabled={!kpiExport.spreadsheetId || kpiExport.exporting}
+              disabled={isCrew || !kpiExport.spreadsheetId || kpiExport.exporting}
               className={`flex-1 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
                 !kpiExport.spreadsheetId || kpiExport.exporting
                   ? 'bg-gray-400 cursor-not-allowed'
@@ -957,7 +959,7 @@ function Dashboard() {
 
             <button
               onClick={() => handleExportMonthlyKPI(-1)}
-              disabled={!kpiExport.spreadsheetId || kpiExport.exporting}
+              disabled={isCrew || !kpiExport.spreadsheetId || kpiExport.exporting}
               className={`flex-1 px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
                 !kpiExport.spreadsheetId || kpiExport.exporting
                   ? 'bg-gray-400 cursor-not-allowed'

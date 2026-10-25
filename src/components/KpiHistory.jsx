@@ -1,3 +1,4 @@
+import { useIsCrew } from '../session'
 import { useState, useEffect } from 'react'
 
 // KPIカード共通コンポーネント
@@ -45,6 +46,7 @@ function ExamSection({ title, data, cycle }) {
 }
 
 function KpiHistory() {
+  const isCrew = useIsCrew()
   const [snapshots, setSnapshots]     = useState([])          // 一覧
   const [selected, setSelected]       = useState(null)        // 選択中の yearMonth
   const [detail, setDetail]           = useState(null)        // 詳細データ
@@ -187,7 +189,7 @@ function KpiHistory() {
           </div>
           <button
             onClick={() => handleSave(false)}
-            disabled={saving}
+            disabled={isCrew || saving}
             className={`px-5 py-2 rounded-lg font-semibold text-white transition ${saving ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
           >
             {saving ? '保存中...' : '📸 スナップショット保存'}
@@ -234,7 +236,7 @@ function KpiHistory() {
 
               <button
                 onClick={handleCsvImport}
-                disabled={csvImporting || !csvText.trim()}
+                disabled={isCrew || csvImporting || !csvText.trim()}
                 className={`px-5 py-2 rounded-lg font-semibold text-white text-sm transition ${
                   csvImporting || !csvText.trim()
                     ? 'bg-gray-400 cursor-not-allowed'

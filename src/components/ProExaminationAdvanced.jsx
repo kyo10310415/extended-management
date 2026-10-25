@@ -1,3 +1,5 @@
+import { useIsCrew } from '../session'
+import { requestStudentUpdate } from '../utils/studentUpdate'
 /**
  * ProExaminationAdvanced.jsx
  *
@@ -22,6 +24,7 @@ function examMonth(round) {
 const MAX_ROUND = 10
 
 function ProExaminationAdvanced() {
+  const isCrew = useIsCrew()
   const [round, setRound] = useState(4)
   const [monthOffset, setMonthOffset] = useState(0)
   const [students, setStudents] = useState([])
@@ -66,7 +69,7 @@ function ProExaminationAdvanced() {
   const handleRefresh = async () => {
     try {
       setRefreshing(true)
-      await fetch('/api/notion/cache/clear', {
+      if (!isCrew) await fetch('/api/notion/cache/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -82,11 +85,7 @@ function ProExaminationAdvanced() {
   const handleUpdate = async (studentId, updatedData) => {
     try {
       const cycle = round
-      const res = await fetch(`/api/students/${studentId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...updatedData, cycle }),
-      })
+      const res = await requestStudentUpdate(isCrew, studentId, { ...updatedData, cycle })
       const data = await res.json()
       if (data.success) {
         setStudents(prev =>

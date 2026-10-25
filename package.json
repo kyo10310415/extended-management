@@ -11,7 +11,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server/index.js",
-    "test": "node --test server/middleware/crew-access.test.js server/services/databaseCacheSnapshot.test.js server/middleware/sso-auth-middleware.test.js server/routes/students.test.js server/services/examinationResultSync.test.js server/services/examinationAutomation.test.js server/services/forcedWithdrawal.test.js server/services/suspensionPaymentSync.test.js server/services/studentExtension.test.js src/utils/authenticatedFetch.test.js src/utils/dashboardKpi.test.js src/utils/tutorKpi.test.js",
+    "test": "node --test server/middleware/crew-access.test.js server/services/databaseCacheSnapshot.test.js server/middleware/sso-auth-middleware.test.js server/routes/students.test.js server/services/examinationResultSync.test.js server/services/examinationAutomation.test.js server/services/forcedWithdrawal.test.js server/services/suspensionPaymentSync.test.js server/services/studentExtension.test.js src/utils/authenticatedFetch.test.js src/utils/studentUpdate.test.js src/utils/dashboardKpi.test.js src/utils/tutorKpi.test.js",
     "test:suspension-discord": "node server/scripts/testSuspensionDiscord.js",
     "migrate": "node run-migration.js"
   },
