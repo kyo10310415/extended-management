@@ -252,3 +252,9 @@ crewは担当者登録・担当者Notion同期・初回承認なしで全生徒�
 ### crewの共通UI
 
 crewもadmin/leaderと同じヘッダー・タブ・一覧・検索・KPI表示を使います。審査結果と統括チェックは閲覧のみで、保存はヒアリング状況・延長確度・備考の3項目に限定します。管理用の同期・出力・強制退会・Pro設定・KPI保存はcrewに許可しません。更新ボタンはcrewでは現在の読取りデータを再表示し、手動同期やキャッシュ削除は行いません。画面用のGETと検証済みbulk読取りPOSTのみを追加許可し、それ以外のAPI制限は維持します。
+
+### 2026-10-25 ビルド/開発依存の更新
+
+Vite5系に当該警告の修正版がないため、互換検証のうえVite6.4.5（exact）へ更新しました。plugin-reactは既存4系、shell-quote等の推移依存は互換patchで更新。アプリ画面・認証・API・DBの変更なし。
+
+Node22.23.4でclean install(ignore-scripts)、86テスト、Vite6のproduction build成功。架空データのブラウザーで共通タブ・一覧・crewの審査結果/統括チェック編集禁止を確認。全依存auditはCritical1/High4からCritical/High0、Moderate7/Low1残存。実業務データ更新なし。Vite6はNode18/20/22系など、採用版のengineに合うNodeを利用してください。
