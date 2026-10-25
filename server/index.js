@@ -9,7 +9,7 @@ const { Pool } = pkg;
 
 // SSO Authentication Middleware
 import { createSsoAuthMiddleware, readSsoConfiguration } from './middleware/sso-auth-middleware.js';
-import { createCrewAccessMiddleware, createAssignedStudentsHandler } from './middleware/crew-access.js';
+import { createCrewAccessMiddleware, createCrewStudentsHandler } from './middleware/crew-access.js';
 
 // Routes
 import notionRoutes from './routes/notion.js';
@@ -68,9 +68,8 @@ app.use(cookieParser());
 // SSO Authentication (must be before routes)
 app.use(createSsoAuthMiddleware(ssoConfiguration));
 app.use(createCrewAccessMiddleware({ queryable: pool }));
-app.get('/api/auth/me', (req, res) => res.json({ role: req.user.role,
-  tutorConfigured: req.user.role !== 'crew' || !!req.user.tutorName }));
-app.get('/api/crew/students', createAssignedStudentsHandler({ queryable: pool }));
+app.get('/api/auth/me', (req, res) => res.json({ role: req.user.role }));
+app.get('/api/crew/students', createCrewStudentsHandler({ queryable: pool }));
 
 // Serve static files from dist directory
 app.use(express.static(path.join(__dirname, '../dist')));
