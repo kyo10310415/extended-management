@@ -6,7 +6,7 @@
 
 lockfileの`@babel/core`を7.29.7へ更新しています。CVE-2026-49356の修正版は7.29.6です。ビルドは管理されたソースだけを入力し、外部から渡されたJavaScript/CSSを変換しないでください。実行時の認証・画面・環境変数の変更はありません。
 
-Tailwind CSS 3経由の`postcss-selector-parser`にはCVE-2026-104844（7.1.6未満）の警告が残っています。現在の参照はVite/PostCSSによるリポジトリ内CSSのビルドで、本番Expressは生成済み`dist`を配信します。リクエスト中に外部CSSを解析する経路は静的調査で見つかっていません。依存の警告自体は未解消であり、Tailwindのメジャー移行は別途画面互換性を検証して実施してください。
+Tailwind CSS 3経由の`postcss-selector-parser`は、lockfileで修正バックポート済み6.1.5です。[上流PR #346](https://github.com/postcss/postcss-selector-parser/pull/346)の保守者はCVE-2026-104844修正の6系への取込み・6.1.5公開と、アドバイザリ範囲の更新手続きを説明しています。導入コードのSetによる修正と合成セレクターの処理も確認しました。npm auditは現時点でMedium 3件を報告し続けますが、本件は修正実装確認済み・アドバイザリ反映待ちとして管理します。警告を消すための強制overrideやTailwindのメジャー更新は不要です。現在の参照はリポジトリ内CSSのビルドで、本番Expressは生成済み`dist`を配信します。
 
 ## Google Sheets SDKの更新検証
 
