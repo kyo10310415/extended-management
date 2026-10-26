@@ -268,3 +268,11 @@ crewもadmin/leaderと同じヘッダー・タブ・一覧・検索・KPI表示�
 Vite5系に当該警告の修正版がないため、互換検証のうえVite6.4.5（exact）へ更新しました。plugin-reactは既存4系、shell-quote等の推移依存は互換patchで更新。アプリ画面・認証・API・DBの変更なし。
 
 Node22.23.4でclean install(ignore-scripts)、86テスト、Vite6のproduction build成功。架空データのブラウザーで共通タブ・一覧・crewの審査結果/統括チェック編集禁止を確認。全依存auditはCritical1/High4からCritical/High0、Moderate7/Low1残存。実業務データ更新なし。Vite6はNode18/20/22系など、採用版のengineに合うNodeを利用してください。
+
+## DB接続のTLS方針（2026-10-26）
+
+主DB・キャッシュ・保守migration・外部DBのPRO参照・管理用接続診断の5接続箇所を`server/utils/databaseConfig.js`へ集約しました。Render上（RENDER=true）の短いdpg内部ホストだけ自己署名TLSを許容し、外部接続は証明書とホスト名を検証します。Render内部は[公式仕様](https://render.com/docs/postgresql-creating-connecting)に合わせた限定的な例外です。内部ネットワークの信頼に依存し、検証失敗から弱い接続へ自動で戻しません。
+
+主DB・キャッシュ・保守migrationにだけ、非production・非Renderのloopback（localhost/127.0.0.1/[::1]）かつTLS指定なしの場合の平文互換を明示許可します。既存の外部DB2経路はローカルでもTLSを維持します。URLのssl*による検証上書き・hostクエリ・グローバル検証無効化は拒否し、CA/mTLSのファイル設定は保持します。PGSSLMODEやURLにTLS指定があれば平文互換は使いません。
+
+SQL・プール数/タイムアウト・認可・UI・審査処理は変更しません。DB URL未設定を許していたテスト2ファイルは合成URLを明示してプールを模擬し、実DBへ接続しません。実DB/TLSハンドシェイク・認証後DB業務は今回未試験で、保守migrationや外部診断も本番実行しません。既存ログ出力と過去ログは別途確認が必要です。

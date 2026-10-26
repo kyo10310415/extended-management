@@ -1,3 +1,4 @@
+import { getDatabaseConfig } from '../utils/databaseConfig.js';
 /**
  * proPlanExternalService.js
  *
@@ -30,8 +31,7 @@ function getExternalPool() {
       );
     }
     externalPool = new Pool({
-      connectionString: connStr,
-      ssl: { rejectUnauthorized: false }, // Render の外部 DB は SSL 必須
+      ...getDatabaseConfig(connStr),
       max: 5,           // 外部 DB なので接続数を絞る
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,

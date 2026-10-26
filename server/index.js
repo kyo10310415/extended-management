@@ -1,3 +1,4 @@
+import { getDatabaseConfig } from './utils/databaseConfig.js';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -46,10 +47,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Database connection
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
+export const pool = new Pool(getDatabaseConfig(process.env.DATABASE_URL, process.env, { allowLocalPlaintext: true }));
 
 // Test database connection
 pool.query('SELECT NOW()', (err, res) => {
