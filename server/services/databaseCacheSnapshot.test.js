@@ -1,3 +1,4 @@
+import '../test-database-fixture.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseCacheService } from './databaseCacheService.js';
