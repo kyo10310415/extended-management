@@ -27,6 +27,7 @@ import {
   initializeDataPreload, 
   initializeAutomaticExaminationResultSync,
   initializeSuspensionPaymentSync,
+  initializeCurrentKPISnapshot,
   scheduleDailyUpdate,
   scheduleAutomaticExaminationResultSync,
   scheduleSuspensionPaymentSync,
@@ -35,7 +36,8 @@ import {
   scheduleIncompleteListNotifications,
   scheduleMonthlyKPIExport,
   scheduleMonthlyKPISnapshot,
-  scheduleWeeklyKPISnapshot
+  scheduleWeeklyKPISnapshot,
+  scheduleCurrentKPISnapshot
 } from './services/backgroundService.js';
 
 dotenv.config();
@@ -327,6 +329,17 @@ async function initDatabase() {
     `);
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS kpi_current_snapshot (
+        singleton_id BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton_id = TRUE),
+        year_month VARCHAR(7) NOT NULL,
+        month_label VARCHAR(20) NOT NULL,
+        snapshot_data JSONB NOT NULL,
+        tutor_data JSONB NOT NULL DEFAULT '[]'::jsonb,
+        calculated_at TIMESTAMP WITH TIME ZONE NOT NULL
+      );
+    `);
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS forced_withdrawals (
         id SERIAL PRIMARY KEY,
         student_id VARCHAR(50) UNIQUE NOT NULL,
@@ -434,6 +447,9 @@ app.listen(PORT, async () => {
 
   // 休会申請も起動時に確認し、以降は30分ごとに新規レコードだけを反映
   await initializeSuspensionPaymentSync();
+
+  // 当月の暫定KPIを起動時に生成し、APIは以降DBだけを読む
+  await initializeCurrentKPISnapshot();
   
   // 定期更新スケジュールを設定
   scheduleDailyUpdate(); // 毎日 AM 2:00 JST
@@ -445,6 +461,7 @@ app.listen(PORT, async () => {
   scheduleMonthlyKPIExport(); // 毎月末日 PM 11:00 JST
   scheduleMonthlyKPISnapshot(); // 毎月1日 AM 2:00 JST（前月分スナップショット自動保存）
   scheduleWeeklyKPISnapshot(); // 毎週日曜 PM 11:55 JST
+  scheduleCurrentKPISnapshot(); // 毎時05分・35分（30分ごと）
   console.log('✅ Server initialization completed');
 });
 

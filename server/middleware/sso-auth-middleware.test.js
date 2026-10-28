@@ -104,9 +104,10 @@ test('API query tokens do not replace cookie authentication', async () => {
   assert.equal((await request(`/api/students?auth_token=${token()}`)).status, 401);
 });
 
-test('only the monthly KPI read endpoint can reach its dedicated Bearer-token validator', async () => {
+test('only monthly and current KPI read endpoints can reach the dedicated Bearer-token validator', async () => {
   const headers = { Authorization: 'Bearer dedicated-read-token' };
   assert.equal((await request('/api/kpi-snapshots/2026-11', { headers })).status, 200);
+  assert.equal((await request('/api/kpi-snapshots/current', { headers })).status, 200);
   assert.equal((await request('/api/kpi-snapshots', { headers })).status, 401);
   assert.equal((await request('/api/kpi-snapshots/list', { headers })).status, 401);
   assert.equal((await request('/api/kpi-snapshots/2026-11', { method: 'POST', headers })).status, 401);
