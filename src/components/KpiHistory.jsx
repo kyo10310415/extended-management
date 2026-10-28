@@ -1,6 +1,8 @@
 import { useIsCrew } from '../session'
 import { useState, useEffect } from 'react'
 
+const examPrefix = cycle => `exam${cycle}${cycle === 1 ? 'st' : cycle === 2 ? 'nd' : cycle === 3 ? 'rd' : 'th'}`
+
 // KPIカード共通コンポーネント
 function KpiCard({ label, value, sub, color = 'blue' }) {
   const colors = {
@@ -23,7 +25,7 @@ function KpiCard({ label, value, sub, color = 'blue' }) {
 // 1回目・2回目・3回目の共通カードセクション
 function ExamSection({ title, data, cycle }) {
   if (!data) return null
-  const isThird = cycle === 3
+  const isProCycle = cycle >= 3
   return (
     <div>
       <h4 className="text-sm font-semibold text-gray-600 mb-2">{title}</h4>
@@ -31,7 +33,7 @@ function ExamSection({ title, data, cycle }) {
         <KpiCard label="対象数" value={data.targetCount} color="blue" />
         <KpiCard label="延長数" value={data.extensionCount} color="green" />
         <KpiCard
-          label={isThird ? '永久会員数' : '退会数'}
+          label={isProCycle ? '永久会員数' : '退会数'}
           value={data.withdrawalCount ?? data.lifetimeCount}
           color="red"
         />
@@ -320,9 +322,9 @@ function KpiHistory() {
               <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
                 <h4 className="text-sm font-semibold text-gray-600 mb-3">📊 全体統計</h4>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
-                  <KpiCard label="延長審査対象" value={s.exam1stTargetCount + s.exam2ndTargetCount + (s.exam3rdTargetCount ?? 0)} color="blue" />
-                  <KpiCard label="延長数"       value={(s.exam1stExtensionCount ?? 0) + (s.exam2ndExtensionCount ?? 0) + (s.exam3rdExtensionCount ?? 0)} color="green" />
-                  <KpiCard label="退会/永久会員" value={(s.exam1stWithdrawalCount ?? 0) + (s.exam2ndWithdrawalCount ?? 0) + (s.exam3rdLifetimeCount ?? 0)} color="red" />
+                  <KpiCard label="延長審査対象" value={[1, 2, 3, 4, 5, 6].reduce((sum, cycle) => sum + (s[`${examPrefix(cycle)}TargetCount`] ?? 0), 0)} color="blue" />
+                  <KpiCard label="延長数" value={[1, 2, 3, 4, 5, 6].reduce((sum, cycle) => sum + (s[`${examPrefix(cycle)}ExtensionCount`] ?? 0), 0)} color="green" />
+                  <KpiCard label="退会/永久会員" value={(s.exam1stWithdrawalCount ?? 0) + (s.exam2ndWithdrawalCount ?? 0) + [3, 4, 5, 6].reduce((sum, cycle) => sum + (s[`${examPrefix(cycle)}LifetimeCount`] ?? 0), 0)} color="red" />
                   <KpiCard label="延長率(全体)"  value={`${(s.overallExtensionRate ?? 0).toFixed(1)}%`} color="purple" />
                   <KpiCard label="Pro成約率"    value={`${(s.proPlanSuccessRate ?? 0).toFixed(1)}%`} color="yellow" />
                 </div>
@@ -356,6 +358,16 @@ function KpiHistory() {
                     }} />
                   </div>
                 )}
+                {[4, 5, 6].map(cycle => s[`exam${cycle}thTargetCount`] != null && (
+                  <div key={cycle} className="bg-white rounded-lg border border-gray-200 p-4">
+                    <ExamSection title={`📌 延長審査${cycle}回目・Pro（PRO継続${5 + (cycle - 4) * 6}ヶ月目）`} cycle={cycle} data={{
+                      targetCount: s[`exam${cycle}thTargetCount`],
+                      extensionCount: s[`exam${cycle}thExtensionCount`],
+                      withdrawalCount: s[`exam${cycle}thLifetimeCount`],
+                      extensionRate: s[`exam${cycle}thExtensionRate`],
+                    }} />
+                  </div>
+                ))}
               </div>
             </div>
           )}

@@ -1,6 +1,7 @@
 import express from 'express';
 import { pool } from '../index.js';
 import { calculateKPIData } from './kpi-export.js';
+import kpiSnapshotReadAuth from '../middleware/kpi-snapshot-read-auth.js';
 
 const router = express.Router();
 
@@ -87,11 +88,35 @@ router.get('/list', async (req, res) => {
   }
 });
 
+router.get('/weekly/:yearMonth(\\d{4}-\\d{2})', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT TO_CHAR(week_end_date, 'YYYY-MM-DD') AS "weekEndDate",
+              target_rate::float AS "targetRate",
+              weekly_target_rate::float AS "weeklyTargetRate",
+              achievement_rate::float AS "achievementRate",
+              remaining_count AS "remainingCount",
+              actual_rate::float AS "actualRate",
+              target_count AS "targetCount",
+              extension_count AS "extensionCount",
+              updated_at AS "updatedAt"
+         FROM kpi_weekly_snapshots
+        WHERE year_month = $1
+        ORDER BY week_end_date`,
+      [req.params.yearMonth]
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    console.error('Error fetching weekly KPI snapshots:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 /**
  * GET /api/kpi-snapshots/:yearMonth
  * 特定月のスナップショットを取得（例: 2026-05）
  */
-router.get('/:yearMonth', async (req, res) => {
+router.get('/:yearMonth(\\d{4}-\\d{2})', kpiSnapshotReadAuth, async (req, res) => {
   try {
     const { yearMonth } = req.params;
     const result = await pool.query(
@@ -198,6 +223,18 @@ router.post('/import-csv', async (req, res) => {
       '延長審査3回目_延長数':       'exam3rdExtensionCount',
       '延長審査3回目_永久会員数':   'exam3rdLifetimeCount',
       '延長審査3回目_延長率(%)':    'exam3rdExtensionRate',
+      '延長審査4回目_対象数':       'exam4thTargetCount',
+      '延長審査4回目_延長数':       'exam4thExtensionCount',
+      '延長審査4回目_永久会員数':   'exam4thLifetimeCount',
+      '延長審査4回目_延長率(%)':    'exam4thExtensionRate',
+      '延長審査5回目_対象数':       'exam5thTargetCount',
+      '延長審査5回目_延長数':       'exam5thExtensionCount',
+      '延長審査5回目_永久会員数':   'exam5thLifetimeCount',
+      '延長審査5回目_延長率(%)':    'exam5thExtensionRate',
+      '延長審査6回目_対象数':       'exam6thTargetCount',
+      '延長審査6回目_延長数':       'exam6thExtensionCount',
+      '延長審査6回目_永久会員数':   'exam6thLifetimeCount',
+      '延長審査6回目_延長率(%)':    'exam6thExtensionRate',
       'Proプラン成約率(%)':         'proPlanSuccessRate',
       '延長率（対 審査対象）(%)':   'overallExtensionRate',
     };

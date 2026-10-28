@@ -42,6 +42,11 @@ export function createSsoAuthMiddleware(configuration) {
     const normalizedPath = req.path.toLowerCase();
     const isApi = normalizedPath === '/api' || normalizedPath.startsWith('/api/');
     const isRead = req.method === 'GET' || req.method === 'HEAD';
+    const isExternalKpiSnapshotRead = isRead
+      && /^\/api\/kpi-snapshots\/\d{4}-\d{2}$/.test(normalizedPath)
+      && /^Bearer\s+\S+$/i.test(req.get('Authorization') || '');
+    // The route itself validates the dedicated read-only token. No other API route bypasses SSO.
+    if (isExternalKpiSnapshotRead) return next();
     if (isRead && (req.path === '/api/health'
       || (!isApi && (req.path.startsWith('/assets/') || req.path === '/favicon.ico')))) {
       return next();

@@ -3,6 +3,11 @@ import { pool } from '../index.js';
 import { fetchStudents } from '../services/notionService.js';
 import { fetchSuspensionData } from '../services/sheetsService.js';
 import { calculateMonthsElapsed } from '../utils/dateUtils.js';
+import {
+  calculateProPlanMonths,
+  examMonth,
+  fetchProStartDates,
+} from '../services/proPlanExternalService.js';
 import { 
   setupKPISpreadsheet, 
   appendMonthlyKPI, 
@@ -153,10 +158,21 @@ export async function calculateKPIData(monthOffset = 0) {
   const exam2ndTargets = studentsWithMonths.filter(s => s.monthsElapsed === 11);
   // 3回目: 調整後月数が17ヶ月
   const exam3rdTargets = studentsWithAdjustedMonths.filter(s => s.adjustedMonths === 17);
+  const advancedCycles = [4, 5, 6, 7, 8, 9, 10];
+  const proStartDates = await fetchProStartDates(activeStudents.map(student => student.studentId));
+  const advancedTargetsByCycle = Object.fromEntries(advancedCycles.map(cycle => [cycle, []]));
+  for (const student of activeStudents) {
+    const proMonths = calculateProPlanMonths(proStartDates[student.studentId]?.proStartDate, monthOffset);
+    const cycle = advancedCycles.find(item => examMonth(item) === proMonths);
+    if (cycle) advancedTargetsByCycle[cycle].push({ ...student, proPlanMonths: proMonths, round: cycle });
+  }
 
   console.log(`📊 延長審査1回目対象: ${exam1stTargets.length}人`);
   console.log(`📊 延長審査2回目対象: ${exam2ndTargets.length}人`);
   console.log(`📊 延長審査3回目対象: ${exam3rdTargets.length}人`);
+  for (const cycle of [4, 5, 6]) {
+    console.log(`📊 延長審査${cycle}回目対象: ${advancedTargetsByCycle[cycle].length}人`);
+  }
 
   // ========================================
   // 延長審査結果を取得
@@ -193,6 +209,34 @@ export async function calculateKPIData(monthOffset = 0) {
 
   console.log(`📊 延長審査3回目: 延長${exam3rdExtensionCount} / 永久会員${exam3rdLifetimeCount} / 対象${exam3rdTargets.length} = ${exam3rdExtensionRate.toFixed(2)}%`);
 
+  const advancedStats = {};
+  const advancedExtensionRecords = [];
+  const advancedExtensionIdsByCycle = {};
+  for (const cycle of advancedCycles) {
+    const extensionStudentIds = await getExtensionResults(
+      advancedTargetsByCycle[cycle].map(student => student.studentId),
+      cycle
+    );
+    advancedExtensionIdsByCycle[cycle] = extensionStudentIds;
+    advancedExtensionRecords.push(...extensionStudentIds.map(studentId => ({ studentId, cycle })));
+  }
+  for (const cycle of [4, 5, 6]) {
+    const targets = advancedTargetsByCycle[cycle];
+    const studentIds = targets.map(s => s.studentId);
+    const extensionStudentIds = advancedExtensionIdsByCycle[cycle];
+    const extensionCount = extensionStudentIds.length;
+    const lifetimeCount = await getLifetimeMemberCount(studentIds, cycle);
+    const remainingCount = await getEmptyResultCount(studentIds, cycle);
+    advancedStats[cycle] = {
+      targetCount: targets.length,
+      extensionCount,
+      lifetimeCount,
+      remainingCount,
+      extensionRate: targets.length > 0 ? extensionCount / targets.length * 100 : 0,
+      extensionStudentIds,
+    };
+  }
+
   // ========================================
   // Proプラン成約率を計算
   // ========================================
@@ -222,9 +266,11 @@ export async function calculateKPIData(monthOffset = 0) {
   // 延長率（対 審査対象）を計算
   // ========================================
   
-  // 全延長審査対象数と延長数（1・2・3回目の合計）
-  const totalExamTargetCount = exam1stTargets.length + exam2ndTargets.length + exam3rdTargets.length;
-  const totalExtensionCount = exam1stExtensionCount + exam2ndExtensionCount + exam3rdExtensionCount;
+  // 全延長審査対象数と延長数（1〜6回目の合計）
+  const advancedTargetCount = [4, 5, 6].reduce((sum, cycle) => sum + advancedStats[cycle].targetCount, 0);
+  const advancedExtensionCount = [4, 5, 6].reduce((sum, cycle) => sum + advancedStats[cycle].extensionCount, 0);
+  const totalExamTargetCount = exam1stTargets.length + exam2ndTargets.length + exam3rdTargets.length + advancedTargetCount;
+  const totalExtensionCount = exam1stExtensionCount + exam2ndExtensionCount + exam3rdExtensionCount + advancedExtensionCount;
   
   const overallExtensionRate = totalExamTargetCount > 0 
     ? (totalExtensionCount / totalExamTargetCount) * 100 
@@ -236,7 +282,7 @@ export async function calculateKPIData(monthOffset = 0) {
   // Tutor別集計
   // ========================================
   const tutorKpi = await calculateTutorKPI(
-    exam1stTargets, exam2ndTargets, exam3rdTargets, monthOffset
+    exam1stTargets, exam2ndTargets, exam3rdTargets, advancedTargetsByCycle, monthOffset
   );
 
   // KPIデータを返す
@@ -254,6 +300,14 @@ export async function calculateKPIData(monthOffset = 0) {
       exam3rdExtensionCount,
       exam3rdLifetimeCount,
       exam3rdExtensionRate,
+      ...Object.fromEntries([4, 5, 6].flatMap(cycle => [
+        [`exam${cycle}thTargetCount`, advancedStats[cycle].targetCount],
+        [`exam${cycle}thExtensionCount`, advancedStats[cycle].extensionCount],
+        [`exam${cycle}thLifetimeCount`, advancedStats[cycle].lifetimeCount],
+        [`exam${cycle}thRemainingCount`, advancedStats[cycle].remainingCount],
+        [`exam${cycle}thExtensionRate`, advancedStats[cycle].extensionRate],
+      ])),
+      advancedExtensionRecords,
       proPlanSuccessRate,
       overallExtensionRate,
     }),
@@ -264,22 +318,21 @@ export async function calculateKPIData(monthOffset = 0) {
 /**
  * Tutor別KPIを集計する内部関数
  */
-async function calculateTutorKPI(exam1stTargets, exam2ndTargets, exam3rdTargets, monthOffset = 0) {
+async function calculateTutorKPI(exam1stTargets, exam2ndTargets, exam3rdTargets, advancedTargetsByCycle, monthOffset = 0) {
   // 全審査対象生徒を tutor でグループ化
   const allTargets = [
     ...exam1stTargets.map(s => ({ ...s, cycle: 1 })),
     ...exam2ndTargets.map(s => ({ ...s, cycle: 2 })),
     ...exam3rdTargets.map(s => ({ ...s, cycle: 3 })),
+    ...[4, 5, 6].flatMap(cycle => advancedTargetsByCycle[cycle].map(s => ({ ...s, cycle }))),
   ];
 
   // tutorごとに生徒IDを集める
   const tutorMap = {};
   for (const s of allTargets) {
     const tutor = s.tutor || '未設定';
-    if (!tutorMap[tutor]) tutorMap[tutor] = { c1: [], c2: [], c3: [] };
-    if (s.cycle === 1) tutorMap[tutor].c1.push(s.studentId);
-    if (s.cycle === 2) tutorMap[tutor].c2.push(s.studentId);
-    if (s.cycle === 3) tutorMap[tutor].c3.push(s.studentId);
+    if (!tutorMap[tutor]) tutorMap[tutor] = Object.fromEntries([1, 2, 3, 4, 5, 6].map(cycle => [`c${cycle}`, []]));
+    tutorMap[tutor][`c${s.cycle}`].push(s.studentId);
   }
 
   const result = [];
@@ -296,9 +349,23 @@ async function calculateTutorKPI(exam1stTargets, exam2ndTargets, exam3rdTargets,
     const ext3 = (await getExtensionResults(ids.c3, 3)).length;
     const life3 = await getLifetimeMemberCount(ids.c3);
     const rate3 = ids.c3.length > 0 ? (ext3 / ids.c3.length * 100) : 0;
+    const advancedTutorStats = {};
+    for (const cycle of [4, 5, 6]) {
+      const cycleIds = ids[`c${cycle}`];
+      const extensionCount = (await getExtensionResults(cycleIds, cycle)).length;
+      const lifetimeCount = await getLifetimeMemberCount(cycleIds, cycle);
+      advancedTutorStats[cycle] = {
+        targetCount: cycleIds.length,
+        extensionCount,
+        lifetimeCount,
+        extensionRate: cycleIds.length > 0 ? extensionCount / cycleIds.length * 100 : 0,
+      };
+    }
     // 全体
-    const totalTarget = ids.c1.length + ids.c2.length + ids.c3.length;
-    const totalExt    = ext1 + ext2 + ext3;
+    const totalTarget = ids.c1.length + ids.c2.length + ids.c3.length
+      + [4, 5, 6].reduce((sum, cycle) => sum + advancedTutorStats[cycle].targetCount, 0);
+    const totalExt = ext1 + ext2 + ext3
+      + [4, 5, 6].reduce((sum, cycle) => sum + advancedTutorStats[cycle].extensionCount, 0);
     const totalRate   = totalTarget > 0 ? (totalExt / totalTarget * 100) : 0;
 
     result.push({
@@ -315,6 +382,12 @@ async function calculateTutorKPI(exam1stTargets, exam2ndTargets, exam3rdTargets,
       exam3rdExtensionCount: ext3,
       exam3rdLifetimeCount: life3,
       exam3rdExtensionRate: Math.round(rate3 * 100) / 100,
+      ...Object.fromEntries([4, 5, 6].flatMap(cycle => [
+        [`exam${cycle}thTargetCount`, advancedTutorStats[cycle].targetCount],
+        [`exam${cycle}thExtensionCount`, advancedTutorStats[cycle].extensionCount],
+        [`exam${cycle}thLifetimeCount`, advancedTutorStats[cycle].lifetimeCount],
+        [`exam${cycle}thExtensionRate`, Math.round(advancedTutorStats[cycle].extensionRate * 100) / 100],
+      ])),
       totalTargetCount: totalTarget,
       totalExtensionCount: totalExt,
       overallExtensionRate: Math.round(totalRate * 100) / 100,
@@ -376,7 +449,7 @@ async function getWithdrawalCount(studentIds, cycle) {
  * @param {string[]} studentIds - 学籍番号の配列
  * @returns {Promise<number>} 永久会員件数
  */
-async function getLifetimeMemberCount(studentIds) {
+async function getLifetimeMemberCount(studentIds, cycle = 3) {
   if (studentIds.length === 0) {
     return 0;
   }
@@ -385,10 +458,22 @@ async function getLifetimeMemberCount(studentIds) {
     SELECT COUNT(*) as count
     FROM student_extensions
     WHERE student_id = ANY($1)
-      AND examination_result_3 = '永久会員'
+      AND examination_result_${cycle} = '永久会員'
   `;
   
   const result = await pool.query(query, [studentIds]);
+  return parseInt(result.rows[0]?.count || 0);
+}
+
+async function getEmptyResultCount(studentIds, cycle) {
+  if (studentIds.length === 0) return 0;
+  const result = await pool.query(
+    `SELECT COUNT(*) AS count
+       FROM UNNEST($1::text[]) AS target(student_id)
+       LEFT JOIN student_extensions se ON se.student_id = target.student_id
+      WHERE NULLIF(BTRIM(se.examination_result_${cycle}), '') IS NULL`,
+    [studentIds]
+  );
   return parseInt(result.rows[0]?.count || 0);
 }
 
