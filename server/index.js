@@ -32,7 +32,8 @@ import {
   scheduleMonthlyStudentListNotifications,
   scheduleIncompleteListNotifications,
   scheduleMonthlyKPIExport,
-  scheduleMonthlyKPISnapshot
+  scheduleMonthlyKPISnapshot,
+  scheduleWeeklyKPISnapshot
 } from './services/backgroundService.js';
 
 dotenv.config();
@@ -305,6 +306,24 @@ async function initDatabase() {
     `);
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS kpi_weekly_snapshots (
+        week_end_date DATE PRIMARY KEY,
+        year_month VARCHAR(7) NOT NULL,
+        target_rate NUMERIC(6,2) NOT NULL,
+        weekly_target_rate NUMERIC(6,2) NOT NULL,
+        achievement_rate NUMERIC(8,2) NOT NULL,
+        remaining_count INTEGER NOT NULL,
+        actual_rate NUMERIC(6,2) NOT NULL,
+        target_count INTEGER NOT NULL,
+        extension_count INTEGER NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_kpi_weekly_snapshots_year_month
+        ON kpi_weekly_snapshots(year_month, week_end_date);
+    `);
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS forced_withdrawals (
         id SERIAL PRIMARY KEY,
         student_id VARCHAR(50) UNIQUE NOT NULL,
@@ -422,6 +441,7 @@ app.listen(PORT, async () => {
   scheduleIncompleteListNotifications(); // 毎月20日 AM 9:00 JST
   scheduleMonthlyKPIExport(); // 毎月末日 PM 11:00 JST
   scheduleMonthlyKPISnapshot(); // 毎月1日 AM 2:00 JST（前月分スナップショット自動保存）
+  scheduleWeeklyKPISnapshot(); // 毎週日曜 PM 11:55 JST
   console.log('✅ Server initialization completed');
 });
 

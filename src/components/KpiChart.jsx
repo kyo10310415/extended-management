@@ -9,6 +9,9 @@ const COLORS = {
   exam1st: '#3b82f6',
   exam2nd: '#10b981',
   exam3rd: '#8b5cf6',
+  exam4th: '#ec4899',
+  exam5th: '#06b6d4',
+  exam6th: '#84cc16',
   overall: '#f59e0b',
 }
 
@@ -41,6 +44,12 @@ function KpiChart() {
       exam1stExtensionRate:  +(d.exam1stExtensionRate  ?? 0).toFixed(1),
       exam2ndExtensionRate:  +(d.exam2ndExtensionRate  ?? 0).toFixed(1),
       exam3rdExtensionRate:  +(d.exam3rdExtensionRate  ?? 0).toFixed(1),
+      ...Object.fromEntries([4, 5, 6].flatMap(cycle => [
+        [`exam${cycle}thExtensionRate`, +(d[`exam${cycle}thExtensionRate`] ?? 0).toFixed(1)],
+        [`exam${cycle}thTargetCount`, d[`exam${cycle}thTargetCount`] ?? 0],
+        [`exam${cycle}thExtensionCount`, d[`exam${cycle}thExtensionCount`] ?? 0],
+        [`exam${cycle}thLifetimeCount`, d[`exam${cycle}thLifetimeCount`] ?? 0],
+      ])),
       overallExtensionRate:  +(d.overallExtensionRate  ?? 0).toFixed(1),
 
       exam1stTargetCount:    d.exam1stTargetCount    ?? 0,
@@ -69,22 +78,26 @@ function KpiChart() {
       { key: 'exam1stExtensionRate',  name: '1回目 延長率', color: COLORS.exam1st },
       { key: 'exam2ndExtensionRate',  name: '2回目 延長率', color: COLORS.exam2nd },
       { key: 'exam3rdExtensionRate',  name: '3回目(Pro) 延長率', color: COLORS.exam3rd },
+      ...[4, 5, 6].map(cycle => ({ key: `exam${cycle}thExtensionRate`, name: `${cycle}回目(Pro) 延長率`, color: COLORS[`exam${cycle}th`] })),
       { key: 'overallExtensionRate',  name: '全体 延長率', color: COLORS.overall },
     ],
     targetCount: [
       { key: 'exam1stTargetCount', name: '1回目 対象数', color: COLORS.exam1st },
       { key: 'exam2ndTargetCount', name: '2回目 対象数', color: COLORS.exam2nd },
       { key: 'exam3rdTargetCount', name: '3回目(Pro) 対象数', color: COLORS.exam3rd },
+      ...[4, 5, 6].map(cycle => ({ key: `exam${cycle}thTargetCount`, name: `${cycle}回目(Pro) 対象数`, color: COLORS[`exam${cycle}th`] })),
     ],
     extensionCount: [
       { key: 'exam1stExtensionCount', name: '1回目 延長数', color: COLORS.exam1st },
       { key: 'exam2ndExtensionCount', name: '2回目 延長数', color: COLORS.exam2nd },
       { key: 'exam3rdExtensionCount', name: '3回目(Pro) 延長数', color: COLORS.exam3rd },
+      ...[4, 5, 6].map(cycle => ({ key: `exam${cycle}thExtensionCount`, name: `${cycle}回目(Pro) 延長数`, color: COLORS[`exam${cycle}th`] })),
     ],
     withdrawalCount: [
       { key: 'exam1stWithdrawalCount', name: '1回目 退会数',   color: COLORS.exam1st },
       { key: 'exam2ndWithdrawalCount', name: '2回目 退会数',   color: COLORS.exam2nd },
       { key: 'exam3rdLifetimeCount',   name: '3回目 永久会員数', color: COLORS.exam3rd },
+      ...[4, 5, 6].map(cycle => ({ key: `exam${cycle}thLifetimeCount`, name: `${cycle}回目 永久会員数`, color: COLORS[`exam${cycle}th`] })),
     ],
   }
 

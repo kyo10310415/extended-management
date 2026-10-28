@@ -4,7 +4,60 @@ import {
   getAdvancedExaminationTargets,
 } from '../utils/dashboardKpi'
 
+function AdvancedExamCard({ round, proMonth, stats }) {
+  return (
+    <div className="bg-white rounded-lg shadow p-6 border-l-4 border-purple-400">
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">📊 延長審査{round}回目（PRO継続{proMonth}か月目）</h3>
+      <div className="space-y-3">
+        {[
+          ['対象数', stats[`exam${round}thTargetCount`], 'text-gray-900'],
+          ['延長数', stats[`exam${round}thExtensionCount`], 'text-green-600'],
+          ['永久会員数', stats[`exam${round}thWithdrawalCount`], 'text-red-600'],
+          ['残弾数（空欄）', stats[`exam${round}thRemainingCount`], 'text-blue-600'],
+        ].map(([label, value, color]) => (
+          <div key={label} className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">{label}:</span>
+            <span className={`text-2xl font-bold ${color}`}>{value}</span>
+          </div>
+        ))}
+        <div className="flex justify-between items-center pt-3 border-t">
+          <span className="text-sm font-semibold text-gray-700">延長率:</span>
+          <span className="text-3xl font-bold text-purple-600">{stats[`exam${round}thExtensionRate`].toFixed(2)}%</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function buildWeeklyKpiRows(stats, snapshots) {
+  const now = new Date()
+  const year = now.getFullYear()
+  const monthIndex = now.getMonth()
+  const first = new Date(year, monthIndex, 1)
+  const firstSunday = 1 + ((7 - first.getDay()) % 7)
+  const snapshotMap = Object.fromEntries(snapshots.map(item => [item.weekEndDate, item]))
+  const todayKey = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const rows = []
+
+  for (let day = firstSunday; new Date(year, monthIndex, day).getMonth() === monthIndex; day += 7) {
+    const dateKey = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    const saved = snapshotMap[dateKey]
+    const isToday = dateKey === todayKey
+    const weeklyTargetRate = Math.min(stats.extensionRateKPI, stats.extensionRateKPI * day / 20)
+    const actualRate = saved?.actualRate ?? (isToday ? stats.extensionRate : null)
+    rows.push({
+      dateKey,
+      weeklyTargetRate: saved?.weeklyTargetRate ?? weeklyTargetRate,
+      achievementRate: saved?.achievementRate ?? (actualRate != null && weeklyTargetRate > 0 ? actualRate / weeklyTargetRate * 100 : null),
+      remainingCount: saved?.remainingCount ?? (isToday ? Math.max(0, stats.extensionCountKPI - stats.extensionCount) : null),
+      actualRate,
+    })
+  }
+  return rows
+}
+
 function Dashboard() {
+  const [weeklySnapshots, setWeeklySnapshots] = useState([])
   const [stats, setStats] = useState({
     loading: true,
     refreshing: false, // 手動更新中フラグ
@@ -54,6 +107,16 @@ function Dashboard() {
     exam4thExtensionRate: 0,
     exam4thWithdrawalCount: 0,
     exam4thRemainingCount: 0,
+    exam5thTargetCount: 0,
+    exam5thExtensionCount: 0,
+    exam5thExtensionRate: 0,
+    exam5thWithdrawalCount: 0,
+    exam5thRemainingCount: 0,
+    exam6thTargetCount: 0,
+    exam6thExtensionCount: 0,
+    exam6thExtensionRate: 0,
+    exam6thWithdrawalCount: 0,
+    exam6thRemainingCount: 0,
   })
 
   // KPIエクスポート関連の状態
@@ -66,6 +129,12 @@ function Dashboard() {
 
   useEffect(() => {
     fetchStats()
+    const now = new Date()
+    const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    fetch(`/api/kpi-snapshots/weekly/${yearMonth}`)
+      .then(response => response.json())
+      .then(data => { if (data.success) setWeeklySnapshots(data.data || []) })
+      .catch(error => console.error('Error fetching weekly KPI snapshots:', error))
   }, [])
 
   const fetchStats = async () => {
@@ -248,10 +317,22 @@ function Dashboard() {
         s.extensionData?.extension_certainty !== '対象外'
       );
 
-      // 既存の4回目KPIカードには4回目の対象だけを使用する
-      const proExamination4thStudents = advancedExaminationStudents
-        .filter(student => student.round === 4)
+      const advancedKpiStudents = advancedExaminationStudents
+        .filter(student => [4, 5, 6].includes(student.round))
         .filter(student => student.extensionData?.extension_certainty !== '対象外')
+      const advancedStats = Object.fromEntries([4, 5, 6].map(round => {
+        const targets = advancedKpiStudents.filter(student => student.round === round)
+        const extensionCount = targets.filter(s => s.extensionData?.examination_result === '延長').length
+        const lifetimeCount = targets.filter(s => s.extensionData?.examination_result === '永久会員').length
+        const remainingCount = targets.filter(s => !s.extensionData?.examination_result?.trim()).length
+        return [round, {
+          targetCount: targets.length,
+          extensionCount,
+          lifetimeCount,
+          remainingCount,
+          extensionRate: targets.length > 0 ? extensionCount / targets.length * 100 : 0,
+        }]
+      }))
 
       // KPI計算（1回目＋2回目＋3回目＋4回目の合計）
       // --- 3回目の中間値（統計用）---
@@ -266,24 +347,12 @@ function Dashboard() {
         s.extensionData.examination_result.trim() === ''
       ).length
 
-      // --- 4回目の中間値（統計用）---
-      const _exam4thExtCount = proExamination4thStudents.filter(s =>
-        s.extensionData?.examination_result === '延長'
-      ).length
-      const _exam4thLifetimeCount = proExamination4thStudents.filter(s =>
-        s.extensionData?.examination_result === '永久会員'
-      ).length
-      const _exam4thRemainingCount = proExamination4thStudents.filter(s =>
-        !s.extensionData?.examination_result ||
-        s.extensionData.examination_result.trim() === ''
-      ).length
-
-      // 全体の延長審査対象数（1回目＋2回目＋3回目＋4回目）
-      const examinationCount = examinationStudents.length + proExaminationStudents.length + proExamination4thStudents.length
+      const advancedTargetCount = [4, 5, 6].reduce((sum, round) => sum + advancedStats[round].targetCount, 0)
+      const examinationCount = examinationStudents.length + proExaminationStudents.length + advancedTargetCount
 
       console.log('📊 KPI計算開始');
       console.log('  延長審査対象（全体）:', examinationCount,
-        `(1・2回目: ${examinationStudents.length}, 3回目: ${proExaminationStudents.length}, 4回目: ${proExamination4thStudents.length})`);
+        `(1・2回目: ${examinationStudents.length}, 3回目: ${proExaminationStudents.length}, 4〜6回目: ${advancedTargetCount})`);
 
       // 延長確度は延長審査一覧・Pro延長審査・Pro審査（4回目～）の表示対象から集計
       const certaintyStats = calculateExtensionCertaintyStats([
@@ -299,14 +368,14 @@ function Dashboard() {
       // 延長数 = 1・2回目「延長」 + 3回目「延長」 + 4回目「延長」
       const extensionCount = examinationStudents.filter(s => 
         s.extensionData?.examination_result === '延長'
-      ).length + _exam3rdExtCount + _exam4thExtCount
+      ).length + _exam3rdExtCount + [4, 5, 6].reduce((sum, round) => sum + advancedStats[round].extensionCount, 0)
 
       console.log('  延長数（全体）:', extensionCount);
 
       // 退会数 = 1・2回目「退会」 + 3回目「永久会員」 + 4回目「永久会員」
       const withdrawalCount = examinationStudents.filter(s => 
         s.extensionData?.examination_result === '退会'
-      ).length + _exam3rdLifetimeCount + _exam4thLifetimeCount
+      ).length + _exam3rdLifetimeCount + [4, 5, 6].reduce((sum, round) => sum + advancedStats[round].lifetimeCount, 0)
 
       console.log('  退会 / 永久会員数（全体）:', withdrawalCount);
 
@@ -325,7 +394,8 @@ function Dashboard() {
       const remaining12Count = examinationStudents.length -
         examinationStudents.filter(s => s.extensionData?.examination_result === '延長').length -
         examinationStudents.filter(s => s.extensionData?.examination_result === '退会').length
-      const remainingCount = remaining12Count + _exam3rdRemainingCount + _exam4thRemainingCount
+      const remainingCount = remaining12Count + _exam3rdRemainingCount
+        + [4, 5, 6].reduce((sum, round) => sum + advancedStats[round].remainingCount, 0)
 
       // 延長確度別カウントも同じ延長審査対象から集計
       const certaintyHigh = certaintyStats.highCount
@@ -401,23 +471,6 @@ function Dashboard() {
       console.log('    残弾数（空欄）:', exam3rdRemainingCount);
       console.log('    延長率:', exam3rdExtensionRate.toFixed(2) + '%');
 
-      // 延長審査4回目（PROプラン継続5か月目）
-      const exam4thStudents = proExamination4thStudents
-      const exam4thTargetCount = exam4thStudents.length
-      const exam4thExtensionCount = _exam4thExtCount
-      const exam4thWithdrawalCount = _exam4thLifetimeCount
-      const exam4thRemainingCount = _exam4thRemainingCount
-      const exam4thExtensionRate = exam4thTargetCount > 0
-        ? (exam4thExtensionCount / exam4thTargetCount * 100)
-        : 0
-
-      console.log('  4回目（PRO継続5か月目）:');
-      console.log('    対象数:', exam4thTargetCount);
-      console.log('    延長数:', exam4thExtensionCount);
-      console.log('    永久会員数:', exam4thWithdrawalCount);
-      console.log('    残弾数（空欄）:', exam4thRemainingCount);
-      console.log('    延長率:', exam4thExtensionRate.toFixed(2) + '%');
-
       // Proプラン成約率の計算
       const proPlanTotalCount = proPlanData.count || 0
       const proPlanEnabledCount = (proPlanData.data || []).filter(s => s.proPlanStatus === '確定').length
@@ -467,11 +520,13 @@ function Dashboard() {
         exam3rdExtensionRate,
         exam3rdWithdrawalCount,
         exam3rdRemainingCount,
-        exam4thTargetCount,
-        exam4thExtensionCount,
-        exam4thExtensionRate,
-        exam4thWithdrawalCount,
-        exam4thRemainingCount,
+        ...Object.fromEntries([4, 5, 6].flatMap(round => [
+          [`exam${round}thTargetCount`, advancedStats[round].targetCount],
+          [`exam${round}thExtensionCount`, advancedStats[round].extensionCount],
+          [`exam${round}thExtensionRate`, advancedStats[round].extensionRate],
+          [`exam${round}thWithdrawalCount`, advancedStats[round].lifetimeCount],
+          [`exam${round}thRemainingCount`, advancedStats[round].remainingCount],
+        ])),
       }))
     } catch (error) {
       console.error('Error fetching stats:', error)
@@ -481,8 +536,8 @@ function Dashboard() {
 
   const handleKPIChange = (value) => {
     const kpi = Number(value)
-    // 全体対象数 = 1・2回目 + 3回目 + 4回目
-    const examinationCount = stats.examinationStudents.length + stats.exam3rdTargetCount + stats.exam4thTargetCount
+    const examinationCount = stats.examinationStudents.length + stats.exam3rdTargetCount
+      + stats.exam4thTargetCount + stats.exam5thTargetCount + stats.exam6thTargetCount
     const extensionCountKPI = Math.ceil(examinationCount * kpi / 100)
     
     setStats(prev => ({
@@ -633,10 +688,13 @@ function Dashboard() {
     )
   }
 
-  // 全体の延長審査対象数（1・2回目 + 3回目 + 4回目）
+  // 全体の延長審査対象数（1〜6回目）
   const examinationTargetCount = stats.examinationStudents.length
     + stats.exam3rdTargetCount
     + stats.exam4thTargetCount
+    + stats.exam5thTargetCount
+    + stats.exam6thTargetCount
+  const weeklyKpiRows = buildWeeklyKpiRows(stats, weeklySnapshots)
 
   return (
     <div>
@@ -692,7 +750,7 @@ function Dashboard() {
           <p className="text-xs text-gray-600 mb-1">延長審査対象</p>
           <p className="text-3xl font-bold text-gray-900">{examinationTargetCount}</p>
           <p className="text-xs text-gray-500 mt-1">
-            1・2回目 {stats.examinationStudents.length} + 3回目 {stats.exam3rdTargetCount} + 4回目 {stats.exam4thTargetCount}
+            1・2回目 {stats.examinationStudents.length} + 3回目 {stats.exam3rdTargetCount} + 4〜6回目 {stats.exam4thTargetCount + stats.exam5thTargetCount + stats.exam6thTargetCount}
           </p>
         </div>
         
@@ -718,7 +776,7 @@ function Dashboard() {
           <p className="text-xs text-gray-600 mb-1">退会 / 永久会員数</p>
           <p className="text-3xl font-bold text-red-600">{stats.withdrawalCount}</p>
           <p className="text-xs text-gray-500 mt-1">
-            1・2回目退会 + 3・4回目永久会員
+            1・2回目退会 + 3〜6回目永久会員
           </p>
         </div>
       </div>
@@ -753,7 +811,7 @@ function Dashboard() {
           <p className="text-xs text-gray-600 mb-1">残弾数</p>
           <p className="text-3xl font-bold text-orange-600">{stats.remainingCount}</p>
           <p className="text-xs text-gray-500 mt-1">
-            1・2回目未決定 + 3・4回目空欄
+            1・2回目未決定 + 3〜6回目空欄
           </p>
         </div>
       </div>
@@ -776,7 +834,7 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* 延長審査1回目・2回目・3回目・4回目 */}
+      {/* 延長審査1〜6回目 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">📊 延長審査1回目（5ヶ月目）</h3>
@@ -856,30 +914,37 @@ function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6 border-l-4 border-purple-400">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">📊 延長審査4回目（PRO継続5か月目）</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">対象数:</span>
-              <span className="text-2xl font-bold text-gray-900">{stats.exam4thTargetCount}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">延長数:</span>
-              <span className="text-2xl font-bold text-green-600">{stats.exam4thExtensionCount}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">永久会員数:</span>
-              <span className="text-2xl font-bold text-red-600">{stats.exam4thWithdrawalCount}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">残弾数（空欄）:</span>
-              <span className="text-2xl font-bold text-blue-600">{stats.exam4thRemainingCount}</span>
-            </div>
-            <div className="flex justify-between items-center pt-3 border-t">
-              <span className="text-sm font-semibold text-gray-700">延長率:</span>
-              <span className="text-3xl font-bold text-purple-600">{stats.exam4thExtensionRate.toFixed(2)}%</span>
-            </div>
-          </div>
+        {[4, 5, 6].map(round => (
+          <AdvancedExamCard key={round} round={round} proMonth={5 + (round - 4) * 6} stats={stats} />
+        ))}
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">📅 週次KPI</h3>
+        <p className="text-xs text-gray-500 mb-4">毎週日曜23:55時点の実績を保存します。週次目標は月次KPIを20日までに達成する計算です。</p>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 text-gray-700">
+                <th className="text-left px-3 py-2">日付</th>
+                <th className="text-right px-3 py-2">週次KPI</th>
+                <th className="text-right px-3 py-2">達成率</th>
+                <th className="text-right px-3 py-2">月次KPI達成まで</th>
+                <th className="text-right px-3 py-2">週次延長率実績</th>
+              </tr>
+            </thead>
+            <tbody>
+              {weeklyKpiRows.map(row => (
+                <tr key={row.dateKey} className="border-t border-gray-100">
+                  <td className="px-3 py-2">{row.dateKey.replaceAll('-', '/')}</td>
+                  <td className="px-3 py-2 text-right">{row.weeklyTargetRate.toFixed(1)}%</td>
+                  <td className="px-3 py-2 text-right">{row.achievementRate == null ? '—' : `${row.achievementRate.toFixed(1)}%`}</td>
+                  <td className="px-3 py-2 text-right">{row.remainingCount == null ? '—' : `${row.remainingCount}人`}</td>
+                  <td className="px-3 py-2 text-right">{row.actualRate == null ? '—' : `${row.actualRate.toFixed(1)}%`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 

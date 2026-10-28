@@ -64,11 +64,12 @@ export async function setupKPISpreadsheet(spreadsheetId) {
       spreadsheetId,
     });
     
-    const firstSheetId = spreadsheet.data.sheets[0].properties.sheetId;
-    const firstSheetTitle = spreadsheet.data.sheets[0].properties.title;
+    const firstSheet = spreadsheet.data.sheets[0];
+    const firstSheetId = firstSheet.properties.sheetId;
+    const firstSheetTitle = firstSheet.properties.title;
     
     // 初期データを書き込み
-    await initializeKPISheet(spreadsheetId, firstSheetTitle);
+    await ensureExtendedKpiRows(spreadsheetId, sheets, firstSheet);
     
     // グラフシートを作成
     await createChartSheet(spreadsheetId, sheets, firstSheetId, firstSheetTitle);
@@ -108,14 +109,26 @@ async function initializeKPISheet(spreadsheetId, sheetTitle) {
       ['延長審査3回目_延長数'],       // A11 ★追加
       ['延長審査3回目_永久会員数'],   // A12 ★追加（退会に相当）
       ['延長審査3回目_延長率(%)'],    // A13 ★追加
-      ['Proプラン成約率(%)'],         // A14
-      ['延長率（対 審査対象）(%)'],   // A15
+      ['延長審査4回目_対象数'],
+      ['延長審査4回目_延長数'],
+      ['延長審査4回目_永久会員数'],
+      ['延長審査4回目_延長率(%)'],
+      ['延長審査5回目_対象数'],
+      ['延長審査5回目_延長数'],
+      ['延長審査5回目_永久会員数'],
+      ['延長審査5回目_延長率(%)'],
+      ['延長審査6回目_対象数'],
+      ['延長審査6回目_延長数'],
+      ['延長審査6回目_永久会員数'],
+      ['延長審査6回目_延長率(%)'],
+      ['Proプラン成約率(%)'],
+      ['延長率（対 審査対象）(%)'],
     ];
 
     // シート名を指定してデータを書き込み
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `${sheetTitle}!A1:A15`,
+      range: `${sheetTitle}!A1:A27`,
       valueInputOption: 'RAW',
       requestBody: { values },
     });
@@ -125,6 +138,48 @@ async function initializeKPISheet(spreadsheetId, sheetTitle) {
     console.error('❌ Error initializing KPI sheet:', error);
     throw error;
   }
+}
+
+async function ensureExtendedKpiRows(spreadsheetId, sheets, dataSheet) {
+  const sheetTitle = dataSheet.properties.title;
+  const current = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetTitle}!A1:A27`,
+  });
+  const labels = (current.data.values || []).map(row => row[0] || '');
+
+  // 旧形式ではPro成約率が14行目。そこへ12行挿入し、既存月次データを保持する。
+  if (labels[13] === 'Proプラン成約率(%)') {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          insertDimension: {
+            range: {
+              sheetId: dataSheet.properties.sheetId,
+              dimension: 'ROWS',
+              startIndex: 13,
+              endIndex: 25,
+            },
+            inheritFromBefore: true,
+          },
+        }],
+      },
+    });
+  }
+
+  await initializeKPISheet(spreadsheetId, sheetTitle);
+}
+
+function columnNumberToA1(columnNumber) {
+  let value = columnNumber;
+  let result = '';
+  while (value > 0) {
+    value -= 1;
+    result = String.fromCharCode(65 + (value % 26)) + result;
+    value = Math.floor(value / 26);
+  }
+  return result;
 }
 
 /**
@@ -497,6 +552,8 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData, monthOffset = 0) 
     const dataSheetId = dataSheet.properties.sheetId;
     const dataSheetTitle = dataSheet.properties.title;
 
+    await ensureExtendedKpiRows(spreadsheetId, sheets, dataSheet);
+
     // 対象月を取得（monthOffset 分ずらす）
     const targetDate = new Date();
     targetDate.setMonth(targetDate.getMonth() + monthOffset);
@@ -511,7 +568,7 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData, monthOffset = 0) 
     });
 
     const existingHeaders = response.data.values?.[0] || ['項目名'];
-    const nextColumn = String.fromCharCode(65 + existingHeaders.length); // A=65, B=66, ...
+    const nextColumn = columnNumberToA1(existingHeaders.length + 1);
 
     console.log(`📊 Adding KPI data to column ${nextColumn} (${monthLabel})`);
 
@@ -530,14 +587,20 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData, monthOffset = 0) 
       [kpiData.exam3rdExtensionCount || 0],                                       // 11行: 3回目_延長数 ★
       [kpiData.exam3rdLifetimeCount || 0],                                        // 12行: 3回目_永久会員数 ★
       [Math.round((kpiData.exam3rdExtensionRate || 0) * 100) / 100],              // 13行: 3回目_延長率 ★
-      [Math.round((kpiData.proPlanSuccessRate || 0) * 100) / 100],                // 14行: Proプラン成約率
-      [Math.round((kpiData.overallExtensionRate || 0) * 100) / 100],              // 15行: 延長率（対 審査対象）
+      ...[4, 5, 6].flatMap(cycle => [
+        [kpiData[`exam${cycle}thTargetCount`] || 0],
+        [kpiData[`exam${cycle}thExtensionCount`] || 0],
+        [kpiData[`exam${cycle}thLifetimeCount`] || 0],
+        [Math.round((kpiData[`exam${cycle}thExtensionRate`] || 0) * 100) / 100],
+      ]),
+      [Math.round((kpiData.proPlanSuccessRate || 0) * 100) / 100],
+      [Math.round((kpiData.overallExtensionRate || 0) * 100) / 100],
     ];
 
     // データを書き込み
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `${dataSheetTitle}!${nextColumn}1:${nextColumn}15`,
+      range: `${dataSheetTitle}!${nextColumn}1:${nextColumn}27`,
       valueInputOption: 'USER_ENTERED',
       requestBody: { values },
     });
@@ -570,36 +633,6 @@ export async function appendMonthlyKPI(spreadsheetId, kpiData, monthOffset = 0) 
  * @param {number} proPlanSuccessRate - Proプラン成約率
  * @param {number} overallExtensionRate - 延長率（対 審査対象）
  */
-export function formatKPIData({
-  exam1stTargetCount,
-  exam1stExtensionCount,
-  exam1stWithdrawalCount,
-  exam1stExtensionRate,
-  exam2ndTargetCount,
-  exam2ndExtensionCount,
-  exam2ndWithdrawalCount,
-  exam2ndExtensionRate,
-  exam3rdTargetCount,
-  exam3rdExtensionCount,
-  exam3rdLifetimeCount,
-  exam3rdExtensionRate,
-  proPlanSuccessRate,
-  overallExtensionRate,
-}) {
-  return {
-    exam1stTargetCount,
-    exam1stExtensionCount,
-    exam1stWithdrawalCount,
-    exam1stExtensionRate,
-    exam2ndTargetCount,
-    exam2ndExtensionCount,
-    exam2ndWithdrawalCount,
-    exam2ndExtensionRate,
-    exam3rdTargetCount,
-    exam3rdExtensionCount,
-    exam3rdLifetimeCount,
-    exam3rdExtensionRate,
-    proPlanSuccessRate,
-    overallExtensionRate,
-  };
+export function formatKPIData(data) {
+  return { ...data };
 }

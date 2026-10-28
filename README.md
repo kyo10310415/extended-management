@@ -74,6 +74,11 @@ GOOGLE_API_KEY=your_google_api_key_here
 
 # PostgreSQL Database
 DATABASE_URL=postgresql://user:password@host:5432/database
+
+# KPI API / weekly snapshot
+KPI_SNAPSHOT_READ_TOKEN=generate-a-long-random-secret
+KPI_TARGET_RATE=80
+WEEKLY_KPI_COMPLETION_DAY=20
 ```
 
 ### 2. Notion API設定
@@ -156,6 +161,9 @@ git push -u origin main
    GOOGLE_SHEETS_ID=1m7P2nsX-M9BGP2RHIj3CjAZiDPs2K9gu1Y_md7xiazQ
    GOOGLE_API_KEY=your_google_api_key
    DATABASE_URL=your_postgresql_internal_url
+   KPI_SNAPSHOT_READ_TOKEN=your_long_random_read_only_token
+   KPI_TARGET_RATE=80
+   WEEKLY_KPI_COMPLETION_DAY=20
    ```
 
 5. 「Create Web Service」をクリック
@@ -164,6 +172,16 @@ git push -u origin main
 
 - デプロイが完了したら、提供されたURLにアクセス
 - 例: `https://wannav-extension-manager.onrender.com`
+
+### KPI月次スナップショット読み取りAPI
+
+`GET /api/kpi-snapshots/YYYY-MM` は読み取り専用トークンで外部から参照できます。
+
+```http
+Authorization: Bearer <KPI_SNAPSHOT_READ_TOKEN>
+```
+
+トークンは必ずRender等の環境変数へ保存し、ソースコードやGitへ登録しないでください。ブラウザ内のKPI履歴画面は従来どおりSSO Cookieで参照できます。月次スナップショットには延長審査1〜6回目の集計値と、4〜6回目で延長になった学籍番号・審査回数の `advancedExtensionRecords` が含まれます。
 
 ## 🔑 必要なNotionプロパティ
 
