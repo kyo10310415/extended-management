@@ -22,6 +22,7 @@ export default function kpiSnapshotReadAuth(req, res, next) {
     authorization: req.get('authorization'),
     authenticatedUser: req.user,
   })) {
+    res.set('Cache-Control', 'no-store');
     return next();
   }
 

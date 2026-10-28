@@ -203,6 +203,8 @@ git push -u origin main
 
 `GET /api/kpi-snapshots/YYYY-MM` は読み取り専用トークンで外部から参照できます。
 
+当月の確定前KPIは `GET /api/kpi-snapshots/current` で取得できます。暫定値は30分ごとに更新され、レスポンスの `status` は `provisional`、`isFinalized` は `false` です。
+
 ```http
 Authorization: Bearer <KPI_SNAPSHOT_READ_TOKEN>
 ```

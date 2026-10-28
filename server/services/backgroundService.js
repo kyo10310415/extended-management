@@ -12,6 +12,24 @@ import { pool } from '../index.js';
 import { syncAllAutomaticExaminationResults } from './examinationResultSyncService.js';
 import { syncSuspensionPaymentStatuses } from './suspensionPaymentSyncService.js';
 import { calculateWeeklyKpiSnapshot } from '../utils/weeklyKpi.js';
+import { refreshCurrentKpiSnapshot } from './currentKpiSnapshotService.js';
+
+let currentKpiRefreshPromise = null;
+
+async function runCurrentKpiRefresh() {
+  if (currentKpiRefreshPromise) return currentKpiRefreshPromise;
+  currentKpiRefreshPromise = refreshCurrentKpiSnapshot({ pool, calculateKPIData })
+    .then(result => {
+      console.log(`✅ Current KPI snapshot refreshed for ${result.yearMonth}`);
+      return result;
+    })
+    .catch(error => {
+      console.error('❌ Current KPI snapshot refresh failed:', error);
+      return null;
+    })
+    .finally(() => { currentKpiRefreshPromise = null; });
+  return currentKpiRefreshPromise;
+}
 
 /**
  * バックグラウンドでデータを取得してキャッシュに保存
@@ -149,6 +167,11 @@ export async function initializeSuspensionPaymentSync() {
   return await syncSuspensionPaymentStatuses({ pool });
 }
 
+export async function initializeCurrentKPISnapshot() {
+  console.log('🚀 Creating initial current KPI snapshot...');
+  return await runCurrentKpiRefresh();
+}
+
 /**
  * 毎時00分・30分に審査結果をGoogleフォームからDBへ同期する。
  * 各ページはこの処理を呼ばず、DBに保存済みの結果だけを読む。
@@ -185,6 +208,16 @@ export function scheduleSuspensionPaymentSync() {
 
   task.start();
   console.log('✅ 30-minute suspension payment sync scheduler started');
+  return task;
+}
+
+export function scheduleCurrentKPISnapshot() {
+  const task = cron.schedule('5,35 * * * *', async () => {
+    console.log('⏰ Scheduled current KPI snapshot refresh triggered');
+    await runCurrentKpiRefresh();
+  }, { timezone: 'Asia/Tokyo' });
+  task.start();
+  console.log('✅ 30-minute current KPI snapshot scheduler started');
   return task;
 }
 
@@ -715,6 +748,7 @@ export default {
   initializeDataPreload,
   initializeAutomaticExaminationResultSync,
   initializeSuspensionPaymentSync,
+  initializeCurrentKPISnapshot,
   scheduleDailyUpdate,
   scheduleAutomaticExaminationResultSync,
   scheduleSuspensionPaymentSync,
@@ -724,6 +758,7 @@ export default {
   scheduleMonthlyKPIExport,
   scheduleMonthlyKPISnapshot,
   scheduleWeeklyKPISnapshot,
+  scheduleCurrentKPISnapshot,
   manualUpdate,
   manualSendSuspensionEndNotifications,
   manualSendMonthlyStudentList,

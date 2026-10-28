@@ -2,6 +2,7 @@ import express from 'express';
 import { pool } from '../index.js';
 import { calculateKPIData } from './kpi-export.js';
 import kpiSnapshotReadAuth from '../middleware/kpi-snapshot-read-auth.js';
+import { getTokyoYearMonth } from '../services/currentKpiSnapshotService.js';
 
 const router = express.Router();
 
@@ -108,6 +109,34 @@ router.get('/weekly/:yearMonth(\\d{4}-\\d{2})', async (req, res) => {
     res.json({ success: true, data: result.rows });
   } catch (error) {
     console.error('Error fetching weekly KPI snapshots:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/current', kpiSnapshotReadAuth, async (_req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM kpi_current_snapshot WHERE singleton_id = TRUE');
+    if (result.rows.length === 0) {
+      return res.status(503).json({ success: false, error: 'Current KPI snapshot is not ready' });
+    }
+    const row = result.rows[0];
+    if (row.year_month !== getTokyoYearMonth()) {
+      return res.status(503).json({ success: false, error: 'Current KPI snapshot is being refreshed' });
+    }
+    res.json({
+      success: true,
+      data: {
+        yearMonth: row.year_month,
+        monthLabel: row.month_label,
+        status: 'provisional',
+        isFinalized: false,
+        snapshotData: row.snapshot_data,
+        tutorKpi: row.tutor_data,
+        calculatedAt: row.calculated_at,
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching current KPI snapshot:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
