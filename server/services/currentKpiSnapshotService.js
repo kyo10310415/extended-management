@@ -9,6 +9,7 @@ export function getTokyoYearMonth(now = new Date()) {
 }
 
 export async function refreshCurrentKpiSnapshot({ queryable, calculateKPIData, now = new Date() }) {
+  if (!queryable?.query) throw new TypeError('A database queryable is required');
   const yearMonth = getTokyoYearMonth(now);
   const [year, month] = yearMonth.split('-');
   const kpiData = await calculateKPIData(0);
