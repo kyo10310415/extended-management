@@ -1,7 +1,10 @@
+import { useIsCrew } from '../session'
+import { requestStudentUpdate } from '../utils/studentUpdate'
 import { useState, useEffect, useMemo } from 'react'
 import StudentTable from './StudentTable'
 
 function HearingList() {
+  const isCrew = useIsCrew()
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -92,7 +95,7 @@ function HearingList() {
       setRefreshing(true)
       
       // キャッシュクリア
-      await fetch('/api/notion/cache/clear', {
+      if (!isCrew) await fetch('/api/notion/cache/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -121,11 +124,7 @@ function HearingList() {
       console.log('  サイクル:', cycle);
       console.log('  更新データ:', updatedData);
       
-      const response = await fetch(`/api/students/${encodeURIComponent(studentId)}/hearing`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...updatedData, cycle }),
-      })
+      const response = await requestStudentUpdate(isCrew, studentId, { ...updatedData, cycle })
 
       const data = await response.json()
 

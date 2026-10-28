@@ -1,3 +1,4 @@
+import { getDatabaseConfig } from './utils/databaseConfig.js';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -8,7 +9,8 @@ import cookieParser from 'cookie-parser';
 const { Pool } = pkg;
 
 // SSO Authentication Middleware
-import ssoAuthMiddleware from './middleware/sso-auth-middleware.js';
+import { createSsoAuthMiddleware, readSsoConfiguration } from './middleware/sso-auth-middleware.js';
+import { createCrewAccessMiddleware, createCrewStudentsHandler } from './middleware/crew-access.js';
 
 // Routes
 import notionRoutes from './routes/notion.js';
@@ -37,6 +39,7 @@ import {
 } from './services/backgroundService.js';
 
 dotenv.config();
+const ssoConfiguration = readSsoConfiguration();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,10 +48,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Database connection
-export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
+export const pool = new Pool(getDatabaseConfig(process.env.DATABASE_URL, process.env, { allowLocalPlaintext: true }));
 
 // Test database connection
 pool.query('SELECT NOW()', (err, res) => {
@@ -60,12 +60,15 @@ pool.query('SELECT NOW()', (err, res) => {
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: ssoConfiguration.appOrigin, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
 // SSO Authentication (must be before routes)
-app.use(ssoAuthMiddleware);
+app.use(createSsoAuthMiddleware(ssoConfiguration));
+app.use(createCrewAccessMiddleware({ queryable: pool }));
+app.get('/api/auth/me', (req, res) => res.json({ role: req.user.role }));
+app.get('/api/crew/students', createCrewStudentsHandler({ queryable: pool }));
 
 // Serve static files from dist directory
 app.use(express.static(path.join(__dirname, '../dist')));

@@ -1,3 +1,4 @@
+import { getDatabaseConfig } from '../utils/databaseConfig.js';
 import express from 'express';
 import { pool } from '../index.js';
 import { fetchStudents } from '../services/notionService.js';
@@ -567,8 +568,7 @@ router.get('/external-db/test', async (req, res) => {
     const pkg = await import('pg');
     const { Pool } = pkg.default;
     const testPool = new Pool({
-      connectionString: envUrl,
-      ssl: { rejectUnauthorized: false },
+      ...getDatabaseConfig(envUrl),
       max: 1,
       connectionTimeoutMillis: 8000,
     });

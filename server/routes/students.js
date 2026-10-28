@@ -110,7 +110,7 @@ router.post('/bulk', async (req, res) => {
       data: extensionMap,
     });
   } catch (error) {
-    console.error('  ❌ 一括取得エラー:', error);
+    console.error('  ❌ 一括取得エラー:');
     res.status(500).json({
       success: false,
       error: error.message,
@@ -173,7 +173,7 @@ router.get('/:studentId', async (req, res) => {
       data,
     });
   } catch (error) {
-    console.error('Error fetching student extension data:', error);
+    console.error('Error fetching student extension data:');
     res.status(500).json({
       success: false,
       error: error.message,
@@ -206,7 +206,7 @@ router.post('/:studentId/hearing', async (req, res) => {
 
     return res.json({ success: true, data });
   } catch (error) {
-    console.error('Error saving hearing data:', error);
+    console.error('Error saving hearing data:');
     return res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -248,9 +248,9 @@ router.post('/:studentId', async (req, res) => {
 
   // デバッグログ
   console.log('📝 POST /api/students/:studentId');
-  console.log('  学籍番号:', studentId);
+
   console.log('  サイクル:', cycleNumber);
-  console.log('  データ:', { extension_certainty, hearing_status, examination_result, notes });
+
 
   try {
     let studentPlan = null;
@@ -467,7 +467,7 @@ router.post('/:studentId', async (req, res) => {
           )?.error,
         };
       } catch (notificationError) {
-        console.error('  ❌ Discord通知処理エラー:', notificationError.message);
+        console.error('  ❌ Discord通知処理エラー:');
         notification = {
           requested: true,
           success: false,
@@ -501,7 +501,7 @@ router.post('/:studentId', async (req, res) => {
           studentNotification: processed.studentNotifications,
         };
       } catch (automationError) {
-        console.error('  ❌ 延長後自動化処理エラー:', automationError.message);
+        console.error('  ❌ 延長後自動化処理エラー:');
         automation = {
           success: false,
           queued: true,
@@ -532,7 +532,7 @@ router.post('/:studentId', async (req, res) => {
       created_at: row.created_at,
     };
 
-    console.log('  ✅ 保存成功:', data);
+    console.log('  ✅ 保存成功');
 
     res.json({
       success: true,
@@ -541,7 +541,7 @@ router.post('/:studentId', async (req, res) => {
       automation,
     });
   } catch (error) {
-    console.error('  ❌ 保存エラー:', error);
+    console.error('  ❌ 保存エラー:');
     res.status(500).json({
       success: false,
       error: error.message,

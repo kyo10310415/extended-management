@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import jwt from 'jsonwebtoken';
 
 function safeTokenEquals(actual, expected) {
   if (!actual || !expected) return false;
@@ -9,25 +8,19 @@ function safeTokenEquals(actual, expected) {
     && crypto.timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
-export function isAuthorizedKpiSnapshotRead({ authorization, ssoCookie }, env = process.env) {
+export function isAuthorizedKpiSnapshotRead({ authorization, authenticatedUser }, env = process.env) {
   const bearerMatch = authorization?.match(/^Bearer\s+(.+)$/i);
   if (bearerMatch && safeTokenEquals(bearerMatch[1].trim(), env.KPI_SNAPSHOT_READ_TOKEN)) {
     return true;
   }
 
-  if (!ssoCookie) return false;
-  try {
-    const decoded = jwt.verify(ssoCookie, env.JWT_SECRET || 'wannav-secret-key-change-in-production');
-    return decoded.type === 'sso';
-  } catch {
-    return false;
-  }
+  return Boolean(authenticatedUser?.id && authenticatedUser?.role);
 }
 
 export default function kpiSnapshotReadAuth(req, res, next) {
   if (isAuthorizedKpiSnapshotRead({
     authorization: req.get('authorization'),
-    ssoCookie: req.cookies?.wannav_sso,
+    authenticatedUser: req.user,
   })) {
     return next();
   }

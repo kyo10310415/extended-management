@@ -1,7 +1,10 @@
+import { useIsCrew } from '../session'
+import { requestStudentUpdate } from '../utils/studentUpdate'
 import { useState, useEffect, useMemo } from 'react'
 import StudentTable from './StudentTable'
 
 function ProHearingList() {
+  const isCrew = useIsCrew()
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -76,7 +79,7 @@ function ProHearingList() {
       setRefreshing(true)
       
       // キャッシュクリア
-      await fetch('/api/notion/cache/clear', {
+      if (!isCrew) await fetch('/api/notion/cache/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -104,11 +107,7 @@ function ProHearingList() {
       console.log('  サイクル:', cycle);
       console.log('  更新データ:', updatedData);
       
-      const response = await fetch(`/api/students/${studentId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...updatedData, cycle }),
-      })
+      const response = await requestStudentUpdate(isCrew, studentId, { ...updatedData, cycle })
 
       const data = await response.json()
 
@@ -127,8 +126,10 @@ function ProHearingList() {
       } else {
         console.error('  ❌ 更新失敗:', data.error);
       }
+      return data
     } catch (err) {
       console.error('  ❌ エラー:', err)
+      return { success: false, error: err.message }
     }
   }
 

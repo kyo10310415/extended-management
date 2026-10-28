@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Dashboard from './components/Dashboard'
 import HearingList from './components/HearingList'
 import ExaminationList from './components/ExaminationList'
@@ -13,8 +13,25 @@ import KpiHistory from './components/KpiHistory'
 import KpiChart from './components/KpiChart'
 import KpiByTutor from './components/KpiByTutor'
 import ForcedWithdrawalList from './components/ForcedWithdrawalList'
+import { SessionContext } from './session'
 
 function App() {
+  const [accessDenied, setAccessDenied] = useState(false)
+  const [session, setSession] = useState(null)
+  useEffect(() => {
+    let active = true
+    fetch('/api/auth/me').then(async response => {
+      if (!response.ok) throw new Error()
+      const user = await response.json()
+      if (active) setSession(user)
+    }).catch(() => { if (active) setAccessDenied(true) })
+    return () => { active = false }
+  }, [])
+  useEffect(() => {
+    const handleAccessDenied = () => setAccessDenied(true)
+    window.addEventListener('wannav-access-denied', handleAccessDenied)
+    return () => window.removeEventListener('wannav-access-denied', handleAccessDenied)
+  }, [])
   const [activeTab, setActiveTab] = useState('dashboard')
   // 一度でも開いたタブを記録（初回だけマウントするため）
   const [visitedTabs, setVisitedTabs] = useState(new Set(['dashboard']))
@@ -61,8 +78,20 @@ function App() {
     { id: 'kpi-tutor',        component: <KpiByTutor /> },
   ]
 
+  if (accessDenied) {
+    return (
+      <main className="p-8" role="alert">
+        <h1 className="text-xl font-bold">操作を続けられません</h1>
+        <p className="mt-3">権限または認証状態を確認できません。画面を開き直すか、管理者にお問い合わせください。</p>
+        <button className="mt-4 underline" onClick={() => window.location.reload()}>画面を開き直す</button>
+      </main>
+    )
+  }
+
+  if (!session) return <main className="p-8">認証状態を確認しています…</main>
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <SessionContext.Provider value={session}><div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -127,7 +156,7 @@ function App() {
           </p>
         </div>
       </footer>
-    </div>
+    </div></SessionContext.Provider>
   )
 }
 

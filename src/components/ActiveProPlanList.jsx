@@ -1,6 +1,8 @@
+import { useIsCrew } from '../session'
 import { useState, useEffect } from 'react'
 
 function ActiveProPlanList() {
+  const isCrew = useIsCrew()
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -72,7 +74,7 @@ function ActiveProPlanList() {
       setRefreshing(true)
       
       // キャッシュクリア
-      await fetch('/api/notion/cache/clear', {
+      if (!isCrew) await fetch('/api/notion/cache/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -268,7 +270,7 @@ function ActiveProPlanList() {
                           type="month"
                           value={student.proPlanStartMonth || ''}
                           onChange={(e) => handleProPlanStartMonthChange(student.studentId, e.target.value)}
-                          disabled={saving[student.studentId]}
+                          disabled={isCrew || saving[student.studentId]}
                           className="px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                         />
                         {saving[student.studentId] && (
