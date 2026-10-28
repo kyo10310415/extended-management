@@ -18,7 +18,7 @@ let currentKpiRefreshPromise = null;
 
 async function runCurrentKpiRefresh() {
   if (currentKpiRefreshPromise) return currentKpiRefreshPromise;
-  currentKpiRefreshPromise = refreshCurrentKpiSnapshot({ pool, calculateKPIData })
+  currentKpiRefreshPromise = refreshCurrentKpiSnapshot({ queryable: pool, calculateKPIData })
     .then(result => {
       console.log(`✅ Current KPI snapshot refreshed for ${result.yearMonth}`);
       return result;
