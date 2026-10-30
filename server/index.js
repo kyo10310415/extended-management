@@ -21,6 +21,8 @@ import proPlanRoutes from './routes/pro-plan.js';
 import kpiExportRoutes from './routes/kpi-export.js';
 import kpiSnapshotsRoutes from './routes/kpi-snapshots.js';
 import forcedWithdrawalsRoutes from './routes/forced-withdrawals.js';
+import { createKpiSettingsRouter } from './routes/kpi-settings.js';
+import { getDefaultKpiTargetRate } from './services/kpiSettingsService.js';
 
 // Background services
 import { 
@@ -83,6 +85,7 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/pro-plan', proPlanRoutes);
 app.use('/api/kpi-export', kpiExportRoutes);
 app.use('/api/kpi-snapshots', kpiSnapshotsRoutes);
+app.use('/api/kpi-settings', createKpiSettingsRouter({ queryable: pool }));
 app.use('/api/forced-withdrawals', forcedWithdrawalsRoutes);
 
 // Health check
@@ -338,6 +341,20 @@ async function initDatabase() {
         calculated_at TIMESTAMP WITH TIME ZONE NOT NULL
       );
     `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS kpi_settings (
+        singleton_id BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton_id = TRUE),
+        target_rate NUMERIC(6,2) NOT NULL CHECK (target_rate >= 0 AND target_rate <= 100),
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await pool.query(`
+      INSERT INTO kpi_settings (singleton_id, target_rate)
+      VALUES (TRUE, $1)
+      ON CONFLICT (singleton_id) DO NOTHING;
+    `, [getDefaultKpiTargetRate()]);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS forced_withdrawals (

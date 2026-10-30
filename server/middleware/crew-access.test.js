@@ -117,7 +117,8 @@ test('shared UI read endpoints work for crew while debug, exports and all admini
   for (const path of ['/api/notion/students', '/api/notion/hearing', '/api/notion/examination',
     '/api/notion/entry-plan-examination', '/api/notion/pro-hearing', '/api/notion/pro-examination',
     '/api/notion/suspension-history', '/api/pro-plan/students', '/api/pro-plan/advanced-examination',
-    '/api/kpi-export/current-kpi', '/api/kpi-snapshots', '/api/kpi-snapshots/list', '/api/kpi-snapshots/2026-10', '/api/forced-withdrawals']) {
+    '/api/kpi-export/current-kpi', '/api/kpi-snapshots', '/api/kpi-snapshots/list', '/api/kpi-snapshots/2026-10',
+    '/api/kpi-settings', '/api/forced-withdrawals']) {
     assert.equal((await f.request(path)).status, 200, path);
   }
   for (const path of ['/api/notion/debug/tutors', '/api/notion/export-spreadsheet', '/api/pro-plan/external-db/test', '/api/pro-plan/debug-months']) {
@@ -126,6 +127,7 @@ test('shared UI read endpoints work for crew while debug, exports and all admini
   for (const path of ['/api/notion/cache/clear', '/api/kpi-export/setup-sheet', '/api/kpi-export/append-monthly', '/api/kpi-snapshots/save', '/api/kpi-snapshots/import-csv', '/api/pro-plan/own-1']) {
     assert.equal((await f.request(path, { method: 'POST', body: '{}' })).status, 403, path);
   }
+  assert.equal((await f.request('/api/kpi-settings', { method: 'PUT', body: '{"targetRate":82}' })).status, 403);
 });
 
 test('bulk POST reads validate IDs, fields and cycles without granting write routes', async t => {
