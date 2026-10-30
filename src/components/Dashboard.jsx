@@ -1,5 +1,5 @@
 import { useIsCrew } from '../session'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   calculateExtensionCertaintyStats,
   getAdvancedExaminationTargets,
@@ -59,6 +59,9 @@ function buildWeeklyKpiRows(stats, snapshots) {
 
 function Dashboard() {
   const [weeklySnapshots, setWeeklySnapshots] = useState([])
+  const [kpiSaveStatus, setKpiSaveStatus] = useState('idle')
+  const kpiSaveQueue = useRef(Promise.resolve())
+  const kpiSaveVersion = useRef(0)
   const isCrew = useIsCrew()
   const [stats, setStats] = useState({
     loading: true,
@@ -130,7 +133,18 @@ function Dashboard() {
   })
 
   useEffect(() => {
-    fetchStats()
+    const initialize = async () => {
+      let targetRate = 80
+      try {
+        const response = await fetch('/api/kpi-settings')
+        const data = await response.json()
+        if (response.ok && data.success) targetRate = Number(data.targetRate)
+      } catch (error) {
+        console.error('Error fetching KPI settings:', error)
+      }
+      await fetchStats(targetRate)
+    }
+    initialize()
     const now = new Date()
     const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     fetch(`/api/kpi-snapshots/weekly/${yearMonth}`)
@@ -139,7 +153,7 @@ function Dashboard() {
       .catch(error => console.error('Error fetching weekly KPI snapshots:', error))
   }, [])
 
-  const fetchStats = async () => {
+  const fetchStats = async (targetRateOverride = null) => {
     try {
       console.log('📊 Dashboard: データ取得開始');
       
@@ -487,49 +501,53 @@ function Dashboard() {
       
       console.log('✅ KPI計算完了');
 
-      setStats(prev => ({
-        ...prev,
-        loading: false,
-        totalStudents: allData.count || 0,
-        hearingStudents,
-        examinationStudents,
-        proPlanTotalCount,
-        proPlanEnabledCount,
-        proPlanRate,
-        extensionCountKPI: Math.ceil(examinationCount * prev.extensionRateKPI / 100),
-        certaintyFilledCount,
-        certaintyTargetCount,
-        extensionCount,
-        withdrawalCount,
-        extensionRate,
-        extensionRateVsResult,
-        remainingCount,
-        certaintyHigh,
-        certaintyMid,
-        certaintyLow,
-        exam1stTargetCount,
-        exam1stExtensionCount,
-        exam1stExtensionRate,
-        exam1stWithdrawalCount,
-        exam1stRemainingCount,
-        exam2ndTargetCount,
-        exam2ndExtensionCount,
-        exam2ndExtensionRate,
-        exam2ndWithdrawalCount,
-        exam2ndRemainingCount,
-        exam3rdTargetCount,
-        exam3rdExtensionCount,
-        exam3rdExtensionRate,
-        exam3rdWithdrawalCount,
-        exam3rdRemainingCount,
-        ...Object.fromEntries([4, 5, 6].flatMap(round => [
-          [`exam${round}thTargetCount`, advancedStats[round].targetCount],
-          [`exam${round}thExtensionCount`, advancedStats[round].extensionCount],
-          [`exam${round}thExtensionRate`, advancedStats[round].extensionRate],
-          [`exam${round}thWithdrawalCount`, advancedStats[round].lifetimeCount],
-          [`exam${round}thRemainingCount`, advancedStats[round].remainingCount],
-        ])),
-      }))
+      setStats(prev => {
+        const extensionRateKPI = targetRateOverride ?? prev.extensionRateKPI
+        return ({
+          ...prev,
+          loading: false,
+          totalStudents: allData.count || 0,
+          hearingStudents,
+          examinationStudents,
+          proPlanTotalCount,
+          proPlanEnabledCount,
+          proPlanRate,
+          extensionRateKPI,
+          extensionCountKPI: Math.ceil(examinationCount * extensionRateKPI / 100),
+          certaintyFilledCount,
+          certaintyTargetCount,
+          extensionCount,
+          withdrawalCount,
+          extensionRate,
+          extensionRateVsResult,
+          remainingCount,
+          certaintyHigh,
+          certaintyMid,
+          certaintyLow,
+          exam1stTargetCount,
+          exam1stExtensionCount,
+          exam1stExtensionRate,
+          exam1stWithdrawalCount,
+          exam1stRemainingCount,
+          exam2ndTargetCount,
+          exam2ndExtensionCount,
+          exam2ndExtensionRate,
+          exam2ndWithdrawalCount,
+          exam2ndRemainingCount,
+          exam3rdTargetCount,
+          exam3rdExtensionCount,
+          exam3rdExtensionRate,
+          exam3rdWithdrawalCount,
+          exam3rdRemainingCount,
+          ...Object.fromEntries([4, 5, 6].flatMap(round => [
+            [`exam${round}thTargetCount`, advancedStats[round].targetCount],
+            [`exam${round}thExtensionCount`, advancedStats[round].extensionCount],
+            [`exam${round}thExtensionRate`, advancedStats[round].extensionRate],
+            [`exam${round}thWithdrawalCount`, advancedStats[round].lifetimeCount],
+            [`exam${round}thRemainingCount`, advancedStats[round].remainingCount],
+          ])),
+        })
+      })
     } catch (error) {
       console.error('Error fetching stats:', error)
       setStats(prev => ({ ...prev, loading: false }))
@@ -538,6 +556,7 @@ function Dashboard() {
 
   const handleKPIChange = (value) => {
     const kpi = Number(value)
+    if (!Number.isFinite(kpi) || kpi < 0 || kpi > 100) return
     const examinationCount = stats.examinationStudents.length + stats.exam3rdTargetCount
       + stats.exam4thTargetCount + stats.exam5thTargetCount + stats.exam6thTargetCount
     const extensionCountKPI = Math.ceil(examinationCount * kpi / 100)
@@ -547,6 +566,26 @@ function Dashboard() {
       extensionRateKPI: kpi,
       extensionCountKPI,
     }))
+
+    if (isCrew) return
+    const version = ++kpiSaveVersion.current
+    setKpiSaveStatus('saving')
+    const save = kpiSaveQueue.current.catch(() => {}).then(async () => {
+      const response = await fetch('/api/kpi-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetRate: kpi }),
+      })
+      const data = await response.json()
+      if (!response.ok || !data.success) throw new Error(data.error || 'KPI設定を保存できませんでした。')
+    })
+    kpiSaveQueue.current = save
+    save.then(() => {
+      if (version === kpiSaveVersion.current) setKpiSaveStatus('saved')
+    }).catch(error => {
+      console.error('Error saving KPI settings:', error)
+      if (version === kpiSaveVersion.current) setKpiSaveStatus('error')
+    })
   }
 
   const handleRefresh = async () => {
@@ -735,9 +774,13 @@ function Dashboard() {
             max="100"
             value={stats.extensionRateKPI}
             onChange={(e) => handleKPIChange(e.target.value)}
-            className="w-24 px-3 py-2 text-gray-900 rounded-lg font-semibold text-center focus:ring-2 focus:ring-white"
+            disabled={isCrew}
+            className="w-24 px-3 py-2 text-gray-900 rounded-lg font-semibold text-center focus:ring-2 focus:ring-white disabled:bg-gray-200 disabled:cursor-not-allowed"
           />
           <span className="text-lg font-bold">%</span>
+          {!isCrew && kpiSaveStatus === 'saving' && <span className="text-xs">保存中...</span>}
+          {!isCrew && kpiSaveStatus === 'saved' && <span className="text-xs">保存済み</span>}
+          {!isCrew && kpiSaveStatus === 'error' && <span className="text-xs text-red-100">保存に失敗しました</span>}
           <div className="ml-auto flex items-center gap-2 bg-white/20 px-4 py-2 rounded-lg">
             <span className="text-sm">延長数KPI:</span>
             <span className="text-2xl font-bold">{stats.extensionCountKPI}</span>

@@ -103,7 +103,7 @@ DATABASE_URL=postgresql://user:password@host:5432/database
 
 # KPI API / weekly snapshot
 KPI_SNAPSHOT_READ_TOKEN=generate-a-long-random-secret
-KPI_TARGET_RATE=80
+KPI_TARGET_RATE=80 # 初回DB作成時の目標延長率。以降はダッシュボードの変更値をDBへ保存
 WEEKLY_KPI_COMPLETION_DAY=20
 ```
 
@@ -188,7 +188,7 @@ git push -u origin main
    GOOGLE_API_KEY=your_google_api_key
    DATABASE_URL=your_postgresql_internal_url
    KPI_SNAPSHOT_READ_TOKEN=your_long_random_read_only_token
-   KPI_TARGET_RATE=80
+   KPI_TARGET_RATE=80 # 初回DB作成時の既定値
    WEEKLY_KPI_COMPLETION_DAY=20
    ```
 

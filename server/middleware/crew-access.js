@@ -9,6 +9,7 @@ const CREW_READ_PATHS = new Set([
   '/api/pro-plan/advanced-examination', '/api/pro-plan/advanced-all',
   '/api/forced-withdrawals', '/api/kpi-export/current-kpi',
   '/api/kpi-snapshots', '/api/kpi-snapshots/list',
+  '/api/kpi-settings',
 ]);
 
 export function readCycle(value = 1) {

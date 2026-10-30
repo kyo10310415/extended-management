@@ -13,6 +13,7 @@ import { syncAllAutomaticExaminationResults } from './examinationResultSyncServi
 import { syncSuspensionPaymentStatuses } from './suspensionPaymentSyncService.js';
 import { calculateWeeklyKpiSnapshot } from '../utils/weeklyKpi.js';
 import { refreshCurrentKpiSnapshot } from './currentKpiSnapshotService.js';
+import { readKpiTargetRate } from './kpiSettingsService.js';
 
 let currentKpiRefreshPromise = null;
 
@@ -609,10 +610,11 @@ export function scheduleWeeklyKPISnapshot() {
   const task = cron.schedule('55 23 * * 0', async () => {
     try {
       const kpiData = await calculateKPIData(0);
+      const targetRate = await readKpiTargetRate(pool);
       const snapshot = calculateWeeklyKpiSnapshot(
         kpiData,
         new Date(),
-        Number(process.env.KPI_TARGET_RATE || 80),
+        targetRate,
         Number(process.env.WEEKLY_KPI_COMPLETION_DAY || 20)
       );
       await pool.query(
