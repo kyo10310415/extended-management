@@ -30,6 +30,7 @@ import {
   initializeAutomaticExaminationResultSync,
   initializeSuspensionPaymentSync,
   initializeCurrentKPISnapshot,
+  initializeMonthlyKPISnapshot,
   scheduleDailyUpdate,
   scheduleAutomaticExaminationResultSync,
   scheduleSuspensionPaymentSync,
@@ -467,6 +468,9 @@ app.listen(PORT, async () => {
 
   // 当月の暫定KPIを起動時に生成し、APIは以降DBだけを読む
   await initializeCurrentKPISnapshot();
+
+  // 前月の確定KPIが未保存なら起動時に補完（定刻停止・デプロイ中断にも対応）
+  await initializeMonthlyKPISnapshot();
   
   // 定期更新スケジュールを設定
   scheduleDailyUpdate(); // 毎日 AM 2:00 JST

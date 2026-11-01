@@ -14,6 +14,7 @@ import { syncSuspensionPaymentStatuses } from './suspensionPaymentSyncService.js
 import { calculateWeeklyKpiSnapshot } from '../utils/weeklyKpi.js';
 import { refreshCurrentKpiSnapshot } from './currentKpiSnapshotService.js';
 import { readKpiTargetRate } from './kpiSettingsService.js';
+import { getPreviousTokyoMonthContext } from '../utils/monthlyKpi.js';
 
 let currentKpiRefreshPromise = null;
 
@@ -585,20 +586,40 @@ export async function getSuspensionEndingStudents() {
 }
 
 /**
+ * 起動時に東京時間の前月分が未保存なら補完
+ */
+export async function initializeMonthlyKPISnapshot(now = new Date()) {
+  const context = getPreviousTokyoMonthContext(now);
+  try {
+    const existing = await pool.query(
+      'SELECT 1 FROM kpi_monthly_snapshots WHERE year_month = $1',
+      [context.yearMonth]
+    );
+    if (existing.rows.length > 0) {
+      console.log(`ℹ️ Monthly KPI snapshot already exists: ${context.monthLabel}`);
+      return { success: true, skipped: true, ...context };
+    }
+    console.log(`📸 Missing monthly KPI snapshot detected: ${context.monthLabel}`);
+    return await saveMonthlyKPISnapshotTask(now);
+  } catch (error) {
+    console.error('❌ Monthly KPI snapshot initialization failed:', error);
+    return { success: false, error: error.message, ...context };
+  }
+}
+
+/**
  * 毎月1日 AM2:00 JSTに前月分KPIスナップショットを自動保存
  */
 export function scheduleMonthlyKPISnapshot() {
-  // 毎月1日 02:00 JST = 17:00 UTC (前日)
-  // わかりやすい表現: '0 17 28-31,1 * *' ではなく、毎月1日のみ実行
-  const cronExpression = '0 17 1 * *'; // UTC 17:00 on 1st = JST 02:00 on 1st
+  const cronExpression = '0 2 1 * *';
 
-  console.log('⏰ Scheduling monthly KPI snapshot on 1st of each month at 2:00 AM JST (17:00 UTC)');
+  console.log('⏰ Scheduling monthly KPI snapshot on 1st of each month at 2:00 AM JST');
 
   const task = cron.schedule(cronExpression, async () => {
     console.log('⏰ Monthly KPI snapshot triggered on 1st of the month at 2:00 AM JST');
-    await saveMonthlyKPISnapshotTask();
+    await saveMonthlyKPISnapshotTask(new Date());
   }, {
-    timezone: 'UTC',
+    timezone: 'Asia/Tokyo',
   });
 
   task.start();
@@ -648,21 +669,13 @@ export function scheduleWeeklyKPISnapshot() {
 /**
  * 前月分KPIスナップショットをDBに保存する内部タスク
  */
-async function saveMonthlyKPISnapshotTask() {
+export async function saveMonthlyKPISnapshotTask(now = new Date()) {
   try {
     console.log('📸 Starting monthly KPI snapshot task (previous month)...');
+    const context = getPreviousTokyoMonthContext(now);
 
-    // monthOffset=-1 で前月分のKPIを計算
-    const kpiData = await calculateKPIData(-1);
+    const kpiData = await calculateKPIData(context.calculationMonthOffset);
     const { tutorKpi, ...snapshotData } = kpiData;
-
-    // 前月の年月ラベルを生成
-    const prevDate = new Date();
-    prevDate.setMonth(prevDate.getMonth() - 1);
-    const year = prevDate.getFullYear();
-    const month = String(prevDate.getMonth() + 1).padStart(2, '0');
-    const yearMonth = `${year}-${month}`;
-    const monthLabel = `${year}年${month}月`;
 
     // UPSERT（既存でも上書き）
     await pool.query(
@@ -672,11 +685,11 @@ async function saveMonthlyKPISnapshotTask() {
          snapshot_data = EXCLUDED.snapshot_data,
          tutor_data    = EXCLUDED.tutor_data,
          created_at    = CURRENT_TIMESTAMP`,
-      [yearMonth, monthLabel, JSON.stringify(snapshotData), JSON.stringify(tutorKpi || [])]
+      [context.yearMonth, context.monthLabel, JSON.stringify(snapshotData), JSON.stringify(tutorKpi || [])]
     );
 
-    console.log(`✅ Monthly KPI snapshot saved: ${monthLabel}`);
-    return { success: true, yearMonth, monthLabel };
+    console.log(`✅ Monthly KPI snapshot saved: ${context.monthLabel}`);
+    return { success: true, yearMonth: context.yearMonth, monthLabel: context.monthLabel };
   } catch (error) {
     console.error('❌ Monthly KPI snapshot task failed:', error);
     return { success: false, error: error.message };
@@ -751,6 +764,7 @@ export default {
   initializeAutomaticExaminationResultSync,
   initializeSuspensionPaymentSync,
   initializeCurrentKPISnapshot,
+  initializeMonthlyKPISnapshot,
   scheduleDailyUpdate,
   scheduleAutomaticExaminationResultSync,
   scheduleSuspensionPaymentSync,
