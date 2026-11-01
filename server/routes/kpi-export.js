@@ -2,7 +2,13 @@ import express from 'express';
 import { pool } from '../index.js';
 import { fetchStudents } from '../services/notionService.js';
 import { fetchSuspensionData } from '../services/sheetsService.js';
-import { calculateMonthsElapsed } from '../utils/dateUtils.js';
+import { calculateEffectiveSuspensionMonths, calculateMonthsElapsed } from '../utils/dateUtils.js';
+import {
+  getDashboardProPlanTargets,
+  groupDashboardStandardExamTargets,
+  KPI_CALCULATION_VERSION,
+  removeTargetOutsideStudents,
+} from '../utils/kpiTargets.js';
 import {
   calculateProPlanMonths,
   examMonth,
@@ -131,20 +137,11 @@ export async function calculateKPIData(monthOffset = 0) {
   // 休会データを取得
   const suspensionData = await fetchSuspensionData();
 
-  // 各生徒の経過月数を計算（monthOffset適用・休会は考慮しない: 1・2回目用）
-  const studentsWithMonths = activeStudents.map(student => {
-    const monthsElapsed = calculateMonthsElapsed(student.lessonStartDate, monthOffset);
-    return {
-      ...student,
-      monthsElapsed,
-    };
-  });
-
-  // 調整後月数付きの生徒リスト（3回目用: 休会期間を差し引く・monthOffset適用）
-  const studentsWithAdjustedMonths = activeStudents.map(student => {
+  // ダッシュボードと同じく、1〜3回目は休会期間を差し引いた月数で対象を判定
+  const studentsWithAdjustedMonths = students.map(student => {
     const monthsElapsed = calculateMonthsElapsed(student.lessonStartDate, monthOffset);
     const suspension = suspensionData[student.studentId];
-    const suspensionMonths = suspension?.suspensionMonths || 0;
+    const suspensionMonths = calculateEffectiveSuspensionMonths(suspension, monthOffset);
     const adjustedMonths = Math.max(0, monthsElapsed - suspensionMonths);
     return {
       ...student,
@@ -153,11 +150,16 @@ export async function calculateKPIData(monthOffset = 0) {
     };
   });
 
-  // 延長審査対象を抽出
-  const exam1stTargets = studentsWithMonths.filter(s => s.monthsElapsed === 5);
-  const exam2ndTargets = studentsWithMonths.filter(s => s.monthsElapsed === 11);
-  // 3回目: 調整後月数が17ヶ月
-  const exam3rdTargets = studentsWithAdjustedMonths.filter(s => s.adjustedMonths === 17);
+  const groupedStandardTargets = groupDashboardStandardExamTargets(studentsWithAdjustedMonths);
+  let exam1stTargets = groupedStandardTargets[1];
+  let exam2ndTargets = groupedStandardTargets[2];
+  let exam3rdTargets = groupedStandardTargets[3];
+  [exam1stTargets, exam2ndTargets, exam3rdTargets] = await Promise.all([
+    removeTargetOutside(exam1stTargets, 1),
+    removeTargetOutside(exam2ndTargets, 2),
+    removeTargetOutside(exam3rdTargets, 3),
+  ]);
+
   const advancedCycles = [4, 5, 6, 7, 8, 9, 10];
   const proStartDates = await fetchProStartDates(activeStudents.map(student => student.studentId));
   const advancedTargetsByCycle = Object.fromEntries(advancedCycles.map(cycle => [cycle, []]));
@@ -166,6 +168,9 @@ export async function calculateKPIData(monthOffset = 0) {
     const cycle = advancedCycles.find(item => examMonth(item) === proMonths);
     if (cycle) advancedTargetsByCycle[cycle].push({ ...student, proPlanMonths: proMonths, round: cycle });
   }
+  await Promise.all(advancedCycles.map(async cycle => {
+    advancedTargetsByCycle[cycle] = await removeTargetOutside(advancedTargetsByCycle[cycle], cycle);
+  }));
 
   console.log(`📊 延長審査1回目対象: ${exam1stTargets.length}人`);
   console.log(`📊 延長審査2回目対象: ${exam2ndTargets.length}人`);
@@ -241,26 +246,25 @@ export async function calculateKPIData(monthOffset = 0) {
   // Proプラン成約率を計算
   // ========================================
   
-  // 永久会員の数を取得
-  const lifetimeMembers = students.filter(s => s.plan === '永久会員');
-  const lifetimeMemberCount = lifetimeMembers.length;
-  
-  console.log(`📊 永久会員: ${lifetimeMemberCount}人`);
-
-  // Proプランステータスが「確定」の数を取得
-  const proPlanQuery = `
-    SELECT COUNT(*) as count
-    FROM pro_plan_data
-    WHERE pro_plan_status = '確定'
-  `;
-  const proPlanResult = await pool.query(proPlanQuery);
+  // ダッシュボードと同じ対象（永久会員 + アクティブな生徒プラン17ヶ月以上）を分母にする
+  const proPlanTargets = getDashboardProPlanTargets(studentsWithAdjustedMonths);
+  const proPlanTargetIds = proPlanTargets.map(student => student.studentId);
+  const proPlanResult = proPlanTargetIds.length > 0
+    ? await pool.query(
+      `SELECT COUNT(*) AS count
+         FROM pro_plan_data
+        WHERE student_id = ANY($1)
+          AND pro_plan_status = '確定'`,
+      [proPlanTargetIds]
+    )
+    : { rows: [{ count: 0 }] };
   const proPlanConfirmedCount = parseInt(proPlanResult.rows[0]?.count || 0);
 
-  const proPlanSuccessRate = lifetimeMemberCount > 0 
-    ? (proPlanConfirmedCount / lifetimeMemberCount) * 100 
+  const proPlanSuccessRate = proPlanTargets.length > 0
+    ? (proPlanConfirmedCount / proPlanTargets.length) * 100
     : 0;
 
-  console.log(`📊 Proプラン成約率: ${proPlanConfirmedCount}/${lifetimeMemberCount} = ${proPlanSuccessRate.toFixed(2)}%`);
+  console.log(`📊 Proプラン成約率: ${proPlanConfirmedCount}/${proPlanTargets.length} = ${proPlanSuccessRate.toFixed(2)}%`);
 
   // ========================================
   // 延長率（対 審査対象）を計算
@@ -288,6 +292,7 @@ export async function calculateKPIData(monthOffset = 0) {
   // KPIデータを返す
   return {
     ...formatKPIData({
+      calculationVersion: KPI_CALCULATION_VERSION,
       exam1stTargetCount: exam1stTargets.length,
       exam1stExtensionCount,
       exam1stWithdrawalCount,
@@ -397,6 +402,21 @@ async function calculateTutorKPI(exam1stTargets, exam2ndTargets, exam3rdTargets,
   // 全体延長率の降順でソート
   result.sort((a, b) => b.overallExtensionRate - a.overallExtensionRate);
   return result;
+}
+
+async function removeTargetOutside(students, cycle) {
+  if (students.length === 0) return [];
+  const result = await pool.query(
+    `SELECT student_id
+       FROM student_extensions
+      WHERE student_id = ANY($1)
+        AND extension_certainty_${cycle} = '対象外'`,
+    [students.map(student => student.studentId)]
+  );
+  return removeTargetOutsideStudents(
+    students,
+    new Set(result.rows.map(row => row.student_id))
+  );
 }
 
 /**

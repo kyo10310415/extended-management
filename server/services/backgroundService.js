@@ -15,6 +15,7 @@ import { calculateWeeklyKpiSnapshot } from '../utils/weeklyKpi.js';
 import { refreshCurrentKpiSnapshot } from './currentKpiSnapshotService.js';
 import { readKpiTargetRate } from './kpiSettingsService.js';
 import { getPreviousTokyoMonthContext } from '../utils/monthlyKpi.js';
+import { KPI_CALCULATION_VERSION } from '../utils/kpiTargets.js';
 
 let currentKpiRefreshPromise = null;
 
@@ -592,14 +593,16 @@ export async function initializeMonthlyKPISnapshot(now = new Date()) {
   const context = getPreviousTokyoMonthContext(now);
   try {
     const existing = await pool.query(
-      'SELECT 1 FROM kpi_monthly_snapshots WHERE year_month = $1',
+      `SELECT snapshot_data->>'calculationVersion' AS "calculationVersion"
+         FROM kpi_monthly_snapshots
+        WHERE year_month = $1`,
       [context.yearMonth]
     );
-    if (existing.rows.length > 0) {
+    if (Number(existing.rows[0]?.calculationVersion) === KPI_CALCULATION_VERSION) {
       console.log(`ℹ️ Monthly KPI snapshot already exists: ${context.monthLabel}`);
       return { success: true, skipped: true, ...context };
     }
-    console.log(`📸 Missing monthly KPI snapshot detected: ${context.monthLabel}`);
+    console.log(`📸 Monthly KPI snapshot missing or outdated: ${context.monthLabel}`);
     return await saveMonthlyKPISnapshotTask(now);
   } catch (error) {
     console.error('❌ Monthly KPI snapshot initialization failed:', error);
