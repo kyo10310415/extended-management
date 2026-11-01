@@ -205,6 +205,8 @@ git push -u origin main
 
 当月の確定前KPIは `GET /api/kpi-snapshots/current` で取得できます。暫定値は30分ごとに更新され、レスポンスの `status` は `provisional`、`isFinalized` は `false` です。
 
+月次スナップショットの対象者・休会月数・対象外判定・Pro成約率は、ダッシュボードと同じ計算ルールを使用します。保存済みデータの計算バージョンが古い場合は、サーバー起動時に前月分を再計算して上書きします。
+
 ```http
 Authorization: Bearer <KPI_SNAPSHOT_READ_TOKEN>
 ```
