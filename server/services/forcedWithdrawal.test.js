@@ -38,7 +38,7 @@ test('強制退会理由は指定の3種類に限定する', () => {
   ]);
 });
 
-test('Discord通知は指定3ユーザーへのメンションと申請内容を含む', () => {
+test('Discord通知は指定4ユーザーへのメンションと申請内容を含む', () => {
   const message = buildForcedWithdrawalDiscordMessage({
     name: '山田太郎',
     studentId: 'OLTS240001-AA',
@@ -51,6 +51,7 @@ test('Discord通知は指定3ユーザーへのメンションと申請内容を
   assert.match(message.content, /<@766666980086120470>/);
   assert.match(message.content, /<@703557224814870568>/);
   assert.match(message.content, /<@1423132417744441445>/);
+  assert.match(message.content, /<@1314834572407738419>/);
   assert.match(message.content, /生徒名：山田太郎/);
   assert.match(message.content, /学籍番号：OLTS240001-AA/);
   assert.match(message.content, /担当Tutor：佐藤Tutor/);
@@ -59,7 +60,12 @@ test('Discord通知は指定3ユーザーへのメンションと申請内容を
   assert.match(message.content, /退会理由：音信不通/);
   assert.deepEqual(message.allowed_mentions, {
     parse: [],
-    users: ['766666980086120470', '703557224814870568', '1423132417744441445'],
+    users: [
+      '766666980086120470',
+      '703557224814870568',
+      '1423132417744441445',
+      '1314834572407738419',
+    ],
   });
 });
 

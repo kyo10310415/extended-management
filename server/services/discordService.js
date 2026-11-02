@@ -76,6 +76,7 @@ const FORCED_WITHDRAWAL_MENTION_USER_IDS = Object.freeze([
   '766666980086120470',
   '703557224814870568',
   '1423132417744441445',
+  '1314834572407738419',
 ]);
 
 export function buildForcedWithdrawalDiscordMessage({
@@ -327,6 +328,7 @@ export function parseDiscordForumTagIds(value) {
 
 const SUSPENSION_NOTIFICATION_MENTION_USER_IDS = Object.freeze([
   '766666980086120470',
+  '1314834572407738419',
 ]);
 
 export function buildSuspensionDiscordForumMessage({
@@ -345,7 +347,9 @@ export function buildSuspensionDiscordForumMessage({
   const message = {
     thread_name: threadName,
     content: [
-      `<@${SUSPENSION_NOTIFICATION_MENTION_USER_IDS[0]}>`,
+      SUSPENSION_NOTIFICATION_MENTION_USER_IDS
+        .map((userId) => `<@${userId}>`)
+        .join(' '),
       '',
       `学籍番号：${studentId || '-'}`,
       `Notionリンク：${notionUrl || '-'}`,
