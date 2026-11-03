@@ -46,6 +46,22 @@ function escapeCsvCell(value) {
 }
 
 /**
+ * 保存済みスナップショットを指定年月の範囲（開始月・終了月を含む）で絞り込む。
+ */
+export function filterTutorKpiSnapshotsByPeriod(snapshots, startYearMonth, endYearMonth) {
+  const start = String(startYearMonth ?? '').trim()
+  const end = String(endYearMonth ?? '').trim()
+
+  return (Array.isArray(snapshots) ? snapshots : []).filter(snapshot => {
+    const yearMonth = String(snapshot?.yearMonth ?? '').trim()
+    if (!/^\d{4}-\d{2}$/.test(yearMonth)) return false
+    if (start && yearMonth < start) return false
+    if (end && yearMonth > end) return false
+    return true
+  })
+}
+
+/**
  * Tutor別KPIの累計データを、Excelで文字化けしにくいBOM付きCSVへ変換する。
  */
 export function buildTutorKpiCumulativeCsv(tutorData) {

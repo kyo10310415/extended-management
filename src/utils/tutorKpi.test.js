@@ -1,6 +1,31 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { aggregateTutorKpiSnapshots, buildTutorKpiCumulativeCsv } from './tutorKpi.js'
+import {
+  aggregateTutorKpiSnapshots,
+  buildTutorKpiCumulativeCsv,
+  filterTutorKpiSnapshotsByPeriod,
+} from './tutorKpi.js'
+
+test('Tutor別KPI累計は指定した開始月から終了月までを両端を含めて抽出する', () => {
+  const snapshots = [
+    { yearMonth: '2026-07' },
+    { yearMonth: '2026-08' },
+    { yearMonth: '2026-09' },
+    { yearMonth: '2026-10' },
+    { yearMonth: 'invalid' },
+  ]
+
+  assert.deepEqual(
+    filterTutorKpiSnapshotsByPeriod(snapshots, '2026-08', '2026-09')
+      .map(snapshot => snapshot.yearMonth),
+    ['2026-08', '2026-09']
+  )
+  assert.deepEqual(
+    filterTutorKpiSnapshotsByPeriod(snapshots, '', '2026-08')
+      .map(snapshot => snapshot.yearMonth),
+    ['2026-07', '2026-08']
+  )
+})
 
 test('Tutor別KPIは保存済み月次データの件数を合算し率を再計算する', () => {
   const result = aggregateTutorKpiSnapshots([
