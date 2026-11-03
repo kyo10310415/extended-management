@@ -1,8 +1,12 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import { aggregateTutorKpiSnapshots, buildTutorKpiCumulativeCsv } from '../utils/tutorKpi'
+import {
+  aggregateTutorKpiSnapshots,
+  buildTutorKpiCumulativeCsv,
+  filterTutorKpiSnapshotsByPeriod,
+} from '../utils/tutorKpi'
 
 // ========== テーブル列定義 ==========
 const cols = [
@@ -311,8 +315,9 @@ function PastMonthTab() {
 
 // ========== 累計タブ（保存済みスナップショット） ==========
 function CumulativeTab() {
-  const [tutorData, setTutorData] = useState([])
-  const [period, setPeriod] = useState(null)
+  const [snapshots, setSnapshots] = useState([])
+  const [startYearMonth, setStartYearMonth] = useState('')
+  const [endYearMonth, setEndYearMonth] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [viewMode, setViewMode] = useState('table')
@@ -331,12 +336,11 @@ function CumulativeTab() {
         const populatedSnapshots = d.data.filter(snapshot =>
           Array.isArray(snapshot.tutorKpi) && snapshot.tutorKpi.length > 0
         )
-        setTutorData(aggregateTutorKpiSnapshots(populatedSnapshots))
-        setPeriod(populatedSnapshots.length > 0 ? {
-          firstLabel: populatedSnapshots[0].monthLabel,
-          lastLabel: populatedSnapshots[populatedSnapshots.length - 1].monthLabel,
-          monthCount: populatedSnapshots.length,
-        } : null)
+        setSnapshots(populatedSnapshots)
+        if (populatedSnapshots.length > 0) {
+          setStartYearMonth(populatedSnapshots[0].yearMonth)
+          setEndYearMonth(populatedSnapshots[populatedSnapshots.length - 1].yearMonth)
+        }
       } catch (e) {
         console.error(e)
         setError(e.message)
@@ -347,6 +351,36 @@ function CumulativeTab() {
 
     fetchCumulative()
   }, [])
+
+  const filteredSnapshots = useMemo(
+    () => filterTutorKpiSnapshotsByPeriod(snapshots, startYearMonth, endYearMonth),
+    [snapshots, startYearMonth, endYearMonth]
+  )
+  const tutorData = useMemo(
+    () => aggregateTutorKpiSnapshots(filteredSnapshots),
+    [filteredSnapshots]
+  )
+  const period = filteredSnapshots.length > 0 ? {
+    firstLabel: filteredSnapshots[0].monthLabel,
+    lastLabel: filteredSnapshots[filteredSnapshots.length - 1].monthLabel,
+    monthCount: filteredSnapshots.length,
+  } : null
+
+  const handleStartChange = (yearMonth) => {
+    setStartYearMonth(yearMonth)
+    if (endYearMonth && yearMonth > endYearMonth) setEndYearMonth(yearMonth)
+  }
+
+  const handleEndChange = (yearMonth) => {
+    setEndYearMonth(yearMonth)
+    if (startYearMonth && yearMonth < startYearMonth) setStartYearMonth(yearMonth)
+  }
+
+  const resetPeriod = () => {
+    if (snapshots.length === 0) return
+    setStartYearMonth(snapshots[0].yearMonth)
+    setEndYearMonth(snapshots[snapshots.length - 1].yearMonth)
+  }
 
   const exportCsv = () => {
     const csv = buildTutorKpiCumulativeCsv(tutorData)
@@ -378,7 +412,7 @@ function CumulativeTab() {
     return <p className="text-sm text-red-600">{error}</p>
   }
 
-  if (tutorData.length === 0) {
+  if (snapshots.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-48 bg-gray-50 rounded-lg border border-dashed border-gray-300">
         <p className="text-gray-400">Tutor別データを含むスナップショットがありません</p>
@@ -389,13 +423,58 @@ function CumulativeTab() {
 
   return (
     <div>
+      <div className="flex flex-wrap items-end gap-3 mb-4 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+        <div>
+          <label htmlFor="tutor-kpi-start-month" className="block text-xs font-medium text-gray-600 mb-1">
+            開始月
+          </label>
+          <select
+            id="tutor-kpi-start-month"
+            value={startYearMonth}
+            onChange={event => handleStartChange(event.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white shadow-sm"
+          >
+            {snapshots.map(snapshot => (
+              <option key={snapshot.yearMonth} value={snapshot.yearMonth}>
+                {snapshot.monthLabel}
+              </option>
+            ))}
+          </select>
+        </div>
+        <span className="pb-2 text-gray-400">〜</span>
+        <div>
+          <label htmlFor="tutor-kpi-end-month" className="block text-xs font-medium text-gray-600 mb-1">
+            終了月
+          </label>
+          <select
+            id="tutor-kpi-end-month"
+            value={endYearMonth}
+            onChange={event => handleEndChange(event.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white shadow-sm"
+          >
+            {snapshots.map(snapshot => (
+              <option key={snapshot.yearMonth} value={snapshot.yearMonth}>
+                {snapshot.monthLabel}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="button"
+          onClick={resetPeriod}
+          className="px-3 py-2 rounded-lg text-xs font-medium bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 transition"
+        >
+          全期間に戻す
+        </button>
+      </div>
+
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div>
           <p className="text-sm text-gray-600">
             <span className="font-semibold text-blue-700">
-              {period.firstLabel}〜{period.lastLabel}
+              {period?.firstLabel}〜{period?.lastLabel}
             </span>
-            <span className="ml-2">（{period.monthCount}ヶ月分）</span>
+            <span className="ml-2">（{period?.monthCount ?? 0}ヶ月分）</span>
           </p>
           <p className="text-xs text-gray-400 mt-0.5">
             保存済みスナップショットを合算し、延長率は累計件数から再計算しています。今月の未保存データは含みません。
