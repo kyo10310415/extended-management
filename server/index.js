@@ -22,6 +22,11 @@ import kpiExportRoutes from './routes/kpi-export.js';
 import kpiSnapshotsRoutes from './routes/kpi-snapshots.js';
 import forcedWithdrawalsRoutes from './routes/forced-withdrawals.js';
 import { createKpiSettingsRouter } from './routes/kpi-settings.js';
+import { createExaminationHistoryRouter } from './routes/examination-history.js';
+import { fetchStudents } from './services/notionService.js';
+import { fetchSuspensionData } from './services/sheetsService.js';
+import { fetchProStartDates, calculateProPlanMonths } from './services/proPlanExternalService.js';
+import { calculateMonthsElapsed, calculateEffectiveSuspensionMonths } from './utils/dateUtils.js';
 import { getDefaultKpiTargetRate } from './services/kpiSettingsService.js';
 
 // Background services
@@ -88,6 +93,10 @@ app.use('/api/kpi-export', kpiExportRoutes);
 app.use('/api/kpi-snapshots', kpiSnapshotsRoutes);
 app.use('/api/kpi-settings', createKpiSettingsRouter({ queryable: pool }));
 app.use('/api/forced-withdrawals', forcedWithdrawalsRoutes);
+app.use('/api/examination-history', createExaminationHistoryRouter({
+  queryable: pool, fetchStudents, fetchSuspensionData, fetchProStartDates,
+  lessonMonths: calculateMonthsElapsed, suspensionMonths: calculateEffectiveSuspensionMonths, proMonths: calculateProPlanMonths,
+}));
 
 // Health check
 app.get('/api/health', (req, res) => {
