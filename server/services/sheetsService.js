@@ -1067,7 +1067,7 @@ export async function fetchFormUpdates() {
  * Google Sheets から休会情報を取得（キャッシュ対応）
  * H列: 学籍番号、K列: 休会期間、L列: 休会開始日、M列: 休会終了日
  */
-export async function fetchSuspensionData() {
+export async function fetchSuspensionData({ strict = false } = {}) {
   const cacheKey = 'sheets_suspension_data';
   
   // キャッシュをチェック
@@ -1203,6 +1203,7 @@ export async function fetchSuspensionData() {
 
     return suspensionData;
   } catch (error) {
+    if (strict) throw new Error('Suspension history could not be loaded');
     console.error('❌ Error fetching suspension data from Google Sheets:', error.message);
     // エラーが発生しても空のオブジェクトを返す
     return {};

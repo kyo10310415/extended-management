@@ -2,6 +2,7 @@ import { useIsCrew } from '../session'
 import { requestStudentUpdate } from '../utils/studentUpdate'
 import { useState, useEffect, useMemo } from 'react'
 import StudentTable from './StudentTable'
+import ExaminationHistoryExport from './ExaminationHistoryExport'
 
 function ProExaminationList() {
   const isCrew = useIsCrew()
@@ -268,6 +269,7 @@ function ProExaminationList() {
 
   return (
     <div>
+      <ExaminationHistoryExport />
       {/* 注意書きバナー */}
       <div className="bg-red-50 border-l-4 border-red-600 rounded-lg p-4 mb-5">
         <p className="text-red-600 text-lg font-bold leading-snug">

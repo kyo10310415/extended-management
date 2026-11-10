@@ -2,6 +2,7 @@ import { useIsCrew } from '../session'
 import { requestStudentUpdate } from '../utils/studentUpdate'
 import { useState, useEffect, useMemo } from 'react'
 import StudentTable from './StudentTable'
+import ExaminationHistoryExport from './ExaminationHistoryExport'
 
 function getCycleForAdjustedMonths(adjustedMonths) {
   const months = Number(adjustedMonths)
@@ -281,6 +282,7 @@ function ExaminationList({ entryPlan = false }) {
 
   return (
     <div>
+      {!entryPlan && <ExaminationHistoryExport />}
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-900">
           {entryPlan

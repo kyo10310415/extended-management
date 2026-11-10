@@ -14,6 +14,7 @@ import { requestStudentUpdate } from '../utils/studentUpdate'
  */
 import { useState, useEffect, useMemo } from 'react'
 import StudentTable from './StudentTable'
+import ExaminationHistoryExport from './ExaminationHistoryExport'
 
 // N 回目審査が何か月目か（サーバーと同じロジック）
 function examMonth(round) {
@@ -175,6 +176,7 @@ function ProExaminationAdvanced() {
 
   return (
     <div>
+      <ExaminationHistoryExport />
       {/* ヘッダー */}
       <div className="flex flex-wrap justify-between items-center mb-6 gap-3">
         <div>

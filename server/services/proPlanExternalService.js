@@ -111,7 +111,7 @@ export function getRoundInfo(months) {
  * @param {string[]} studentIds - 学籍番号配列
  * @returns {Object} { [studentId]: { proStartDate: Date|null } }
  */
-export async function fetchProStartDates(studentIds) {
+export async function fetchProStartDates(studentIds, { strict = false } = {}) {
   if (!studentIds || studentIds.length === 0) return {};
 
   try {
@@ -134,6 +134,7 @@ export async function fetchProStartDates(studentIds) {
     console.log(`[ExternalDB] Fetched pro_plan_start_date for ${result.rows.length}/${studentIds.length} students`);
     return map;
   } catch (err) {
+    if (strict) throw new Error('PRO start dates could not be loaded');
     console.error('[ExternalDB] fetchProStartDates error:', err.message);
     return {}; // エラー時は空オブジェクトで続行（graceful degradation）
   }
