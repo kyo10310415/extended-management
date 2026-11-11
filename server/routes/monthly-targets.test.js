@@ -1,0 +1,37 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import express from 'express';
+import { createSsoAuthMiddleware } from '../middleware/sso-auth-middleware.js';
+import { monthlyTargets, createMonthlyTargetsRouter } from './monthly-targets.js';
+const rules = { lessonMonths: x => x || 0, suspensionMonths: x => x || 0, proMonths: x => x };
+test('all current hearing and exam categories use source list rules and return IDs only', () => {
+  const students = [4, 5, 10, 11, 16, 17].map(n => ({ studentId: `S${n}`, status: 'アクティブ', lessonStartDate: n }));
+  students.push({ studentId: 'EP', status: 'アクティブ', plan: 'エントリープラン', lessonStartDate: 23 });
+  students.push({ studentId: 'PRO', status: 'アクティブ' }, { studentId: 'INACTIVE', status: '正規退会', lessonStartDate: 5 });
+  const result = monthlyTargets(students, {}, { PRO: { proStartDate: 41 } }, rules);
+  assert.deepEqual(result.find(x => x.studentId === 'S4'), { studentId: 'S4', hearing: [1], examination: [] });
+  assert.deepEqual(result.find(x => x.studentId === 'S17').examination, [3]);
+  assert.deepEqual(result.find(x => x.studentId === 'EP').examination, [4]);
+  assert.deepEqual(result.find(x => x.studentId === 'PRO').examination, [10]);
+  assert.equal(result.some(x => x.studentId === 'INACTIVE'), false);
+  assert.deepEqual(monthlyTargets([{ studentId: 'S', status: 'アクティブ', lessonStartDate: 6 }], { S: 1 }, {}, rules)[0].examination, [1]);
+});
+test('dedicated token is required before data reads, correct token returns minimal data', async t => {
+  const token = 'x'.repeat(40); let calls = 0;
+  const app = express();
+  const sso = createSsoAuthMiddleware({ secret: 's'.repeat(40), appOrigin: 'https://example.com', dashboardUrl: 'https://dashboard.example.com', secure: true });
+  app.use((req, res, next) => req.path.startsWith('/api/') ? sso(req, res, next) : next());
+  app.use('/api/monthly-targets', createMonthlyTargetsRouter({ ...rules, fetchStudents: async () => [], fetchSuspensionData: async () => ({}), fetchProStartDates: async () => ({}) }, { EXTENSION_TARGETS_READ_TOKEN: token }));
+  app.use(createMonthlyTargetsRouter({ ...rules, fetchStudents: async () => { calls++; return []; }, fetchSuspensionData: async o => { assert.equal(o.strict, true); return {}; }, fetchProStartDates: async () => ({}) }, { EXTENSION_TARGETS_READ_TOKEN: token }));
+  const server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r));
+  t.after(() => new Promise(r => server.close(r)));
+  const url = `http://127.0.0.1:${server.address().port}/current`;
+  assert.equal((await fetch(url)).status, 401);
+  assert.equal((await fetch(url, { headers: { Authorization: 'Bearer invalid' } })).status, 401);
+  assert.equal(calls, 0);
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  assert.equal(response.status, 200); assert.deepEqual((await response.json()).data, []);
+  assert.equal(calls, 1);
+  assert.equal((await fetch(`http://127.0.0.1:${server.address().port}/api/monthly-targets/current`)).status, 401);
+  assert.equal((await fetch(`http://127.0.0.1:${server.address().port}/api/monthly-targets/current`, { headers: { Authorization: `Bearer ${token}` } })).status, 200);
+});
