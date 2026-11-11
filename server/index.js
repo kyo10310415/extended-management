@@ -23,6 +23,7 @@ import kpiSnapshotsRoutes from './routes/kpi-snapshots.js';
 import forcedWithdrawalsRoutes from './routes/forced-withdrawals.js';
 import { createKpiSettingsRouter } from './routes/kpi-settings.js';
 import { createExaminationHistoryRouter } from './routes/examination-history.js';
+import { createMonthlyTargetsRouter } from './routes/monthly-targets.js';
 import { fetchStudents } from './services/notionService.js';
 import { fetchSuspensionData } from './services/sheetsService.js';
 import { fetchProStartDates, calculateProPlanMonths } from './services/proPlanExternalService.js';
@@ -95,6 +96,10 @@ app.use('/api/kpi-settings', createKpiSettingsRouter({ queryable: pool }));
 app.use('/api/forced-withdrawals', forcedWithdrawalsRoutes);
 app.use('/api/examination-history', createExaminationHistoryRouter({
   queryable: pool, fetchStudents, fetchSuspensionData, fetchProStartDates,
+  lessonMonths: calculateMonthsElapsed, suspensionMonths: calculateEffectiveSuspensionMonths, proMonths: calculateProPlanMonths,
+}));
+app.use('/api/monthly-targets', createMonthlyTargetsRouter({
+  fetchStudents, fetchSuspensionData, fetchProStartDates,
   lessonMonths: calculateMonthsElapsed, suspensionMonths: calculateEffectiveSuspensionMonths, proMonths: calculateProPlanMonths,
 }));
 
