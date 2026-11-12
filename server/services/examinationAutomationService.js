@@ -1,4 +1,5 @@
 import {
+  addMonthsToYearMonth,
   applySalesForecastExtensionPlan,
   getExtensionAgreementStudentChatDestination,
   planSalesForecastExtension,
@@ -166,6 +167,13 @@ async function processRevenueExtensions({ client, cycles, studentId }) {
   return { completedCount, failedCount, results };
 }
 
+// 売上予測・DBの年月は支払月。通知に表示するレッスン最終月だけ翌月へ変換する。
+export function lessonEndMonthFromPaymentMonth(paymentMonth) {
+  const lessonMonth = addMonthsToYearMonth(paymentMonth, 1);
+  if (!lessonMonth) throw new Error('支払最終月が不正なため通知できません。');
+  return lessonMonth;
+}
+
 async function processStudentNotifications({ client, cycles, studentId }) {
   let sentCount = 0;
   let failedCount = 0;
@@ -193,12 +201,13 @@ async function processStudentNotifications({ client, cycles, studentId }) {
 
     for (const pending of pendingRows.rows) {
       try {
+        const lessonEndMonth = lessonEndMonthFromPaymentMonth(pending.end_month);
         const destination = await getExtensionAgreementStudentChatDestination(
           pending.student_id
         );
         const notification = await sendExtensionAgreementNotification({
           ...destination,
-          endYearMonth: pending.end_month,
+          endYearMonth: lessonEndMonth,
           studentId: pending.student_id,
         });
 

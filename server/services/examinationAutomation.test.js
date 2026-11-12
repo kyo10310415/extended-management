@@ -12,7 +12,7 @@ import {
   buildExtensionAgreementDiscordMessage,
   parseDiscordChannelUrl,
 } from './discordService.js';
-import { isValidExecutiveCheck } from './examinationAutomationService.js';
+import { isValidExecutiveCheck, lessonEndMonthFromPaymentMonth } from './examinationAutomationService.js';
 
 test('売上予測の月ヘッダーはYYYY/MとYYYY-MMを正規化する', () => {
   assert.equal(parseSalesForecastMonthHeader('2026/6'), '2026-06');
@@ -121,7 +121,7 @@ test('DiscordチャットURLからサーバーIDとチャンネルIDを取得す
   );
 });
 
-test('契約延長メッセージは追記した最終月を日本語で含む', () => {
+test('契約延長メッセージは渡されたレッスン最終月を日本語で含む', () => {
   const message = buildExtensionAgreementDiscordMessage('2026-12');
 
   assert.match(message.content, /^# 契約延長の妥結について/);
@@ -129,3 +129,16 @@ test('契約延長メッセージは追記した最終月を日本語で含む',
   assert.deepEqual(message.allowed_mentions, { parse: [] });
   assert.ok(message.content.length <= 2000);
 });
+
+for (const [payment, lesson] of [['2027-06', '2027-07'], ['2027-05', '2027-06'], ['2026-12', '2027-01'], ['2028-02', '2028-03']]) {
+  test(`支払最終月 ${payment} の通知はレッスン最終月 ${lesson} を示す`, () => {
+    assert.equal(lessonEndMonthFromPaymentMonth(payment), lesson);
+    const [year, month] = lesson.split('-').map(Number);
+    assert.ok(buildExtensionAgreementDiscordMessage(lessonEndMonthFromPaymentMonth(payment)).content.includes(`${year}年${month}月末（レッスンの最終月）`));
+  });
+}
+for (const invalid of [null, undefined, '', '2026-00', '2026-13', '2026/12', '2026-1']) {
+  test(`不正な支払最終月 ${invalid} では通知用の年月を作らない`, () => {
+    assert.throws(() => lessonEndMonthFromPaymentMonth(invalid), /支払最終月が不正/);
+  });
+}
