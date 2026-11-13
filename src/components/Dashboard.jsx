@@ -1,6 +1,7 @@
 import { useIsCrew } from '../session'
 import { useState, useEffect, useRef } from 'react'
 import {
+  calculateExtensionRateVsResult,
   calculateExtensionCertaintyStats,
   getAdvancedExaminationTargets,
 } from '../utils/dashboardKpi'
@@ -24,6 +25,10 @@ function AdvancedExamCard({ round, proMonth, stats }) {
         <div className="flex justify-between items-center pt-3 border-t">
           <span className="text-sm font-semibold text-gray-700">延長率:</span>
           <span className="text-3xl font-bold text-purple-600">{stats[`exam${round}thExtensionRate`].toFixed(2)}%</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-xs font-semibold text-gray-700">延長率（対 結果お伝え）:</span>
+          <span className="text-2xl font-bold text-indigo-600">{stats[`exam${round}thExtensionRateVsResult`].toFixed(2)}%</span>
         </div>
       </div>
     </div>
@@ -92,34 +97,40 @@ function Dashboard() {
     exam1stTargetCount: 0,
     exam1stExtensionCount: 0,
     exam1stExtensionRate: 0,
+    exam1stExtensionRateVsResult: 0,
     exam1stWithdrawalCount: 0,
     exam1stRemainingCount: 0,
     // 延長審査2回目（11ヶ月目）
     exam2ndTargetCount: 0,
     exam2ndExtensionCount: 0,
     exam2ndExtensionRate: 0,
+    exam2ndExtensionRateVsResult: 0,
     exam2ndWithdrawalCount: 0,
     exam2ndRemainingCount: 0,
     // 延長審査3回目（17ヶ月目）
     exam3rdTargetCount: 0,
     exam3rdExtensionCount: 0,
     exam3rdExtensionRate: 0,
+    exam3rdExtensionRateVsResult: 0,
     exam3rdWithdrawalCount: 0,
     exam3rdRemainingCount: 0,
     // 延長審査4回目（PROプラン継続5か月目）
     exam4thTargetCount: 0,
     exam4thExtensionCount: 0,
     exam4thExtensionRate: 0,
+    exam4thExtensionRateVsResult: 0,
     exam4thWithdrawalCount: 0,
     exam4thRemainingCount: 0,
     exam5thTargetCount: 0,
     exam5thExtensionCount: 0,
     exam5thExtensionRate: 0,
+    exam5thExtensionRateVsResult: 0,
     exam5thWithdrawalCount: 0,
     exam5thRemainingCount: 0,
     exam6thTargetCount: 0,
     exam6thExtensionCount: 0,
     exam6thExtensionRate: 0,
+    exam6thExtensionRateVsResult: 0,
     exam6thWithdrawalCount: 0,
     exam6thRemainingCount: 0,
   })
@@ -347,6 +358,7 @@ function Dashboard() {
           lifetimeCount,
           remainingCount,
           extensionRate: targets.length > 0 ? extensionCount / targets.length * 100 : 0,
+          extensionRateVsResult: calculateExtensionRateVsResult(extensionCount, lifetimeCount),
         }]
       }))
 
@@ -401,10 +413,7 @@ function Dashboard() {
         : 0
 
       // 延長率（対 審査結果お伝え） = 延長数 / (延長数 + 退会数) × 100
-      const totalDecided = extensionCount + withdrawalCount
-      const extensionRateVsResult = totalDecided > 0 
-        ? (extensionCount / totalDecided * 100) 
-        : 0
+      const extensionRateVsResult = calculateExtensionRateVsResult(extensionCount, withdrawalCount)
 
       // 残弾数 = 1・2回目（対象-延長-退会） + 3回目（空欄件数） + 4回目（空欄件数）
       const remaining12Count = examinationStudents.length -
@@ -431,6 +440,10 @@ function Dashboard() {
       const exam1stExtensionRate = exam1stTargetCount > 0 
         ? (exam1stExtensionCount / exam1stTargetCount * 100) 
         : 0
+      const exam1stExtensionRateVsResult = calculateExtensionRateVsResult(
+        exam1stExtensionCount,
+        exam1stWithdrawalCount
+      )
       
       console.log('  1回目（調整後5ヶ月目）:');
       console.log('    対象数:', exam1stTargetCount);
@@ -452,6 +465,10 @@ function Dashboard() {
       const exam2ndExtensionRate = exam2ndTargetCount > 0 
         ? (exam2ndExtensionCount / exam2ndTargetCount * 100) 
         : 0
+      const exam2ndExtensionRateVsResult = calculateExtensionRateVsResult(
+        exam2ndExtensionCount,
+        exam2ndWithdrawalCount
+      )
       
       console.log('  2回目（調整後11ヶ月目）:');
       console.log('    対象数:', exam2ndTargetCount);
@@ -479,6 +496,10 @@ function Dashboard() {
       const exam3rdExtensionRate = exam3rdTargetCount > 0
         ? (exam3rdExtensionCount / exam3rdTargetCount * 100)
         : 0
+      const exam3rdExtensionRateVsResult = calculateExtensionRateVsResult(
+        exam3rdExtensionCount,
+        exam3rdWithdrawalCount
+      )
 
       console.log('  3回目（調整後17ヶ月目）:');
       console.log('    対象数:', exam3rdTargetCount);
@@ -527,22 +548,26 @@ function Dashboard() {
           exam1stTargetCount,
           exam1stExtensionCount,
           exam1stExtensionRate,
+          exam1stExtensionRateVsResult,
           exam1stWithdrawalCount,
           exam1stRemainingCount,
           exam2ndTargetCount,
           exam2ndExtensionCount,
           exam2ndExtensionRate,
+          exam2ndExtensionRateVsResult,
           exam2ndWithdrawalCount,
           exam2ndRemainingCount,
           exam3rdTargetCount,
           exam3rdExtensionCount,
           exam3rdExtensionRate,
+          exam3rdExtensionRateVsResult,
           exam3rdWithdrawalCount,
           exam3rdRemainingCount,
           ...Object.fromEntries([4, 5, 6].flatMap(round => [
             [`exam${round}thTargetCount`, advancedStats[round].targetCount],
             [`exam${round}thExtensionCount`, advancedStats[round].extensionCount],
             [`exam${round}thExtensionRate`, advancedStats[round].extensionRate],
+            [`exam${round}thExtensionRateVsResult`, advancedStats[round].extensionRateVsResult],
             [`exam${round}thWithdrawalCount`, advancedStats[round].lifetimeCount],
             [`exam${round}thRemainingCount`, advancedStats[round].remainingCount],
           ])),
@@ -904,6 +929,10 @@ function Dashboard() {
               <span className="text-sm font-semibold text-gray-700">延長率:</span>
               <span className="text-3xl font-bold text-purple-600">{stats.exam1stExtensionRate.toFixed(2)}%</span>
             </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-semibold text-gray-700">延長率（対 結果お伝え）:</span>
+              <span className="text-2xl font-bold text-indigo-600">{stats.exam1stExtensionRateVsResult.toFixed(2)}%</span>
+            </div>
           </div>
         </div>
 
@@ -930,6 +959,10 @@ function Dashboard() {
               <span className="text-sm font-semibold text-gray-700">延長率:</span>
               <span className="text-3xl font-bold text-purple-600">{stats.exam2ndExtensionRate.toFixed(2)}%</span>
             </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-semibold text-gray-700">延長率（対 結果お伝え）:</span>
+              <span className="text-2xl font-bold text-indigo-600">{stats.exam2ndExtensionRateVsResult.toFixed(2)}%</span>
+            </div>
           </div>
         </div>
 
@@ -955,6 +988,10 @@ function Dashboard() {
             <div className="flex justify-between items-center pt-3 border-t">
               <span className="text-sm font-semibold text-gray-700">延長率:</span>
               <span className="text-3xl font-bold text-purple-600">{stats.exam3rdExtensionRate.toFixed(2)}%</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-semibold text-gray-700">延長率（対 結果お伝え）:</span>
+              <span className="text-2xl font-bold text-indigo-600">{stats.exam3rdExtensionRateVsResult.toFixed(2)}%</span>
             </div>
           </div>
         </div>

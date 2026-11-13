@@ -1,9 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  calculateExtensionRateVsResult,
   calculateExtensionCertaintyStats,
   getAdvancedExaminationTargets,
 } from './dashboardKpi.js'
+
+test('対結果お伝えの延長率は延長と退会・永久会員だけを分母にする', () => {
+  assert.equal(calculateExtensionRateVsResult(8, 2), 80)
+  assert.equal(calculateExtensionRateVsResult(0, 0), 0)
+  assert.equal(calculateExtensionRateVsResult('3', '1'), 75)
+})
 
 test('延長審査各ページの表示対象から入力済み延長確度を集計する', () => {
   const students = [
