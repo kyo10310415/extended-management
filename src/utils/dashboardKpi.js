@@ -1,6 +1,19 @@
 const CERTAINTY_LEVELS = Object.freeze(['高', '中', '低'])
 
 /**
+ * 結果をお伝え済みの生徒だけを分母にした延長率を返す。
+ */
+export function calculateExtensionRateVsResult(extensionCount, withdrawalCount) {
+  const extensions = Number(extensionCount)
+  const withdrawals = Number(withdrawalCount)
+  const safeExtensions = Number.isFinite(extensions) ? Math.max(0, extensions) : 0
+  const safeWithdrawals = Number.isFinite(withdrawals) ? Math.max(0, withdrawals) : 0
+  const decidedCount = safeExtensions + safeWithdrawals
+
+  return decidedCount > 0 ? safeExtensions / decidedCount * 100 : 0
+}
+
+/**
  * 延長審査ページの表示対象から、入力済みの延長確度を集計する。
  * 「対象外」や空欄は記入済み件数に含めない。
  */
