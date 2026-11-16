@@ -103,6 +103,10 @@ NOTION_DATABASE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 GOOGLE_SHEETS_ID=1m7P2nsX-M9BGP2RHIj3CjAZiDPs2K9gu1Y_md7xiazQ
 GOOGLE_API_KEY=your_google_api_key_here
 
+# 延長審査のDiscord通知
+EXAMINATION_DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your-extension-webhook
+NON_EXTENSION_EXAMINATION_DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your-withdrawal-webhook
+
 # PostgreSQL Database
 DATABASE_URL=postgresql://user:password@host:5432/database
 

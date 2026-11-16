@@ -1,6 +1,7 @@
 import express from 'express';
 import { pool } from '../index.js';
 import {
+  DISCORD_NOTIFICATION_RESULTS,
   isValidExtensionCycle,
   processPendingExaminationDiscordNotifications,
 } from '../services/examinationResultSyncService.js';
@@ -265,6 +266,9 @@ router.post('/:studentId', async (req, res) => {
       ? getExaminationRevenueAmount(studentPlan, examination_result)
       : null;
     const isAutomationResult = revenueAmount !== null;
+    const isDiscordNotificationResult = DISCORD_NOTIFICATION_RESULTS.includes(
+      examination_result
+    );
 
     if (
       examinationResultWasManuallyChanged
@@ -346,8 +350,8 @@ router.post('/:studentId', async (req, res) => {
          $3,
          CASE WHEN $6 THEN NULLIF($4, '') ELSE NULL END,
          $6,
-         CASE WHEN $6 AND $7 AND $10 THEN TRUE ELSE FALSE END,
-         CASE WHEN $6 AND $7 AND $10 THEN $11 ELSE NULL END,
+         CASE WHEN $6 AND $7 AND $13 THEN TRUE ELSE FALSE END,
+         CASE WHEN $6 AND $7 AND $13 THEN $11 ELSE NULL END,
          CASE WHEN $8 THEN NULLIF($9, '') ELSE NULL END,
          CASE WHEN $6 AND $10 THEN TRUE ELSE FALSE END,
          CASE WHEN $6 AND $10 THEN $12::INTEGER ELSE NULL END,
@@ -370,7 +374,7 @@ router.post('/:studentId', async (req, res) => {
          ${discordPendingCol} = CASE
            WHEN $6
             AND $7
-            AND $10
+            AND $13
             AND student_extensions.${examCol} IS DISTINCT FROM EXCLUDED.${examCol}
             AND NOT COALESCE(student_extensions.${discordSentCol}, FALSE)
              THEN TRUE
@@ -380,7 +384,7 @@ router.post('/:studentId', async (req, res) => {
          ${discordResultLabelCol} = CASE
            WHEN $6
             AND $7
-            AND $10
+            AND $13
             AND student_extensions.${examCol} IS DISTINCT FROM EXCLUDED.${examCol}
             AND NOT COALESCE(student_extensions.${discordSentCol}, FALSE)
              THEN $11
@@ -433,8 +437,9 @@ router.post('/:studentId', async (req, res) => {
         executiveCheckWasProvided,
         executive_check,
         isAutomationResult,
-        isAutomationResult ? examination_result : null,
+        isDiscordNotificationResult ? examination_result : null,
         revenueAmount,
+        isDiscordNotificationResult,
       ]
     );
 
@@ -445,7 +450,7 @@ router.post('/:studentId', async (req, res) => {
     if (
       examinationResultWasManuallyChanged
       && discordNotificationWasRequested
-      && isAutomationResult
+      && isDiscordNotificationResult
     ) {
       try {
         const processed = await processPendingExaminationDiscordNotifications({

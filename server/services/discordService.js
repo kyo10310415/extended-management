@@ -1,6 +1,20 @@
 import axios from 'axios';
 import { getTutorWebhooks, normalizeTutorName } from './tutorWebhookService.js';
 
+const NON_EXTENSION_EXAMINATION_RESULTS = new Set(['退会', '永久会員']);
+const NON_EXTENSION_EXAMINATION_MENTION_USER_IDS = Object.freeze([
+  '766666980086120470',
+  '973151062158630914',
+  '703557224814870568',
+  '1314834572407738419',
+]);
+
+export function getExaminationDiscordWebhookEnvName(resultLabel) {
+  return NON_EXTENSION_EXAMINATION_RESULTS.has(resultLabel)
+    ? 'NON_EXTENSION_EXAMINATION_DISCORD_WEBHOOK_URL'
+    : 'EXAMINATION_DISCORD_WEBHOOK_URL';
+}
+
 export function buildExaminationResultDiscordMessage({
   name,
   tutor,
@@ -8,13 +22,15 @@ export function buildExaminationResultDiscordMessage({
   notionUrl,
   resultLabel,
 }) {
-  const displayedResult = resultLabel === 'PROプラン' || resultLabel === 'アップセル'
-    ? resultLabel
-    : '延長';
+  const displayedResult = resultLabel || '延長';
+  const isNonExtensionResult = NON_EXTENSION_EXAMINATION_RESULTS.has(resultLabel);
+  const mentionLine = isNonExtensionResult
+    ? NON_EXTENSION_EXAMINATION_MENTION_USER_IDS.map(id => `<@${id}>`).join(' ')
+    : '@everyone';
 
   return {
     content: [
-      '@everyone',
+      mentionLine,
       '延長審査報告',
       `生徒名：${name || '-'}`,
       `担当Tutor名：${tutor || '-'}`,
@@ -22,7 +38,9 @@ export function buildExaminationResultDiscordMessage({
       `NotionURL：${notionUrl || '-'}`,
       `審査結果：${displayedResult}`,
     ].join('\n'),
-    allowed_mentions: { parse: ['everyone'] },
+    allowed_mentions: isNonExtensionResult
+      ? { users: [...NON_EXTENSION_EXAMINATION_MENTION_USER_IDS] }
+      : { parse: ['everyone'] },
   };
 }
 
@@ -37,11 +55,12 @@ export async function sendExaminationResultNotification({
   notionUrl,
   resultLabel,
 }) {
-  const webhookUrl = process.env.EXAMINATION_DISCORD_WEBHOOK_URL;
+  const webhookEnvName = getExaminationDiscordWebhookEnvName(resultLabel);
+  const webhookUrl = process.env[webhookEnvName];
   if (!webhookUrl) {
     return {
       success: false,
-      error: 'EXAMINATION_DISCORD_WEBHOOK_URL is not configured',
+      error: `${webhookEnvName} is not configured`,
     };
   }
 
