@@ -24,6 +24,12 @@ export const AUTOMATICALLY_OVERRIDABLE_MANUAL_RESULTS = Object.freeze([
   '未払い',
   '音信不通',
 ]);
+export const DISCORD_NOTIFICATION_RESULTS = Object.freeze([
+  '延長',
+  'アップセル',
+  '退会',
+  '永久会員',
+]);
 
 let fullSyncPromise = null;
 
@@ -172,8 +178,10 @@ export async function applyAutomaticExaminationResults({
     const sourceValue = value && typeof value === 'object'
       ? String(value.sourceValue ?? '').replace(/＋/g, '+')
       : '';
-    if (result !== '延長') return null;
-    return sourceValue === '永久会員+PROプラン' ? 'PROプラン' : '延長';
+    if (result === '延長') {
+      return sourceValue === '永久会員+PROプラン' ? 'PROプラン' : '延長';
+    }
+    return DISCORD_NOTIFICATION_RESULTS.includes(result) ? result : null;
   });
   const automationEligibility = entries.map(() => true);
   const mappedCount = automaticResults.filter(Boolean).length;
@@ -204,7 +212,8 @@ export async function applyAutomaticExaminationResults({
             source.examination_result,
             FALSE,
             COALESCE(
-              source.automation_eligible AND source.examination_result = '延長',
+              source.automation_eligible
+                AND source.examination_result = ANY($6::text[]),
               FALSE
             ),
             source.discord_result_label,
@@ -240,7 +249,10 @@ export async function applyAutomaticExaminationResults({
          WHEN COALESCE(EXCLUDED.${discordPendingColumn}, FALSE)
           AND NOT COALESCE(student_extensions.${discordSentColumn}, FALSE)
            THEN TRUE
-         WHEN EXCLUDED.${examinationResultColumn} IS DISTINCT FROM '延長'
+         WHEN NOT COALESCE(
+           EXCLUDED.${examinationResultColumn} = ANY($6::text[]),
+           FALSE
+         )
            THEN FALSE
          ELSE student_extensions.${discordPendingColumn}
        END,
@@ -273,6 +285,7 @@ export async function applyAutomaticExaminationResults({
       notificationResultLabels,
       automationEligibility,
       AUTOMATICALLY_OVERRIDABLE_MANUAL_RESULTS,
+      DISCORD_NOTIFICATION_RESULTS,
     ]
   );
 
@@ -340,10 +353,10 @@ export async function processPendingExaminationDiscordNotifications({
              ON students.student_id = extensions.student_id
           WHERE COALESCE(extensions.${discordPendingColumn}, FALSE)
             AND NOT COALESCE(extensions.${discordSentColumn}, FALSE)
-            AND extensions.${examinationResultColumn} IN ('延長', 'アップセル')
+            AND extensions.${examinationResultColumn} = ANY($${params.length + 1}::text[])
             ${studentFilter}
           ORDER BY extensions.student_id`,
-        params
+        [...params, DISCORD_NOTIFICATION_RESULTS]
       );
 
       for (const pending of pendingResult.rows) {

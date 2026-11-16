@@ -79,7 +79,9 @@ function StudentTable({
 
   const handleSave = useCallback(async (studentId) => {
     if (isCrew) return performSave(studentId, false)
-    const notificationResults = allowUpsell ? ['延長', 'アップセル'] : ['延長']
+    const notificationResults = allowUpsell
+      ? ['延長', 'アップセル', '退会', '永久会員']
+      : ['延長', '退会', '永久会員']
     const changedToNotificationResult = notificationResults.includes(formData.examination_result)
       && originalExaminationResult !== formData.examination_result
 

@@ -14,7 +14,10 @@ import {
   getOrInitializeExaminationFormSyncState,
   isValidExtensionCycle,
 } from './examinationResultSyncService.js';
-import { buildExaminationResultDiscordMessage } from './discordService.js';
+import {
+  buildExaminationResultDiscordMessage,
+  getExaminationDiscordWebhookEnvName,
+} from './discordService.js';
 import { isExaminationOverdue } from '../../src/utils/examinationStatus.js';
 import {
   getEntryPlanExaminationCycle,
@@ -214,6 +217,8 @@ test('DB同期SQLは未払い・音信不通を除く手動固定済みの審査
     cycle: 7,
     automaticResultsByStudent: new Map([
       ['OLTS-A', { result: '延長', automationEligible: true }],
+      ['OLTS-C', { result: '退会', automationEligible: true }],
+      ['OLTS-D', { result: '永久会員', automationEligible: true }],
       ['OLTS-B', { result: null, automationEligible: false }],
     ]),
   });
@@ -223,18 +228,20 @@ test('DB同期SQLは未払い・音信不通を除く手動固定済みの審査
   assert.match(capturedQuery, /revenue_extension_pending_7/);
   assert.match(capturedQuery, /revenue_extension_completed_7/);
   assert.match(capturedQuery, /source\.automation_eligible AND source\.examination_result = '延長'/);
+  assert.match(capturedQuery, /source\.examination_result = ANY\(\$6::text\[\]\)/);
   assert.match(capturedQuery, /COALESCE\(EXCLUDED\.discord_notification_pending_7, FALSE\)/);
   assert.match(capturedQuery, /WHEN COALESCE\(student_extensions\.examination_result_manual_override_7, FALSE\)/);
   assert.match(capturedQuery, /= ANY\(\$5::text\[\]\)/);
   assert.match(capturedQuery, /examination_result_manual_override_7 = CASE/);
   assert.deepEqual(capturedParams, [
-    ['OLTS-A'],
-    ['延長'],
-    ['延長'],
-    [true],
+    ['OLTS-A', 'OLTS-C', 'OLTS-D'],
+    ['延長', '退会', '永久会員'],
+    ['延長', '退会', '永久会員'],
+    [true, true, true],
     ['未払い', '音信不通'],
+    ['延長', 'アップセル', '退会', '永久会員'],
   ]);
-  assert.deepEqual(result, { syncedCount: 1, mappedCount: 1 });
+  assert.deepEqual(result, { syncedCount: 3, mappedCount: 3 });
 });
 
 test('基準行以前の回答だけならDB同期を実行しない', async () => {
@@ -338,6 +345,41 @@ test('EPアップセルのDiscord通知は審査結果をアップセルと表�
   });
 
   assert.match(message.content, /審査結果：アップセル/);
+});
+
+test('退会・永久会員のDiscord通知はそれぞれの審査結果を表示する', () => {
+  const mentionUserIds = [
+    '766666980086120470',
+    '973151062158630914',
+    '703557224814870568',
+    '1314834572407738419',
+  ];
+
+  for (const resultLabel of ['退会', '永久会員']) {
+    const message = buildExaminationResultDiscordMessage({
+      name: '山田太郎',
+      tutor: '佐藤Tutor',
+      studentId: 'OLTS-A',
+      notionUrl: 'https://www.notion.so/example',
+      resultLabel,
+    });
+
+    assert.match(message.content, new RegExp(`審査結果：${resultLabel}`));
+    assert.match(
+      message.content,
+      new RegExp(`^${mentionUserIds.map(id => `<@${id}>`).join(' ')}`)
+    );
+    assert.deepEqual(message.allowed_mentions, { users: mentionUserIds });
+    assert.equal(
+      getExaminationDiscordWebhookEnvName(resultLabel),
+      'NON_EXTENSION_EXAMINATION_DISCORD_WEBHOOK_URL'
+    );
+  }
+
+  assert.equal(
+    getExaminationDiscordWebhookEnvName('延長'),
+    'EXAMINATION_DISCORD_WEBHOOK_URL'
+  );
 });
 
 test('最初のレッスン日の翌日以降で審査結果が空欄なら未実施と判定する', () => {
