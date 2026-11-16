@@ -29,6 +29,7 @@ export function createCrewAccessMiddleware({ queryable }) {
       || /^\/api\/kpi-snapshots\/\d{4}-\d{2}$/.test(req.path)
       || /^\/api\/kpi-snapshots\/weekly\/\d{4}-\d{2}$/.test(req.path)
       || /^\/api\/forced-withdrawals\/student\/[A-Za-z0-9_-]{1,50}$/.test(req.path))) return next();
+    if (req.method === 'POST' && req.path === '/api/forced-withdrawals') return next();
     // These POST routes only read records; permit their exact input contracts.
     if (req.method === 'POST' && ['/api/students/bulk', '/api/pro-plan/bulk'].includes(req.path)) {
       const body = req.body;

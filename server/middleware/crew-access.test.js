@@ -69,9 +69,25 @@ test('unknown students, legacy lists, bulk requests and administrative routes fa
     ['GET', '/api/students/unknown'], ['POST', '/api/students/other-2'],
     ['POST', '/api/notion/update'],
     ['GET', '/api/notifications/debug-tutor-webhooks'], ['POST', '/api/kpi-snapshots/save'],
-    ['POST', '/api/forced-withdrawals'], ['GET', '/API/crew/students'],
+    ['GET', '/API/crew/students'],
   ]) assert.equal((await f.request(path, { method, ...(method === 'POST' ? { body: JSON.stringify(body) } : {}) })).status, 403);
   assert.equal(f.count(), 0);
+});
+
+test('crew can submit forced withdrawal applications', async t => {
+  const f = await fixture(t, { tutorName: null });
+  const application = {
+    studentId: 'OLTS240001-AA',
+    forcedWithdrawalDate: '2026-11-16',
+    withdrawalReason: '音信不通',
+  };
+  const response = await f.request('/api/forced-withdrawals', {
+    method: 'POST',
+    body: JSON.stringify(application),
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(f.submitted(), application);
+  assert.equal(f.count(), 1);
 });
 
 test('shared UI can read examination state but removed students are denied', async t => {
@@ -112,7 +128,7 @@ test('leader retains existing routes and does not use a crew scope', async t => 
   assert.equal(f.calls.length, 0);
 });
 
-test('shared UI read endpoints work for crew while debug, exports and all administrative writes remain closed', async t => {
+test('shared UI reads work for crew while debug, exports and unapproved administrative writes remain closed', async t => {
   const f = await fixture(t, { tutorName: null });
   for (const path of ['/api/notion/students', '/api/notion/hearing', '/api/notion/examination',
     '/api/notion/entry-plan-examination', '/api/notion/pro-hearing', '/api/notion/pro-examination',
