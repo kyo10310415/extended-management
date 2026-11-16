@@ -1,0 +1,73 @@
+{
+  "students": {
+    "title": "延長管理：現在の生徒キャッシュ",
+    "sql": "SELECT student_id,name,tutor,plan,status,to_char(lesson_start_date,'YYYY-MM-DD') AS lesson_start_date,updated_at FROM notion_students_cache",
+    "fields": {
+      "student_id": "text",
+      "name": "text",
+      "tutor": "text",
+      "plan": "text",
+      "status": "text",
+      "lesson_start_date": "text",
+      "updated_at": "text"
+    },
+    "order": ["student_id"],
+    "history": "current"
+  },
+  "reviews": {
+    "title": "延長管理：審査回別の現在の保存値（審査対象月は含まない）",
+    "sql": "SELECT s.student_id,c.cycle,n.name,n.tutor,n.plan,to_jsonb(s)->>('extension_certainty_'||c.cycle) AS certainty,to_jsonb(s)->>('hearing_status_'||c.cycle) AS hearing_status,to_jsonb(s)->>('examination_result_'||c.cycle) AS result,to_jsonb(s)->>('notes_'||c.cycle) AS notes,s.updated_at FROM student_extensions s CROSS JOIN generate_series(1,10) c(cycle) LEFT JOIN notion_students_cache n ON n.student_id=s.student_id",
+    "fields": {
+      "student_id": "text",
+      "name": "text",
+      "tutor": "text",
+      "plan": "text",
+      "certainty": "text",
+      "hearing_status": "text",
+      "result": "text",
+      "notes": "text",
+      "updated_at": "text",
+      "cycle": "number"
+    },
+    "order": ["student_id", "cycle"],
+    "history": "current"
+  },
+  "monthly_kpi": {
+    "title": "延長管理：保存済み月次KPI。対象月の保存データのみ",
+    "sql": "SELECT year_month,snapshot_data,tutor_data,created_at FROM kpi_monthly_snapshots",
+    "fields": {
+      "year_month": "text",
+      "created_at": "text",
+      "snapshot_data": "json",
+      "tutor_data": "json"
+    },
+    "order": ["year_month"],
+    "history": "snapshot"
+  },
+  "current_kpi": {
+    "title": "延長管理：当月暫定KPI（year_monthとcalculated_atを必ず確認）",
+    "sql": "SELECT year_month,snapshot_data,tutor_data,calculated_at FROM kpi_current_snapshot",
+    "fields": {
+      "year_month": "text",
+      "calculated_at": "text",
+      "snapshot_data": "json",
+      "tutor_data": "json"
+    },
+    "order": ["year_month"],
+    "history": "provisional"
+  },
+  "weekly_kpi": {
+    "title": "延長管理：保存済み週次KPI",
+    "sql": "SELECT year_month,to_char(week_end_date,'YYYY-MM-DD') AS week_end_date,target_count,extension_count,actual_rate,updated_at FROM kpi_weekly_snapshots",
+    "fields": {
+      "year_month": "text",
+      "week_end_date": "text",
+      "updated_at": "text",
+      "target_count": "number",
+      "extension_count": "number",
+      "actual_rate": "number"
+    },
+    "order": ["year_month", "week_end_date"],
+    "history": "snapshot"
+  }
+}
