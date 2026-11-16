@@ -1,5 +1,8 @@
 import { getDatabaseConfig } from './utils/databaseConfig.js';
 import express from 'express';
+import chatgptReader from '../chatgpt-readonly/reader.cjs';
+import { createRequire } from 'node:module';
+const chatgptCatalog = createRequire(import.meta.url)('../chatgpt-readonly/catalog.json');
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -74,6 +77,9 @@ pool.query('SELECT NOW()', (err, res) => {
 app.use(cors({ origin: ssoConfiguration.appOrigin, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
+
+// Separately authenticated, read-only integration; does not grant an SSO session.
+app.use('/integrations/chatgpt/v1', chatgptReader.expressHandler({ catalog: chatgptCatalog, pool }));
 
 // SSO Authentication (must be before routes)
 app.use(createSsoAuthMiddleware(ssoConfiguration));

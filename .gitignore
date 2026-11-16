@@ -13,6 +13,7 @@ config/
 !package.json
 !package-lock.json
 !jsconfig.json
+!/chatgpt-readonly/catalog.json
 
 # Build outputs
 dist/
