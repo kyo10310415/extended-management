@@ -319,3 +319,6 @@ API: `GET /api/examination-history/export.csv?from=2026-09&to=2026-10`（既存S
 # 今月の審査・ヒアリング対象者API
 
 `GET /api/monthly-targets/current` は専用の `Authorization: Bearer` トークンで参照できます。`EXTENSION_TARGETS_READ_TOKEN` に32文字以上のランダムな秘密値を設定し、中央管理にも同じ値を設定します。既存JWTやKPIトークンは流用しません。応答は日本時間の当月と、対象者の学籍番号・ヒアリング回・審査回のみです。完了状況では対象から除外しません。通常・PRO・EP専用の既存一覧と同じ月数基準（休会調整、PRO開始月）を用い、PRO4～10回目も含みます。対象情報は60秒キャッシュし、取得中の要求を共有します。データ取得失敗時は503を返します。APIの専用トークン認証はこのGET/HEADパスだけに適用し、他のSSO認証には影響しません。
+# 中央管理向けPRO割り振り対象
+
+`GET /api/monthly-targets/pro-assignments` は既存の専用 `EXTENSION_TARGETS_READ_TOKEN` で利用します。前月のPro延長審査一覧と同じ条件（アクティブ・EP以外・休会調整後17ヶ月目）で3回目の結果が「延長」の生徒、および永久会員ページと同じ表示条件で `pro_plan_data.pro_plan_start_month` が翌月の生徒を返します。後者に追加の確定ステータス条件はありません。月判定は日本時間です。学籍番号で重複を除去し、中央管理での表示補完用に名前・担当Tutor・契約プラン・開始月・Notionリンクも返します。取得エラーは503とし、不完全な空一覧には置き換えません。中央管理のPRO割り振りタブより先に反映してください。

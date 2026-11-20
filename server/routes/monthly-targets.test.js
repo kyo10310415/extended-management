@@ -33,5 +33,6 @@ test('dedicated token is required before data reads, correct token returns minim
   assert.equal(response.status, 200); assert.deepEqual((await response.json()).data, []);
   assert.equal(calls, 1);
   assert.equal((await fetch(`http://127.0.0.1:${server.address().port}/api/monthly-targets/current`)).status, 401);
+  assert.equal((await fetch(`http://127.0.0.1:${server.address().port}/api/monthly-targets/pro-assignments`)).status, 401);
   assert.equal((await fetch(`http://127.0.0.1:${server.address().port}/api/monthly-targets/current`, { headers: { Authorization: `Bearer ${token}` } })).status, 200);
 });

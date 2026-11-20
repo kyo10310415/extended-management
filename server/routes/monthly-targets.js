@@ -1,5 +1,13 @@
 import express from 'express';
 import { timingSafeEqual } from 'node:crypto';
+import { createProAssignmentHandler } from './pro-assignment-targets.js';
+
+export function authorizedTargetRead(req, env) {
+  const expected = env.EXTENSION_TARGETS_READ_TOKEN;
+  const actual = req.get('Authorization')?.match(/^Bearer (\S+)$/i)?.[1];
+  return Boolean(expected && expected.length >= 32 && actual && Buffer.byteLength(actual) === Buffer.byteLength(expected)
+    && timingSafeEqual(Buffer.from(actual), Buffer.from(expected)));
+}
 
 export function monthlyTargets(students, suspensions, proDates, { lessonMonths, suspensionMonths, proMonths }) {
   return students.flatMap(s => {
@@ -24,13 +32,15 @@ export function monthlyTargets(students, suspensions, proDates, { lessonMonths, 
 
 export function createMonthlyTargetsRouter(deps, env = process.env) {
   const router = express.Router();
+  router.get('/pro-assignments', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    if (!authorizedTargetRead(req, env)) return res.status(401).json({ error: 'Read token required' });
+    return createProAssignmentHandler(deps)(req, res);
+  });
   let pending, cached;
   router.get('/current', async (req, res) => {
     res.set('Cache-Control', 'no-store');
-    const expected = env.EXTENSION_TARGETS_READ_TOKEN;
-    const actual = req.get('Authorization')?.match(/^Bearer (\S+)$/i)?.[1];
-    if (!expected || expected.length < 32 || !actual || Buffer.byteLength(actual) !== Buffer.byteLength(expected)
-      || !timingSafeEqual(Buffer.from(actual), Buffer.from(expected))) return res.status(401).json({ error: 'Read token required' });
+    if (!authorizedTargetRead(req, env)) return res.status(401).json({ error: 'Read token required' });
     const month = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit' }).format(new Date());
     try {
       if (!cached || cached.month !== month || Date.now() - cached.at > 60000) {
