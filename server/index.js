@@ -105,6 +105,7 @@ app.use('/api/examination-history', createExaminationHistoryRouter({
   lessonMonths: calculateMonthsElapsed, suspensionMonths: calculateEffectiveSuspensionMonths, proMonths: calculateProPlanMonths,
 }));
 app.use('/api/monthly-targets', createMonthlyTargetsRouter({
+  queryable: pool,
   fetchStudents, fetchSuspensionData, fetchProStartDates,
   lessonMonths: calculateMonthsElapsed, suspensionMonths: calculateEffectiveSuspensionMonths, proMonths: calculateProPlanMonths,
 }));

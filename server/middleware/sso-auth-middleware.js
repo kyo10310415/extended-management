@@ -43,7 +43,7 @@ export function createSsoAuthMiddleware(configuration) {
     const isApi = normalizedPath === '/api' || normalizedPath.startsWith('/api/');
     const isRead = req.method === 'GET' || req.method === 'HEAD';
     // This exact endpoint independently validates a dedicated server-to-server read token.
-    if (isRead && req.path === '/api/monthly-targets/current') return next();
+    if (isRead && ['/api/monthly-targets/current', '/api/monthly-targets/pro-assignments'].includes(req.path)) return next();
     const isExternalKpiSnapshotRead = isRead
       && /^\/api\/kpi-snapshots\/(?:\d{4}-\d{2}|current)$/.test(normalizedPath)
       && /^Bearer\s+\S+$/i.test(req.get('Authorization') || '');
