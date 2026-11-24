@@ -1,3 +1,4 @@
+import { createStudentWriteIntegrity } from '../middleware/student-write-integrity.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import pg from 'pg';
@@ -131,8 +132,8 @@ test('external service and diagnostic route retain pool limits with enforced TLS
     let route = await readFile(new URL('../routes/pro-plan.js', import.meta.url), 'utf8');
     route = route.replace(/^import[\s\S]*?from ['"][^'"]+['"];?\r?\n/gm, '').replace('export default router;', '')
       .replace("await import('pg')", 'fixturePg');
-    const router = { get(path, fn) { if (path === '/external-db/test') handler = fn; }, post() {} };
-    vm.runInNewContext(route, { ...scope, express: { Router: () => router }, fixturePg: { default: { Pool } } });
+    const router = { param() {}, get(path, fn) { if (path === '/external-db/test') handler = fn; }, post() {} };
+    vm.runInNewContext(route, { ...scope, createStudentWriteIntegrity, pool: {}, express: { Router: () => router }, fixturePg: { default: { Pool } } });
     let response;
     await handler({}, { json(value) { response = value; }, status() { return this; } });
     assert.equal(response.success, true);
