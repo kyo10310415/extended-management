@@ -21,7 +21,10 @@ import { isValidExtensionCycle } from '../services/examinationResultSyncService.
 import { createStudentWriteIntegrity } from '../middleware/student-write-integrity.js';
 
 const router = express.Router();
-router.param('studentId', createStudentWriteIntegrity({ queryable: pool }));
+// Routes are imported before index.js initializes its exported pool.
+router.param('studentId', createStudentWriteIntegrity({
+  queryable: { query: (...args) => pool.query(...args) }
+}));
 
 // テーブル存在確認と自動作成
 async function ensureProPlanTableExists() {
