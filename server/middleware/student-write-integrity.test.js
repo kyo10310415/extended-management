@@ -63,3 +63,25 @@ test('a missing registry fails closed without exposing the provider error', asyn
     assert.equal(f.writes.length, 0);
   } finally { await f.close(); }
 });
+
+
+test('both route guards defer the circular pool binding until the request', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const vm = await import('node:vm');
+  for (const route of ['students', 'pro-plan']) {
+    const source = await readFile(new URL(`../routes/${route}.js`, import.meta.url), 'utf8');
+    const registration = source.match(/router\.param\('studentId',[\s\S]*?\n}\)\);/);
+    assert.ok(registration, route);
+    let ready = false, guard;
+    const context = { createStudentWriteIntegrity, router: { param: (_name, callback) => { guard = callback; } } };
+    Object.defineProperty(context, 'pool', { get() {
+      if (!ready) throw new ReferenceError("Cannot access 'pool' before initialization");
+      return { query: async () => ({ rows: [{ student_id: 'OLTS260001-AA' }] }) };
+    } });
+    vm.runInNewContext(registration[0], context);
+    ready = true;
+    let passed = false;
+    await guard({ method: 'POST' }, {}, () => { passed = true; }, 'OLTS260001-AA');
+    assert.equal(passed, true, route);
+  }
+});
