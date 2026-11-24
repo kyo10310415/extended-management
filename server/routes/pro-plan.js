@@ -18,8 +18,10 @@ import {
   enrichStudentsWithProPlanMonths,
 } from '../services/proPlanExternalService.js';
 import { isValidExtensionCycle } from '../services/examinationResultSyncService.js';
+import { createStudentWriteIntegrity } from '../middleware/student-write-integrity.js';
 
 const router = express.Router();
+router.param('studentId', createStudentWriteIntegrity({ queryable: pool }));
 
 // テーブル存在確認と自動作成
 async function ensureProPlanTableExists() {

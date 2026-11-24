@@ -15,8 +15,10 @@ import {
   UPSELL_EXAMINATION_RESULT,
 } from '../utils/examinationCycle.js';
 import { saveHearingExtensionData } from '../services/studentExtensionService.js';
+import { createStudentWriteIntegrity } from '../middleware/student-write-integrity.js';
 
 const router = express.Router();
+router.param('studentId', createStudentWriteIntegrity({ queryable: pool }));
 
 function parseCycle(value) {
   const cycle = Number.parseInt(value, 10);

@@ -32,6 +32,7 @@ import { fetchSuspensionData } from './services/sheetsService.js';
 import { fetchProStartDates, calculateProPlanMonths } from './services/proPlanExternalService.js';
 import { calculateMonthsElapsed, calculateEffectiveSuspensionMonths } from './utils/dateUtils.js';
 import { getDefaultKpiTargetRate } from './services/kpiSettingsService.js';
+import { quarantineEmptyOrphans } from './services/emptyOrphanRepair.js';
 
 // Background services
 import { 
@@ -476,6 +477,12 @@ app.listen(PORT, async () => {
   
   // データベース初期化
   await initDatabase();
+  try {
+    const repair = await quarantineEmptyOrphans(pool);
+    console.log('[Data integrity] Empty orphan repair', repair);
+  } catch {
+    console.error('[Data integrity] Empty orphan repair stopped; inspect database before retrying');
+  }
   
   // バックグラウンドでデータをプリロード（起動時に即座に取得）
   console.log('📊 Starting data preload...');
